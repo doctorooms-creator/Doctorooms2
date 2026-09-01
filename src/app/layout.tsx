@@ -1,0 +1,83 @@
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
+import "@/styles/print.css";
+import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "next-themes";
+import { Providers } from "@/components/providers";
+import { RealtimeNotification } from "@/components/shared/RealtimeNotification";
+import { ServiceWorkerRegistrar } from "@/components/shared/ServiceWorkerRegistrar";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const viewport: Viewport = {
+  themeColor: "#0d9488",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
+};
+
+export const metadata: Metadata = {
+  title: {
+    default: "Doctorooms — Your Health, Our Priority",
+    template: "%s | Doctorooms",
+  },
+  description:
+    "Book appointments with India's top doctors, manage health records, and access quality healthcare — all in one place.",
+  keywords: [
+    "Doctorooms",
+    "doctor",
+    "hospital",
+    "appointment",
+    "healthcare",
+    "India",
+    "telemedicine",
+    "video consultation",
+  ],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Doctorooms",
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="apple-touch-icon" href="/icon-192.svg" />
+      </head>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+      >
+        <Providers>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            {children}
+            <RealtimeNotification />
+            <ServiceWorkerRegistrar />
+            <Toaster />
+          </ThemeProvider>
+        </Providers>
+      </body>
+    </html>
+  );
+}
