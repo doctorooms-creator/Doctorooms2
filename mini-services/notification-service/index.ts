@@ -152,6 +152,16 @@ httpServer.on('request', async (req, res) => {
   const url = req.url || ''
   const method = req.method || 'GET'
 
+  // ── Guard: never touch socket.io's own path ──────────────────────────
+  // socket.io attached its request listener when `new Server(httpServer, …)`
+  // ran ABOVE, BEFORE this handler was registered. Node therefore calls BOTH
+  // listeners for every request. Without this guard, this handler's 404
+  // fallback fires on top of socket.io's handshake responses, corrupting
+  // them (clients then fail with endless "Connection error: timeout").
+  if (url.startsWith('/socket.io/')) {
+    return
+  }
+
   // Set CORS headers for all responses (mini-service is called from Next.js
   // server-side, but the /online-doctors proxy needs CORS too just in case)
   res.setHeader('Access-Control-Allow-Origin', '*')

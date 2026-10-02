@@ -5654,3 +5654,25 @@ Stage Summary:
 - Migration-caught regressions fixed: case-insensitive search (103 filters/47 files), Cloudinary double-folder, .env quoting/sourcing trap, P1001 resilience params.
 - Secrets: ONLY in .env (gitignored, verified 0 env files tracked in git). Pooler URL/password/service-role/Cloudinary keys never written to any committed file or worklog.
 - Remaining risks/recommendations: (1) dev-server OOM instability persists (died 2× during session; restart-server.sh auto-recovers — consider 2-min watchdog cron); (2) direct db.*.supabase.co is IPv6-only — sandbox MUST keep using the Seoul pooler URL (IPv4) in .env; (3) session pooler prepared-statement compatibility verified by QA but watch for interactive-transaction edge cases; (4) NEXTAUTH_SECRET still placeholder (works under DEV_MODE=1 — set a real secret before production auth hardening); (5) git push of this round pending at time of writing (schema switch + 47-file insensitive fix + start scripts + restart-server.sh + cloudinary fix).
+
+---
+Task ID: post-migration-qa-round-1
+Agent: main (Z.ai Code)
+Task: User asked "testing start krte hai" — full E2E QA round on the Supabase+Cloudinary live app, fix anything broken.
+
+Work Log:
+- Pre-check: 3 services UP (main 3000, chat 3004, notif 3005), dev.log clean 200s.
+- agent-browser E2E (doctor side, Dr. Amit Shah userId cmuqor8ia0005q91rhv1xcbha via POST /api/dev-login): landing renders; dashboard full live data (5 appts / 10 patients / 4.8 rating / PEDI-001→006 queue with complaints / IST schedule / real reviews); appointments (tokens #2-#4, Done/In-Consultation/Waiting states); patients (10 with visit history); prescriptions (all Rx incl. Myra diagnosis — old fix intact); earnings (₹1,600, 2 consults, transactions table); Rx Templates (4 seeded); command-palette search "aarav" → Aarav Sharma result (Postgres case-insensitive fix intact).
+- Patient side (Rohit Sharma cmuqp2anh0000q95pno90qdej): dashboard (2 completed visits, recent activity), appointments list (2 finished w/ Dr. Amit Shah + filter counts), Rx Access page — all clean.
+- Mobile 375px: zero horizontal overflow on dashboard / appointments / prescriptions / landing.
+- lint clean; agent-browser page errors: none.
+
+BUG FOUND & FIXED (P0, real-time): console flooded with "[useSocket] Connection error: timeout" — notification-service (3005) registered its custom httpServer.on('request') handler AFTER socket.io attached, so Node called BOTH listeners per request and the custom 404 fallback corrupted every socket.io handshake (curl to :3005/socket.io/?EIO=4 returned the 404 JSON instead of the 0{"sid":...} handshake). FIX: early-return guard `if (url.startsWith('/socket.io/')) return` at top of the custom handler (mini-services/notification-service/index.ts). bun --hot auto-reloaded.
+- Verified: handshake direct AND via gateway :81 both return 0{"sid":...}; /stats + /online-doctors still work; browser at gateway origin now logs "[useSocket] Connected"; /online-doctors lists Dr. Amit Shah online; POST /emit queue-updated → toast "QA toast check live" rendered live in browser; notif.log shows full connect/emit/disconnect lifecycle.
+- Note: QA browser must use http://localhost:81 origin (gateway) for socket E2E — localhost:3000 bypasses the gateway so /socket.io/ hits Next.js (308) and sockets can't connect there by design.
+
+Stage Summary:
+- App is fully LIVE on Supabase + Cloudinary and passes the full QA round: doctor flows, patient flows, search, earnings, templates, mobile responsiveness, lint, logs — all green.
+- One real bug found & fixed: notification-service socket.io handshake corruption (double request-listener). Real-time notifications + doctor-online presence now work end-to-end through the gateway.
+- Secrets policy maintained (nothing new written anywhere).
+- Remaining recommendations: (1) dev-server OOM watchdog idea still open; (2) NEXTAUTH_SECRET placeholder before production; (3) chat-service (3004) has no frontend socket client yet (only notif 3005 is used by useSocket) — future feature opportunity.
