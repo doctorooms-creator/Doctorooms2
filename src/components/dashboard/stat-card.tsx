@@ -75,11 +75,11 @@ export function StatCard({
         </div>
         <div
           className={cn(
-            'flex h-11 w-11 items-center justify-center rounded-xl',
+            'flex h-11 w-11 items-center justify-center rounded-xl ring-1 ring-inset ring-transparent transition-all duration-200 group-hover:scale-105 group-hover:ring-teal-200 dark:group-hover:ring-teal-800',
             iconBg
           )}
         >
-          <Icon className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+          <Icon className="h-5 w-5 text-teal-600 dark:text-teal-400 transition-transform duration-200 group-hover:scale-110" />
         </div>
       </div>
     </motion.div>

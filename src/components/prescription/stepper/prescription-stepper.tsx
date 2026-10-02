@@ -134,6 +134,11 @@ export function PrescriptionStepper({ bookingId, onPrint }: PrescriptionStepperP
               queryFn: () =>
                 fetch('/api/dashboard/doctor/prescription-settings/findings?status=Active').then((r) => r.json()),
             })
+            void qc.prefetchQuery({
+              queryKey: ['rx-table-templates'], // Step 3 — table templates
+              queryFn: () =>
+                fetch('/api/dashboard/doctor/prescription-settings/table-templates?status=Active').then((r) => r.json()),
+            })
 
             // If existing draft, load data and determine start step
             if (!data.isNew) {

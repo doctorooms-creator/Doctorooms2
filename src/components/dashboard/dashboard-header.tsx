@@ -4,7 +4,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuthStore } from '@/lib/auth-store'
 import { useEffect, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -30,6 +29,7 @@ import {
   Moon,
   Sun,
 } from 'lucide-react'
+import { GlobalSearch } from '@/components/dashboard/global-search'
 import { formatDistanceToNow } from 'date-fns'
 import {
   Popover,
@@ -190,13 +190,6 @@ export function DashboardHeader({ onMenuClick, onLogout }: DashboardHeaderProps)
     } catch {}
   }
 
-  const handleSearch = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault()
-    },
-    []
-  )
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -218,13 +211,23 @@ export function DashboardHeader({ onMenuClick, onLogout }: DashboardHeaderProps)
       <h1 className="text-lg font-semibold tracking-tight hidden sm:block">{pageTitle}</h1>
 
       <div className="flex-1 flex justify-center">
-        <form onSubmit={handleSearch} className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search..." className="pl-9 pr-20 h-9 bg-muted/50" />
-          <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground sm:flex">
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          aria-label="Open search (Ctrl+K)"
+          className="group relative w-full max-w-md cursor-pointer text-left"
+        >
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-hover:text-teal-600 dark:group-hover:text-teal-400" />
+          <div
+            role="presentation"
+            className="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 pr-20 pl-9 text-sm text-muted-foreground transition-all group-hover:border-teal-300 group-hover:bg-background group-hover:shadow-sm dark:group-hover:border-teal-700"
+          >
+            Search patients, pages…
+          </div>
+          <kbd className="pointer-events-none absolute right-3 top-1/2 hidden h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground transition-colors group-hover:border-teal-300 group-hover:text-teal-600 sm:flex dark:group-hover:text-teal-400">
             <span className="text-xs">⌘</span>K
           </kbd>
-        </form>
+        </button>
       </div>
 
       <div className="flex items-center gap-2">
@@ -252,7 +255,7 @@ export function DashboardHeader({ onMenuClick, onLogout }: DashboardHeaderProps)
               )}
             </div>
             {/* List */}
-            <div className="max-h-72 overflow-y-auto">
+            <div className="custom-scrollbar max-h-72 overflow-y-auto">
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center py-6 text-muted-foreground">
                   <Bell className="h-8 w-8 mb-2 opacity-30" />
@@ -363,6 +366,9 @@ export function DashboardHeader({ onMenuClick, onLogout }: DashboardHeaderProps)
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Global search command palette (⌘K) */}
+      <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
     </header>
   )
 }

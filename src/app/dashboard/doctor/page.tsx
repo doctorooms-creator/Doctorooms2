@@ -47,7 +47,7 @@ import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PreVisitBriefSheet } from '@/components/copilot/brief-sheet'
-import { Sparkles } from 'lucide-react'
+import { Sparkles, ChevronRight } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -299,7 +299,7 @@ export default function DoctorDashboardPage() {
             </Button>
           </CardHeader>
           <CardContent>
-            <div className="max-h-96 overflow-y-auto space-y-3 pr-1">
+            <div className="custom-scrollbar max-h-96 overflow-y-auto space-y-3 pr-1">
               {stats?.todayList?.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                   <CalendarDays className="h-10 w-10 mb-2 opacity-50" />
@@ -408,6 +408,8 @@ export default function DoctorDashboardPage() {
                       )}
                     </div>
                   </div>
+                  {/* Hover affordance — signals the row opens the Rx wizard */}
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-teal-600 dark:group-hover:text-teal-400" />
                 </motion.div>
               ))}
             </div>
@@ -423,7 +425,7 @@ export default function DoctorDashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="max-h-96 overflow-y-auto space-y-3 pr-1">
+            <div className="custom-scrollbar max-h-96 overflow-y-auto space-y-3 pr-1">
               {stats?.recentReviews?.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
                   <Star className="h-10 w-10 mb-2 opacity-50" />

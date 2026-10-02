@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Card, CardContent } from '@/components/ui/card'
@@ -30,8 +31,18 @@ interface Patient {
 }
 
 export default function DoctorPatientsPage() {
+  return (
+    <Suspense fallback={null}>
+      <DoctorPatientsContent />
+    </Suspense>
+  )
+}
+
+function DoctorPatientsContent() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const searchParams = useSearchParams()
+  const focusUserId = searchParams.get('focus')
 
   const handleSearch = (value: string) => {
     setSearch(value)
@@ -43,6 +54,21 @@ export default function DoctorPatientsPage() {
     queryFn: () =>
       fetch(`/api/dashboard/doctor/patients?search=${encodeURIComponent(debouncedSearch)}`).then((r) => r.json()),
   })
+
+  // When arriving from the global search palette (?focus=<userId>),
+  // scroll the patient's card into view and flash a teal highlight ring.
+  useEffect(() => {
+    if (!focusUserId || isLoading || !data?.patients?.length) return
+    const card = document.getElementById(`patient-card-${focusUserId}`)
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      card.classList.add('ring-2', 'ring-teal-500', 'ring-offset-2', 'ring-offset-background')
+      const t = setTimeout(() => {
+        card.classList.remove('ring-2', 'ring-teal-500', 'ring-offset-2', 'ring-offset-background')
+      }, 2500)
+      return () => clearTimeout(t)
+    }
+  }, [focusUserId, isLoading, data])
 
   return (
     <div className="space-y-6">
@@ -90,8 +116,11 @@ export default function DoctorPatientsPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
             >
-              <Link href={`/dashboard/doctor/patients/${patient.userId}`}>
-                <Card className="group transition-all hover:shadow-md hover:border-teal-300 dark:hover:border-teal-700 cursor-pointer">
+              <Link href={`/dashboard/doctor/patients/${patient.userId}`} className="block rounded-xl">
+                <Card
+                  id={`patient-card-${patient.userId}`}
+                  className="group h-full transition-all duration-200 hover:shadow-md hover:border-teal-300 hover:-translate-y-0.5 dark:hover:border-teal-700 cursor-pointer"
+                >
                   <CardContent className="p-5">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-12 w-12">

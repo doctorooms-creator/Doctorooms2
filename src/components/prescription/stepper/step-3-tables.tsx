@@ -41,9 +41,13 @@ export function Step3Tables() {
   const queryClient = useQueryClient()
 
   const [templateId, setTemplateId] = useState('')
+  // Tracks whether saved tables are still being fetched from the prescription
+  // (draft resume). While true, the step shows skeletons instead of an empty
+  // canvas so the doctor never thinks their saved tables vanished.
+  const [loadingExisting, setLoadingExisting] = useState(true)
 
   // Fetch table templates
-  const { data: templatesData } = useQuery({
+  const { data: templatesData, isLoading: templatesLoading } = useQuery({
     queryKey: ['rx-table-templates'],
     queryFn: () =>
       fetch('/api/dashboard/doctor/prescription-settings/table-templates?status=Active').then((r) => r.json()),
@@ -62,7 +66,12 @@ export function Step3Tables() {
 
   // Load existing tables from prescription
   useEffect(() => {
-    if (!prescriptionId || tables.length > 0) return
+    if (!prescriptionId || tables.length > 0) {
+      if (prescriptionId && tables.length > 0) setLoadingExisting(false)
+      else if (!prescriptionId) setLoadingExisting(false)
+      return
+    }
+    setLoadingExisting(true)
     fetch(`/api/prescription/${prescriptionId}`)
       .then((r) => r.json())
       .then((data) => {
@@ -111,8 +120,9 @@ export function Step3Tables() {
           })
           setTables(parsed)
         }
+        setLoadingExisting(false)
       })
-      .catch(() => {})
+      .catch(() => setLoadingExisting(false))
   }, [prescriptionId, tables.length, setTables])
 
   const handleAddEmpty = () => {
@@ -254,10 +264,13 @@ export function Step3Tables() {
     >
       {/* Add Table Controls */}
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" onClick={handleAddEmpty}>
+        <Button variant="outline" size="sm" onClick={handleAddEmpty} disabled={loadingExisting}>
           <Plus className="mr-1 h-3.5 w-3.5" /> Add Empty Table
         </Button>
         <div className="flex items-center gap-2">
+          {templatesLoading ? (
+            <Skeleton className="h-9 w-48" />
+          ) : (
           <Select value={templateId} onValueChange={setTemplateId}>
             <SelectTrigger className="w-48 h-9">
               <SelectValue placeholder="From Template..." />
@@ -269,11 +282,48 @@ export function Step3Tables() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={handleAddFromTemplate} disabled={!templateId}>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAddFromTemplate}
+            disabled={!templateId || templatesLoading}
+          >
             <Table2 className="mr-1 h-3.5 w-3.5" /> Add
           </Button>
         </div>
       </div>
+
+      {/* Saved tables loading skeleton (draft resume) — never show an empty
+          canvas while the prescription fetch is still in flight */}
+      {loadingExisting && tables.length === 0 && (
+        <div className="space-y-3">
+          {[0, 1].map((i) => (
+            <div key={i} className="rounded-lg border border-border p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-4 w-36" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Skeleton className="h-7 flex-1" />
+                  <Skeleton className="h-7 flex-1" />
+                  <Skeleton className="h-7 flex-1" />
+                </div>
+                <div className="flex gap-2">
+                  <Skeleton className="h-7 flex-1" />
+                  <Skeleton className="h-7 flex-1" />
+                  <Skeleton className="h-7 flex-1" />
+                </div>
+              </div>
+            </div>
+          ))}
+          <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Grid3X3 className="h-3.5 w-3.5 animate-pulse text-teal-600 dark:text-teal-400" />
+            Loading saved tables…
+          </p>
+        </div>
+      )}
 
       {/* Tables */}
       <AnimatePresence mode="popLayout">

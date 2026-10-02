@@ -263,6 +263,10 @@
 
 /* ============ SCROLLBAR ============ */
 
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(20, 184, 166) transparent;
+}
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
