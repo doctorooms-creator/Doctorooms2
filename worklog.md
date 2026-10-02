@@ -5546,3 +5546,21 @@ Work Log:
 Stage Summary:
 - GitHub main = 1 clean commit (31eed46) with full system + this round's 5 fixes. Future pushes: git push origin main works; if history diverges again after resets, repeat orphan-commit pattern.
 - All services healthy; lint clean; dev.log clean.
+
+---
+Task ID: db-audit-supabase
+Agent: Main Agent (Z.ai Code)
+Task: User asked: "Should we keep ONLY Supabase as database — is the product currently running entirely on Supabase?" → Full storage-layer audit (read-only, no code changes).
+
+Work Log:
+- Audited prisma/schema.prisma: provider = "sqlite", DATABASE_URL=file:/home/z/my-project/db/custom.db (system-level env overrides .env).
+- Counted live rows in SQLite: 101 users (13 patients), 53 doctors, 18 bookings, 0 chat msgs — ALL product data lives in this ONE local SQLite file.
+- Audited src/lib/supabase.ts: Supabase is wired ONLY as optional FILE STORAGE (avatars, medical docs, lab reports), with local-filesystem fallback. SUPABASE_SECRET_KEY / SUPABASE_SERVICE_ROLE_KEY are placeholders ("YOUR_SUPABASE_SECRET_KEY_HERE") → every upload attempts Supabase, fails 401, falls back to public/uploads/ (68KB there).
+- Audited src/lib/cloudinary.ts (inactive — no keys), src/lib/redis.ts (inactive — no REDIS_URL → in-memory fallbacks).
+- Mini-services: chat-service (3004) uses the SAME SQLite file via shared DATABASE_URL env; notification-service (3005) has NO DB (pure socket.io relay, in-memory).
+- Found existing migration assets: src/scripts/migrate-to-postgres.ts (SQLite→Postgres, docs mention Supabase), prisma/schema.sqlite.prisma.bak, NEXT_PUBLIC_SUPABASE_URL=https://fmsccgnfdjiophuyjwcv.supabase.co already in .env.
+
+Stage Summary:
+- ANSWER: NO — product currently runs 100% on local SQLite (db/custom.db). Supabase contributes NOTHING active (its storage layer is inactive due to placeholder keys). Redis/Cloudinary also inactive.
+- "Supabase only" migration path ALREADY EXISTS in codebase: needs (1) Supabase Postgres connection string, (2) real service-role key from user; then provider switch sqlite→postgresql, db:push, run migrate-to-postgres.ts, restart. Chat-service inherits same DATABASE_URL automatically.
+- Caveats for migration: system-level DATABASE_URL env + restart-server.sh hardcode SQLite path — both must be updated; SQLite→Postgres may need type/default tweaks; user must provide Supabase DB password (never commit it).
