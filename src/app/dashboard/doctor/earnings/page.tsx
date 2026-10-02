@@ -33,6 +33,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { LostRevenueBanner } from '@/components/dashboard/lost-revenue-banner'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -147,6 +148,9 @@ export default function DoctorEarningsPage() {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="space-y-6">
+        {/* Lost Revenue conversion banner (PRICING-STRATEGY §6 — earnings page moment) */}
+        <LostRevenueBanner surface="earnings_banner" />
+
         {/* Header + Period Selector */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>

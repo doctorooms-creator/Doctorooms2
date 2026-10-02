@@ -47,6 +47,7 @@ import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PreVisitBriefSheet } from '@/components/copilot/brief-sheet'
+import { LostRevenueBanner } from '@/components/dashboard/lost-revenue-banner'
 import { Sparkles, ChevronRight } from 'lucide-react'
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -237,6 +238,9 @@ export default function DoctorDashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* ── Lost Revenue conversion banner (PRICING-STRATEGY §6) ── */}
+      <LostRevenueBanner surface="dashboard_banner" />
+
       {/* ── Hospital & Department Banner (Hospital Mode) ── */}
       <AnimatePresence>
         {isHospitalMode && primaryLink && (

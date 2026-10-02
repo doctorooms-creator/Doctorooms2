@@ -2327,3 +2327,19 @@ model PlanUsage {
   @@unique([hospitalId, metric, monthKey])
   @@index([hospitalId, monthKey])
 }
+
+// Conversion-funnel instrumentation (docs/PRICING-STRATEGY.md §7).
+// Every upgrade moment records wall_viewed / wall_upgraded with a source tag
+// so we learn which trigger earns, then double down there.
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  hospitalId String?
+  type       String   // wall_viewed | wall_upgraded | founder_interest | report_viewed
+  source     String   // ai | whatsapp | receptionist_seats | nurse_seats | doctor_seats | lost_revenue | earnings_banner | dashboard_banner | billing_page
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([type, source, createdAt])
+  @@index([hospitalId, createdAt])
+}

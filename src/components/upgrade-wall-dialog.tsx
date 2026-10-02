@@ -8,8 +8,12 @@
  *   1. Points se Pro (referral wallet ≥ 2,000 → instant pro_month activation)
  *   2. Founder Pricing waitlist (₹4,999/yr forever — cash path via sales)
  *   3. Referral page (earn points: "1 referral = 1 mahina Pro free")
+ *
+ * Instrumented (§7): wall_viewed on open, wall_upgraded on points-redeem,
+ * founder_interest on lock — all tagged with `source` so we learn which
+ * trigger earns. Fire-and-forget, never blocks the UX.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -23,7 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
 export interface UpgradeWallPayload {
-  reason: 'ai' | 'whatsapp' | 'receptionist_seats' | 'nurse_seats' | 'doctor_seats'
+  reason: 'ai' | 'whatsapp' | 'receptionist_seats' | 'nurse_seats' | 'doctor_seats' | 'lost_revenue'
   used: number
   limit: number
   planKey: 'free' | 'pro' | 'hospital'
@@ -40,6 +44,17 @@ interface Props {
   /** 'self' = the doctor/hospital themselves (upgrade actions live).
    *  'admin' = platform admin hit the wall on someone's hospital — inform only. */
   mode?: 'self' | 'admin'
+  /** Funnel attribution (§7): which surface showed the wall. Defaults to wall.reason. */
+  source?: string
+}
+
+/** Fire-and-forget funnel event — never blocks the UX. */
+function track(type: string, source: string, meta?: Record<string, unknown>) {
+  fetch('/api/analytics/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, source, meta }),
+  }).catch(() => {})
 }
 
 const REASON_META: Record<UpgradeWallPayload['reason'], { title: string; highlight: string }> = {
@@ -48,6 +63,7 @@ const REASON_META: Record<UpgradeWallPayload['reason'], { title: string; highlig
   receptionist_seats: { title: 'Clinic badh rahi hai! 🎉', highlight: 'Pro mein 3 receptionist + 3 nurse seats' },
   nurse_seats: { title: 'Clinic badh rahi hai! 🎉', highlight: 'Pro mein 3+3 staff accounts' },
   doctor_seats: { title: 'Practice badh rahi hai! 🎉', highlight: 'Pro mein 3 doctor seats' },
+  lost_revenue: { title: 'No-shows aapka paisa le rahe hain 💸', highlight: 'Pro mein full Lost Revenue report + auto-reminders' },
 }
 
 const VALUE_STACK = [
@@ -58,11 +74,20 @@ const VALUE_STACK = [
   { item: 'Staff accounts (3+3 seats)', worth: '₹1,200' },
 ]
 
-export function UpgradeWallDialog({ open, onOpenChange, wall, walletSpendable = 0, mode = 'self' }: Props) {
+export function UpgradeWallDialog({ open, onOpenChange, wall, walletSpendable = 0, mode = 'self', source }: Props) {
   const router = useRouter()
   const queryClient = useQueryClient()
   const [redeeming, setRedeeming] = useState(false)
   const [interestDone, setInterestDone] = useState(false)
+
+  const funnelSource = source ?? wall?.reason ?? 'unknown'
+
+  // §7 instrumentation: count every wall impression (self mode only)
+  useEffect(() => {
+    if (open && wall && mode === 'self') {
+      track('wall_viewed', funnelSource, { reason: wall.reason, planKey: wall.planKey })
+    }
+  }, [open, wall, mode, funnelSource])
 
   if (!wall) return null
   const meta = REASON_META[wall.reason]
@@ -78,6 +103,7 @@ export function UpgradeWallDialog({ open, onOpenChange, wall, walletSpendable = 
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || d.hint || 'Redemption failed')
+      track('wall_upgraded', funnelSource, { via: 'points' })
       toast.success('🎉 Pro activated — 1 month, points se! (30 din valid)')
       queryClient.invalidateQueries({ queryKey: ['plans-me'] })
       queryClient.invalidateQueries({ queryKey: ['referral-me'] })
@@ -98,6 +124,7 @@ export function UpgradeWallDialog({ open, onOpenChange, wall, walletSpendable = 
         body: JSON.stringify({ planKey: 'pro' }),
       })
       if (!r.ok) throw new Error('Failed')
+      track('founder_interest', funnelSource)
       setInterestDone(true)
       toast.success('Founder Pricing interest lock ho gaya — team aapse contact karegi 🤝')
     } catch {

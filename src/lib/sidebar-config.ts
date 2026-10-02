@@ -1,6 +1,6 @@
 import {
   type LucideIcon,
-  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History, Gift,
+  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History, Gift,
 } from 'lucide-react'
 
 export interface SidebarItem {
@@ -55,6 +55,7 @@ export const sidebarConfig: RoleSidebarMap = {
     { label: 'Prescriptions', href: '/dashboard/doctor/prescriptions', icon: FileText },
     { label: 'Rx Templates', href: '/dashboard/doctor/rx-templates', icon: Zap },
     { label: 'Earnings', href: '/dashboard/doctor/earnings', icon: IndianRupee },
+    { label: 'Lost Revenue', href: '/dashboard/doctor/lost-revenue', icon: TrendingDown },
     { label: 'Referral', href: '/dashboard/doctor/referral', icon: Gift },
     { label: 'Plan & Billing', href: '/dashboard/doctor/billing', icon: CreditCard },
     { label: 'Schedule', href: '/dashboard/doctor/schedule', icon: Clock },
@@ -129,6 +130,7 @@ export const sidebarConfig: RoleSidebarMap = {
         { label: 'Lab Reports', href: '/dashboard/hospital/lab/reports', icon: FileText },
       ],
     },
+    { label: 'Plan & Billing', href: '/dashboard/hospital/plan', icon: CreditCard },
     {
       label: 'Inventory',
       href: '/dashboard/hospital/inventory',
