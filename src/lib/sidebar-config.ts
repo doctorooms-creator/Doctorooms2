@@ -56,6 +56,7 @@ export const sidebarConfig: RoleSidebarMap = {
     { label: 'Rx Templates', href: '/dashboard/doctor/rx-templates', icon: Zap },
     { label: 'Earnings', href: '/dashboard/doctor/earnings', icon: IndianRupee },
     { label: 'Referral', href: '/dashboard/doctor/referral', icon: Gift },
+    { label: 'Plan & Billing', href: '/dashboard/doctor/billing', icon: CreditCard },
     { label: 'Schedule', href: '/dashboard/doctor/schedule', icon: Clock },
     { label: 'Patients', href: '/dashboard/doctor/patients', icon: Users },
     { label: 'Medicine Master', href: '/dashboard/doctor/medicines', icon: FlaskConical },

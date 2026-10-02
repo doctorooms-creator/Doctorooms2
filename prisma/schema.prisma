@@ -2296,8 +2296,9 @@ model Redemption {
 }
 
 // Foundation for the pricing/plan system (docs/PRICING-STRATEGY.md).
-// One active subscription per hospital. Inert in Phase 1 (no feature gating
-// yet) — pro_month point redemptions write here.
+// One active subscription per hospital. pro_month/pro_year/hospital_month point
+// redemptions + (future) Razorpay payments write here; plans.ts resolves the
+// effective plan for gating.
 model Subscription {
   id                 String    @id @default(cuid())
   hospitalId         String    @unique
@@ -2311,4 +2312,18 @@ model Subscription {
   updatedAt          DateTime  @updatedAt
 
   @@index([planKey, status])
+}
+
+// Monthly metering for plan limits (docs/PRICING-STRATEGY.md §3.3 walls).
+// One row per hospital+metric+month; counters increment atomically.
+model PlanUsage {
+  id         String   @id @default(cuid())
+  hospitalId String
+  metric     String   // whatsapp | ai
+  monthKey   String   // "2026-02" UTC bucket
+  count      Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([hospitalId, metric, monthKey])
+  @@index([hospitalId, monthKey])
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/api-auth'
+import { checkSeatWall } from '@/lib/plans'
 
 const VALID_QUALIFICATIONS = ['GNM', 'BSc Nursing', 'ANM']
 const VALID_DESIGNATIONS = ['Staff Nurse', 'Sister', 'Nursing Incharge']
@@ -126,6 +127,12 @@ export async function POST(request: NextRequest) {
     const hospital = await db.hospital.findUnique({ where: { id: hospitalId } })
     if (!hospital) {
       return NextResponse.json({ error: 'Hospital not found' }, { status: 404 })
+    }
+
+    // ── Plan seat wall (Free: 1 nurse seat — Pro: 3) ──
+    const seat = await checkSeatWall(hospitalId, 'nurse_seats')
+    if (seat.blocked && seat.wall) {
+      return NextResponse.json({ error: seat.wall.message, upgrade: seat.wall }, { status: 402 })
     }
 
     // Verify ward exists if provided

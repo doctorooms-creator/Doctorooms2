@@ -70,11 +70,12 @@ import {
   Stethoscope,
   Pill,
   HandHelping,
-  HeadsetMic,
+  Headset,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { resolveAvatarUrl } from '@/lib/avatar-url'
+import { UpgradeWallDialog, type UpgradeWallPayload } from '@/components/upgrade-wall-dialog'
 import { toast } from 'sonner'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -134,7 +135,7 @@ const statusBadgeColors: Record<string, string> = {
 }
 
 const roleIcons: Record<string, React.ElementType> = {
-  receptionist: HeadsetMic,
+  receptionist: Headset,
   pharmacist: Pill,
   assistant: HandHelping,
   doctor: Stethoscope,
@@ -154,6 +155,7 @@ export default function HospitalStaffPage({ params }: { params: Promise<{ id: st
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [showAddDialog, setShowAddDialog] = useState(false)
+  const [upgradeWall, setUpgradeWall] = useState<UpgradeWallPayload | null>(null)
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null)
 
   // Add staff form state
@@ -210,7 +212,15 @@ export default function HospitalStaffPage({ params }: { params: Promise<{ id: st
         body: JSON.stringify(payload),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to create staff')
+      if (!res.ok) {
+        // Plan seat wall → open the upgrade dialog (admin mode)
+        if (res.status === 402 && data.upgrade) {
+          setUpgradeWall(data.upgrade as UpgradeWallPayload)
+        }
+        throw Object.assign(new Error(data.error || 'Failed to create staff'), {
+          isPlanWall: res.status === 402,
+        })
+      }
       return data
     },
     onSuccess: () => {
@@ -221,6 +231,9 @@ export default function HospitalStaffPage({ params }: { params: Promise<{ id: st
     },
     onError: (err: Error) => {
       toast.error(err.message)
+      if ((err as Error & { isPlanWall?: boolean }).isPlanWall) {
+        setShowAddDialog(false)
+      }
     },
   })
 
@@ -748,7 +761,7 @@ export default function HospitalStaffPage({ params }: { params: Promise<{ id: st
                 <SelectContent>
                   <SelectItem value="receptionist">
                     <span className="flex items-center gap-2">
-                      <HeadsetMic className="h-3.5 w-3.5" />
+                      <Headset className="h-3.5 w-3.5" />
                       Receptionist
                     </span>
                   </SelectItem>
@@ -917,6 +930,14 @@ export default function HospitalStaffPage({ params }: { params: Promise<{ id: st
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Plan Seat Wall (Free plan limits) ───────────────────────────── */}
+      <UpgradeWallDialog
+        open={!!upgradeWall}
+        onOpenChange={(o) => { if (!o) setUpgradeWall(null) }}
+        wall={upgradeWall}
+        mode="admin"
+      />
     </div>
   )
 }

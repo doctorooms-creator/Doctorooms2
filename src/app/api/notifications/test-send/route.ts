@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/api-auth'
 import { sendViaChannel, isSmsConfigured } from '@/lib/notify-channels'
+import { checkAndIncrementMetric } from '@/lib/plans'
 
 /**
  * POST /api/notifications/test-send
@@ -28,6 +29,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Hospital not found' }, { status: 404 })
       }
       hospitalId = hospital.id
+    }
+
+    // ── Plan wall: reminder metering (Free 20/mo → Pro 1,000/mo) ──
+    // Counted per hospital per calendar month; soft wall with upgrade payload.
+    if (hospitalId) {
+      const meter = await checkAndIncrementMetric(hospitalId, 'whatsapp')
+      if (meter.blocked && meter.wall) {
+        return NextResponse.json(
+          { success: false, error: meter.wall.message, upgrade: meter.wall },
+          { status: 402 }
+        )
+      }
     }
 
     const body = await req.json().catch(() => null)

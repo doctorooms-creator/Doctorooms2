@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/api-auth'
+import { checkSeatWall } from '@/lib/plans'
 import { hash } from 'bcryptjs'
 
 export async function GET(
@@ -185,6 +186,16 @@ export async function POST(
     const validRoles = ['receptionist', 'pharmacist', 'assistant', 'doctor']
     if (!validRoles.includes(role)) {
       return NextResponse.json({ error: `Invalid role. Must be one of: ${validRoles.join(', ')}` }, { status: 400 })
+    }
+
+    // ── Plan seat wall (Free: 1 receptionist / 1 doctor — Pro: 3+3) ──
+    // Growth-celebration framing per PRICING-STRATEGY §3.3 (never "denied").
+    const seatRole = role === 'receptionist' ? 'receptionist_seats' : role === 'doctor' ? 'doctor_seats' : null
+    if (seatRole) {
+      const seat = await checkSeatWall(id, seatRole)
+      if (seat.blocked && seat.wall) {
+        return NextResponse.json({ error: seat.wall.message, upgrade: seat.wall }, { status: 402 })
+      }
     }
 
     // Check email uniqueness

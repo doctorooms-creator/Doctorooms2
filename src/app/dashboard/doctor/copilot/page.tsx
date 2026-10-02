@@ -29,6 +29,7 @@ import {
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { ActionCardView } from '@/components/copilot/action-card'
+import { UpgradeWallDialog, type UpgradeWallPayload } from '@/components/upgrade-wall-dialog'
 import type { CopilotActionCard, CopilotChart } from '@/lib/copilot/action-card'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -173,6 +174,8 @@ export default function CopilotStudioPage() {
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [upgradeWall, setUpgradeWall] = useState<UpgradeWallPayload | null>(null)
+  const [walletSpendable, setWalletSpendable] = useState(0)
   const [pending, setPending] = useState<PendingAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
@@ -403,6 +406,19 @@ export default function CopilotStudioPage() {
         })
 
         if (!res.ok || !res.body) {
+          // ── Plan wall (402): AI credits exhausted for this month ──
+          if (res.status === 402) {
+            const d = await res.json().catch(() => null)
+            setMessages((prev) => prev.filter((m) => m.id !== userMsg.id && m.id !== aiId))
+            if (d?.upgrade) {
+              setUpgradeWall(d.upgrade as UpgradeWallPayload)
+              fetch('/api/plans/me')
+                .then((r) => (r.ok ? r.json() : null))
+                .then((pm) => { if (pm?.wallet) setWalletSpendable(pm.wallet.spendable as number) })
+                .catch(() => {})
+              return
+            }
+          }
           throw new Error(res.status === 401 ? 'Session expired — please re-login' : 'Copilot unavailable')
         }
 
@@ -1291,6 +1307,14 @@ export default function CopilotStudioPage() {
           </p>
         </div>
       </section>
+
+      {/* Plan soft wall — AI credits exhausted (Free 50/mo) */}
+      <UpgradeWallDialog
+        open={!!upgradeWall}
+        onOpenChange={(o) => { if (!o) setUpgradeWall(null) }}
+        wall={upgradeWall}
+        walletSpendable={walletSpendable}
+      />
     </div>
   )
 }

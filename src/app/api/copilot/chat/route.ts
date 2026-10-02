@@ -24,6 +24,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { getCtx, sanitizeMessage } from '@/lib/copilot/guard'
+import { checkAndIncrementMetric, getHospitalIdForUser } from '@/lib/plans'
 import { classifyIntent } from '@/lib/copilot/router'
 import { fetchData } from '@/lib/copilot/agents/query'
 import { buildSystemPrompt, streamChat, type LLMMessage } from '@/lib/copilot/llm'
@@ -54,6 +55,17 @@ export async function POST(req: NextRequest) {
   const message = sanitizeMessage(body.message)
   if (!message) {
     return Response.json({ error: 'Message is required' }, { status: 400 })
+  }
+
+  // ── Plan wall: AI credits metering (Free 50/mo → Pro 500/mo) ──
+  // Soft wall per PRICING-STRATEGY §3.3: growth-celebration framing, never
+  // mid-stream — the 402 payload renders in the UpgradeWallDialog.
+  const planHospitalId = await getHospitalIdForUser({ id: ctx.doctorUserId, role: 'doctor' })
+  if (planHospitalId) {
+    const meter = await checkAndIncrementMetric(planHospitalId, 'ai')
+    if (meter.blocked && meter.wall) {
+      return Response.json({ error: meter.wall.message, upgrade: meter.wall }, { status: 402 })
+    }
   }
 
   const startedAt = Date.now()
