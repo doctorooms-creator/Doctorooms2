@@ -37,9 +37,9 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       where.OR = [
-        { coDetail: { contains: search } },
-        { coDetailEn: { contains: search } },
-        { coCode: { contains: search } },
+        { coDetail: { contains: search, mode: 'insensitive' } },
+        { coDetailEn: { contains: search, mode: 'insensitive' } },
+        { coCode: { contains: search, mode: 'insensitive' } },
       ]
     }
 

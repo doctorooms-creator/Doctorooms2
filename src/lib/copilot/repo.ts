@@ -88,7 +88,7 @@ export async function findBookingByAppointmentNo(ctx: CopilotCtx, appointmentNo:
   return db.booking.findFirst({
     where: {
       doctorId: ctx.doctorId,
-      appointmentNo: { contains: appointmentNo.trim() },
+      appointmentNo: { contains: appointmentNo.trim(), mode: 'insensitive' },
     },
     select: bookingSelect,
     orderBy: { createdAt: 'desc' },
@@ -144,7 +144,7 @@ export async function patientHistoryByMobile(ctx: CopilotCtx, mobile: string): P
   const m = mobile.replace(/\D/g, '')
   if (m.length < 4) return null
   const user = await db.user.findFirst({
-    where: { mobileNo: { contains: m }, role: 'patient' },
+    where: { mobileNo: { contains: m, mode: 'insensitive' }, role: 'patient' },
     select: { id: true, name: true, mobileNo: true, gender: true },
   })
   if (!user) return null
@@ -164,7 +164,7 @@ export async function patientHistoryByName(ctx: CopilotCtx, name: string): Promi
   const users = await db.user.findMany({
     where: {
       role: 'patient',
-      name: { contains: name.trim() },
+      name: { contains: name.trim(), mode: 'insensitive' },
       bookings: { some: { doctorId: ctx.doctorId } }, // only patients THIS doctor saw
     },
     select: { id: true, name: true, mobileNo: true, gender: true },

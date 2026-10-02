@@ -152,7 +152,7 @@ export async function GET(request: NextRequest) {
           ? { in: status.split(',').map((s) => s.trim()).filter(Boolean) }
           : status,
       }),
-      ...(patientName && { patientName: { contains: patientName } }),
+      ...(patientName && { patientName: { contains: patientName, mode: 'insensitive' } }),
       ...(fromDate && { createdAt: { gte: new Date(fromDate) } }),
       ...(toDate && { createdAt: { ...(fromDate ? {} : { gte: new Date('2000-01-01') }), lte: new Date(toDate + 'T23:59:59') } }),
     }
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
     // If testName is provided, filter through testMaster relation
     if (testName) {
       const testMasters = await db.labTestMaster.findMany({
-        where: { name: { contains: testName } },
+        where: { name: { contains: testName, mode: 'insensitive' } },
         select: { id: true },
       })
       if (testMasters.length > 0) {

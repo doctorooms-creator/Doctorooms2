@@ -50,8 +50,9 @@ export async function uploadToStorage(
         const uploadStream = cloudinary.uploader
           .upload_stream(
             {
+              // publicId already includes the folder — passing `folder` too
+              // would duplicate it (avatars/avatars/...).
               public_id: publicId,
-              folder,
               resource_type: isImage ? 'image' : 'raw',
               ...(isImage && {
                 transformation: [{ width: 800, height: 800, crop: 'limit', quality: 'auto' }],

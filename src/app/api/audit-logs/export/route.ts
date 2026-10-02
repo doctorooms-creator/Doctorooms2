@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     const where: Record<string, unknown> = {}
     if (userId) where.userId = userId
     if (action && action !== 'All') where.action = action
-    if (entityType) where.entityType = { contains: entityType }
+    if (entityType) where.entityType = { contains: entityType, mode: 'insensitive' }
 
     const logs = await db.auditLog.findMany({
       where,

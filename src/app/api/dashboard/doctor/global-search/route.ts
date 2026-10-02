@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Case-insensitive contains for SQLite
-    const contains = { contains: q }
+    const contains = { contains: q, mode: 'insensitive' }
 
     // Latest booking per matching patient (name OR token OR mobile match).
     // tokenNumber is stored like "PEDI-004" — allow searching with or without
@@ -46,7 +46,10 @@ export async function GET(req: NextRequest) {
           { user: { mobileNo: contains } },
           { user: { name: contains } },
           ...(isNumericTail
-            ? [{ tokenNumber: { contains: `-${q}` } }, { tokenNumber: { contains: `#${q}` } }]
+            ? [
+                { tokenNumber: { contains: `-${q}`, mode: 'insensitive' } },
+                { tokenNumber: { contains: `#${q}`, mode: 'insensitive' } },
+              ]
             : []),
         ],
       },

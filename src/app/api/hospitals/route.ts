@@ -20,8 +20,8 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { hospital: { hospitalName: { contains: search } } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { hospital: { hospitalName: { contains: search, mode: 'insensitive' } } },
       ]
     }
 

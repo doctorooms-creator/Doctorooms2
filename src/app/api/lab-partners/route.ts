@@ -32,11 +32,11 @@ export async function GET(req: NextRequest) {
     if (createdBy) where.createdBy = createdBy
     if (search) {
       where.OR = [
-        { labName: { contains: search } },
-        { ownerName: { contains: search } },
-        { email: { contains: search } },
-        { mobile: { contains: search } },
-        { city: { contains: search } },
+        { labName: { contains: search, mode: 'insensitive' } },
+        { ownerName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { mobile: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
       ]
     }
 

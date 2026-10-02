@@ -37,8 +37,8 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       where.OR = [
-        { suggestions: { contains: search } },
-        { suggestionsEn: { contains: search } },
+        { suggestions: { contains: search, mode: 'insensitive' } },
+        { suggestionsEn: { contains: search, mode: 'insensitive' } },
       ]
     }
 

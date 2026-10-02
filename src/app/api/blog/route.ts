@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
     // Free-text search across title and content
     if (search) {
       where.OR = [
-        { title: { contains: search } },
-        { content: { contains: search } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { content: { contains: search, mode: 'insensitive' } },
       ]
     }
 

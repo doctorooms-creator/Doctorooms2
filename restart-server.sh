@@ -10,12 +10,19 @@ if ss -tlnp 2>/dev/null | grep -q ':3000 '; then
 fi
 
 # Server is dead — restart it
-pkill -9 -f "next" 2>/dev/null
+pkill -9 -f "next/dist/bin/next" 2>/dev/null
+pkill -9 -f "next-server" 2>/dev/null
 sleep 1
 
-# Ensure .env has critical vars
-if ! grep -q "^DEV_MODE=1$" /home/z/my-project/.env 2>/dev/null; then
-  printf 'DATABASE_URL=file:/home/z/my-project/db/custom.db\nDEV_MODE=1\nNEXTAUTH_SECRET=YOUR_NEXTAUTH_SECRET_HERE\nNEXT_PUBLIC_SUPABASE_URL=https://fmsccgnfdjiophuyjwcv.supabase.co\nSUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY_HERE\nSUPABASE_SERVICE_ROLE_KEY=YOUR_SUPABASE_SECRET_KEY_HERE\nSMS_PROVIDER=log\nNOTIFICATION_SERVICE_URL=http://localhost:3005\n' > /home/z/my-project/.env
+# Load .env into the environment (overrides any inherited/system DATABASE_URL —
+# the Supabase Postgres URL + Cloudinary keys live ONLY in .env, which is gitignored).
+if [ -f /home/z/my-project/.env ]; then
+  set -a
+  . /home/z/my-project/.env
+  set +a
+else
+  echo "[restart] FATAL: .env missing — cannot start without DB config $(date)" >> /home/z/my-project/restart.log
+  exit 1
 fi
 
 # Start server

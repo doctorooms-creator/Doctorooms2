@@ -44,12 +44,12 @@ export async function GET(request: NextRequest) {
     if (category) where.category = category
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { contactPerson: { contains: search } },
-        { phoneNo: { contains: search } },
-        { email: { contains: search } },
-        { gstNo: { contains: search } },
-        { city: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { contactPerson: { contains: search, mode: 'insensitive' } },
+        { phoneNo: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { gstNo: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
       ]
     }
 

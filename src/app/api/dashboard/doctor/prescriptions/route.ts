@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
     // Default: own prescriptions
     const where: Record<string, unknown> = { doctorId: doctor.id }
     if (search) {
-      where.patientName = { contains: search }
+      where.patientName = { contains: search, mode: 'insensitive' }
     }
 
     const prescriptions = await db.prescription.findMany({

@@ -110,8 +110,8 @@ export async function GET(request: NextRequest) {
         ...(status && { status }),
         ...(search && {
           OR: [
-            { name: { contains: search } },
-            { shortCode: { contains: search } },
+            { name: { contains: search, mode: 'insensitive' } },
+            { shortCode: { contains: search, mode: 'insensitive' } },
           ],
         }),
       },

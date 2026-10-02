@@ -50,9 +50,9 @@ export async function GET(request: NextRequest) {
       // or appointment number — the desk searches by the ID printed on the
       // prescription when the patient returns.
       where.OR = [
-        { patientName: { contains: search } },
-        { booking: { tokenNumber: { contains: search } } },
-        { booking: { appointmentNo: { contains: search } } },
+        { patientName: { contains: search, mode: 'insensitive' } },
+        { booking: { tokenNumber: { contains: search, mode: 'insensitive' } } },
+        { booking: { appointmentNo: { contains: search, mode: 'insensitive' } } },
       ]
     }
 

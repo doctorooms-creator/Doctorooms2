@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
     // DoctorMedicine.userId stores Doctor.id (not User.id)
     const where = {
       userId: receptionist.doctorId,
-      ...(search ? { name: { contains: search } } : {}),
+      ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
     }
 
     const medicines = await db.doctorMedicine.findMany({

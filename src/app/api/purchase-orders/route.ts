@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = { hospitalId }
     if (status) where.status = status
     if (supplier) {
-      where.supplierName = { contains: supplier }
+      where.supplierName = { contains: supplier, mode: 'insensitive' }
     }
     if (fromDate || toDate) {
       const dateFilter: Record<string, unknown> = {}

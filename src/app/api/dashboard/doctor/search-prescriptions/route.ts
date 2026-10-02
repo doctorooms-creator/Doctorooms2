@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
       // Search by Appointment ID (appointmentNo) → 1 prescription
       const booking = await db.booking.findFirst({
         where: {
-          appointmentNo: { contains: value },
+          appointmentNo: { contains: value, mode: 'insensitive' },
           doctorId: doctor.id,
         },
         include: {
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
       // Find the patient user by mobile number
       const patientUser = await db.user.findFirst({
         where: {
-          mobileNo: { contains: value },
+          mobileNo: { contains: value, mode: 'insensitive' },
         },
         select: { id: true, name: true, mobileNo: true },
       })

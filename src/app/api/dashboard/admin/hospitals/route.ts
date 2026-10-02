@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = {}
     if (search) {
       where.OR = [
-        { hospitalName: { contains: search } },
-        { user: { name: { contains: search } } },
+        { hospitalName: { contains: search, mode: 'insensitive' } },
+        { user: { name: { contains: search, mode: 'insensitive' } } },
       ]
     }
     if (cityFilter !== 'all') {

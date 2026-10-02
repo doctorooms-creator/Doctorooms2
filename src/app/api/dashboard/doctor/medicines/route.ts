@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
-      where.name = { contains: search }
+      where.name = { contains: search, mode: 'insensitive' }
     }
 
     const medicines = await db.doctorMedicine.findMany({

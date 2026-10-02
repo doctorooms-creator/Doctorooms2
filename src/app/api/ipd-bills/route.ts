@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
 
     if (search) {
       where.admission = {
-        patientName: { contains: search },
+        patientName: { contains: search, mode: 'insensitive' },
       }
     }
 

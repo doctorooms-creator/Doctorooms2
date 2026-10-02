@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     const bookings = await db.booking.findMany({
       where: {
         doctorId: doctor.id,
-        ...(search ? { patientName: { contains: search } } : {}),
+        ...(search ? { patientName: { contains: search, mode: 'insensitive' } } : {}),
       },
       distinct: ['userId'],
       orderBy: { updatedAt: 'desc' },

@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || ''
 
     if (search) {
-      where.name = { contains: search }
+      where.name = { contains: search, mode: 'insensitive' }
     }
 
     const medicines = await db.doctorMedicine.findMany({

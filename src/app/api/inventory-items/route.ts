@@ -121,10 +121,10 @@ export async function GET(request: NextRequest) {
     if (status) where.status = status
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { genericName: { contains: search } },
-        { batchNo: { contains: search } },
-        { manufacturer: { contains: search } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { genericName: { contains: search, mode: 'insensitive' } },
+        { batchNo: { contains: search, mode: 'insensitive' } },
+        { manufacturer: { contains: search, mode: 'insensitive' } },
       ]
     }
 

@@ -3,8 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  // system-level DATABASE_URL=file:... that overrides the .env file.
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = {}
     if (search) {
       where.OR = [
-        { title: { contains: search } },
-        { author: { name: { contains: search } } },
+        { title: { contains: search, mode: 'insensitive' } },
+        { author: { name: { contains: search, mode: 'insensitive' } } },
       ]
     }
 
