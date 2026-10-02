@@ -5564,3 +5564,25 @@ Stage Summary:
 - ANSWER: NO — product currently runs 100% on local SQLite (db/custom.db). Supabase contributes NOTHING active (its storage layer is inactive due to placeholder keys). Redis/Cloudinary also inactive.
 - "Supabase only" migration path ALREADY EXISTS in codebase: needs (1) Supabase Postgres connection string, (2) real service-role key from user; then provider switch sqlite→postgresql, db:push, run migrate-to-postgres.ts, restart. Chat-service inherits same DATABASE_URL automatically.
 - Caveats for migration: system-level DATABASE_URL env + restart-server.sh hardcode SQLite path — both must be updated; SQLite→Postgres may need type/default tweaks; user must provide Supabase DB password (never commit it).
+
+---
+Task ID: db-audit-supabase-live-check
+Agent: Main Agent (Z.ai Code)
+Task: User provided NEW Supabase credentials (project dauhputqahqutczyrfme) and insisted "product is LIVE on Supabase, we connected it before, audit yourself — NO migration, NO development". → Read-only audit of the actual Supabase project via REST API (port 5432 blocked by sandbox; pooler tenant not found; REST/HTTPS worked with service-role key).
+
+Work Log:
+- Connected to https://dauhputqahqutczyrfme.supabase.co/rest/v1/ with service-role key → OpenAPI spec lists 32 tables (OLD schema: User, Doctor, Booking, Prescription, PCo, PMedicine, PLabel, masters etc. — MISSING all newer tables: FindingsMaster, FindingsMedicine, LabReport*, IPD*, inventory, wards/beds etc. Current SQLite has 101 tables).
+- Counted rows in every Supabase table: User=29, Doctor=3, Hospital=2, Booking=13, Prescription=4, BookingChat=3, DoctorSchedule=14, SuggestionsMaster=27, CoMaster=15, DiseaseMaster=20, DoctorMedicine=21, LabelMaster=17, QuestionsMaster=9, DoctorRating=4, DoctorGallery=6, Notification=15, Post=4, Slider=3, others small; FindingsMaster ABSENT.
+- Checked timestamps: EVERY row in Supabase was created 2026-08-11 19:07–19:45 UTC (one-time seed/test session ~52 days ago). NOTHING written since. ID prefixes in Supabase are 'cmsp…' era; current SQLite uses 'cmt…' era — two separate datasets, SQLite was re-seeded later and grown independently.
+- Supabase Storage: 3 buckets exist (avatars, medical-docs, sliders, all created 2026-08-11T19:07) — ALL EMPTY (0 files).
+- Local SQLite (db/custom.db) for same tables: User=101, Doctor=53, Hospital=3, Booking=18, Prescription=13, DoctorSchedule=165, SuggestionsMaster=116, CoMaster=36, QuestionsMaster=31, PMedicine=29, PLabel=16, FindingsMaster=18(+FindingsMedicine=36), DoctorRating=5, Receptionist=6, DoctorAssistant=2, DoctorPharmacist=3. Latest User/Booking createdAt = 2026-10-02T08:21 (TODAY) — app is ACTIVELY writing to SQLite right now.
+- Verified no direct Supabase REST/PostgREST usage anywhere in src/ outside lib/supabase.ts (which is inactive: .env keys are placeholders, and .env points to the OLD project fmsccgnfdjiophuyjwcv anyway).
+- DATA-LOSS RISK found: db/custom.db is NOT tracked by git (git ls-files empty). All live data (53 doctors, 101 users, 165 schedules, RX settings etc.) exists ONLY in this sandbox file. Supabase copy does NOT protect it.
+- Security note: scripts/switch-to-supabase.sh contains an OLD Supabase DB password in plaintext (stale — user provided a different password today). Flagged for later cleanup; not touched (no-development order).
+- Credentials from chat were used only inline in ephemeral commands; NOT written to any file.
+
+Stage Summary:
+- VERDICT: Live app runs 100% on LOCAL SQLite. Supabase project contains only a stale one-day seed from 2026-08-11 (29 users / 3 doctors / 13 bookings / 4 rx / empty storage) and an outdated 32-table schema. Nothing has been written to Supabase in 52 days; nothing can be, because .env keys are placeholders pointing at a different (old) project.
+- What user sees in the app = served from SQLite. What user sees in Supabase dashboard = old seed data.
+- User's "data-loss protection" belief is FALSE: current data is unprotected (single sandbox file, not in git, not in Supabase).
+- Migration to "Supabase-only" remains NOT started per user's explicit order. When approved, plan: set real keys in .env (new project ref), switch provider to postgresql, db:push (creates missing 69 tables), run migrate-to-postgres.ts (SQLite→Supabase), fix restart-server.sh DATABASE_URL hardcode, restart. Pooler/direct-port issue means db:push may need REST/HTTPS workaround or user-run script on their machine (scripts/switch-to-supabase.sh exists for that, needs password update).
