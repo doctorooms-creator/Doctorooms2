@@ -5718,3 +5718,22 @@ Stage Summary:
 - PRICING v2 READY (doc-only, zero code): persuasion-optimized 3 plans — FREE (clinic ops engine, unlimited patients/Rx, habit-forming tastes of paid features) / PRO ₹833/mo eff. (growth+money features lead, 60-day guarantee, founder ₹4,999 forever for first 1,000) / HOSPITAL PRO ₹4,999/mo eff. (leakage-recovery 24x ROI story, decoy anchor).
 - Core strategic shift: conversion happens INSIDE the product at emotional peaks (engineered walls/celebrations), not on the pricing page.
 - 6 open decisions for user in doc §9 (founder pricing, guarantee, WhatsApp cap 20 vs 50, dual billing, seat overage, clinic-page scope).
+
+---
+Task ID: referral-system-plan
+Agent: main (Z.ai Code)
+Task: User proposed referral points system (doctor brings genuine referral → 2,000 points usable for account upgrade). Asked for a DETAILED implementation plan document; development to start LATER. No development done.
+
+Work Log:
+- Designed complete points economy: 1 pt = ₹0.50 base value; 2,000 pts full referral reward ≈ 1 month Pro (₹999); 18-month FIFO expiry; 60,000 pts/yr earn cap; clawback on referee refunds.
+- Staged award for "layak" (genuine) referrals: +300 activation (referee 1st booking) / +700 habit (20 bookings) / +1,000 paid conversion = 2,000 total. Free-but-active referrals earn 1,000 pts — deliberately rewards registration-maximization goal.
+- Milestone bonuses: 5th conversion +2,000, 10th +5,000 + champion badge.
+- Redemption catalog (DB-driven, 6 items): pro_month 2,000 pts / pro_year 20,000 / seat_year 5,000 / ai_500pack 1,000 / whatsapp_1000pack 1,000 / hospital_month 10,000. Points-only upgrade path exists for FREE users ("pay with points" dual-button in upgrade modal).
+- Referee welcome: extended 30-day full trial (double-sided).
+- Wrote docs/REFERRAL-SYSTEM-PLAN.md (12 sections): user flows (referrer dashboard, referee signup w/ code prefill, redemption flow), Prisma schema (4 additive tables: ReferralCode, Referral, PointsLedger append-only, Redemption), API surface (validate/claim/me/redeem/share-track + awardPoints internal + Razorpay webhook hook + daily cron), 7 anti-fraud rules (self-referral block, 15-day pending spendability, append-only ledger, caps), frontend component inventory, socket event referral-reward (1-line whitelist add), analytics/KPIs (K>=0.3 viral coefficient, referred-activation 50%), 3 build phases, 10 pre-decided edge cases, kill-switch safety, 5 open decisions.
+- Updated PRICING-STRATEGY.md §5 referral row to point to the new points system (docs synced).
+
+Stage Summary:
+- REFERRAL SYSTEM PLAN READY (doc-only, zero code): 2,000-point referral economy fully specified — schema, APIs, fraud rules, flows, phases, edge cases — ready to hand to implementation when user says "start".
+- Strategic value: CAC killer (peer trust channel), points-only Pro upgrade path (payment friction killer), referral points = switching cost (lock-in), rewards active free referrals (registration engine).
+- 5 open decisions in doc §12 (stage split, expiry, referee welcome, leaderboard, catalog size).

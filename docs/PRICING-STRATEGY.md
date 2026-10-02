@@ -163,7 +163,7 @@ What the doctor GETS (monthly value framing):
 | **Founder's Pricing** | First **1,000 doctors**: Pro at **₹4,999/yr — forever grandfathered** (renews at ₹4,999 for life) | Scarcity + ownership ("founder doctor" badge on profile + public page). Grandfathering removes "what if price drops" wait-logic |
 | Countdown | Live counter on pricing page: "847/1,000 founder seats left" | Verifiable, honest scarcity |
 | 60-day ROI guarantee | "60 din mein jo bhi aap recover karein wo software ki price se kam ho, to full refund. Data wapas CSV." | Risk reversal — the single highest-leverage conversion lever |
-| Double-sided referral | Refer a doctor → both get 1 month Pro free | Doctor-friend trust channel (ICP trigger #5) |
+| Double-sided referral | Refer a doctor → **2,000 points** (staged: activation/habit/conversion) + referee gets 30-day trial. Full points economy in **REFERRAL-SYSTEM-PLAN.md** | Doctor-friend trust channel (ICP trigger #5) — points = upgrade currency ("1 referral ≈ 1 month Pro free") |
 | Exit-intent | "Ruko! Founder seats khatam ho rahe hain — 60-day guarantee ke saath try karo. Card se ₹0 aaj." | Last catch |
 
 ---
