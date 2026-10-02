@@ -10,6 +10,10 @@
  * Anti-fraud: earn entries spendable after 15 days (pendingUntil), expire after
  * 18 months (FIFO approximated — spend entries never expire), 60k/yr earn cap,
  * idempotent awards via (type, refId) uniqueness check.
+ *
+ * Phase 2 (plan §9): milestone bonuses (5th/10th conversion), conversion +
+ * clawback (billing-ready — Razorpay webhook / admin ops), daily jobs
+ * (pending-referral expiry, FIFO points-expiry materialization, stage sweep).
  */
 
 import { db } from '@/lib/db'
@@ -35,6 +39,15 @@ export const POINTS_EXPIRY_MONTHS = 18
 /** Annual earn cap per user (30 full referrals). */
 export const ANNUAL_EARN_CAP = 60_000
 
+/** Days a pending referral (no bookings) survives before auto-expiring. */
+export const REFERRAL_PENDING_EXPIRY_DAYS = 90
+
+/** Milestone bonuses — rolling 12-month converted referrals (plan §1.3). */
+export const MILESTONE_BONUSES = [
+  { conversions: 5, points: 2_000, type: 'earn_milestone_5', label: '5th Conversion Bonus' },
+  { conversions: 10, points: 5_000, type: 'earn_milestone_10', label: '10th Conversion — Referral Champion' },
+] as const
+
 export interface RedeemItem {
   itemType: string
   title: string
@@ -44,7 +57,7 @@ export interface RedeemItem {
   active: boolean
 }
 
-/** Redemption catalog — Phase 1 activates pro_month + ai_500pack. */
+/** Redemption catalog — fully activated in Phase 2 (plan §1.4). */
 export const REDEEM_CATALOG: RedeemItem[] = [
   {
     itemType: 'pro_month',
@@ -68,7 +81,7 @@ export const REDEEM_CATALOG: RedeemItem[] = [
     description: '10 successful referrals = poora saal free',
     points: 20000,
     cashValue: 9999,
-    active: false,
+    active: true,
   },
   {
     itemType: 'seat_year',
@@ -76,7 +89,7 @@ export const REDEEM_CATALOG: RedeemItem[] = [
     description: 'Pro plan mein ek aur doctor seat',
     points: 5000,
     cashValue: 2499,
-    active: false,
+    active: true,
   },
   {
     itemType: 'whatsapp_1000pack',
@@ -84,7 +97,7 @@ export const REDEEM_CATALOG: RedeemItem[] = [
     description: 'Plan limit se zyada reminders',
     points: 1000,
     cashValue: 499,
-    active: false,
+    active: true,
   },
   {
     itemType: 'hospital_month',
@@ -92,7 +105,7 @@ export const REDEEM_CATALOG: RedeemItem[] = [
     description: 'IPD, OT, insurance — full hospital suite',
     points: 10000,
     cashValue: 4999,
-    active: false,
+    active: true,
   },
 ]
 
@@ -385,6 +398,249 @@ export async function checkReferralStages(refereeUserId: string): Promise<void> 
     // Stage checks must NEVER break the calling route (booking creation etc.)
     console.error('[referral] checkReferralStages failed:', err)
   }
+}
+
+// ─── Stage 3: conversion + milestones (Phase 2) ────────────────────────────
+
+/**
+ * Mark a referral CONVERTED (referee became a paying customer).
+ * Called by the Razorpay webhook on first payment.captured — or manually by
+ * an admin (ops tool for payments captured outside the webhook).
+ * Idempotent; also fires milestone bonuses (plan §1.3) at exactly the 5th /
+ * 10th conversion in a rolling 12-month window.
+ */
+export async function markReferralConverted(
+  refereeUserId: string,
+  source = 'billing'
+): Promise<{ converted: boolean; already?: boolean; milestoneAwarded?: string | null }> {
+  const referral = await db.referral.findUnique({ where: { refereeUserId } })
+  if (!referral) return { converted: false }
+  if (referral.status === 'converted') return { converted: true, already: true }
+
+  // Catch up stages 1–2 first (an admin may convert a pending referral whose
+  // referee already has bookings — those awards must not be lost).
+  await checkReferralStages(refereeUserId)
+  const fresh = await db.referral.findUnique({ where: { refereeUserId } })
+  if (!fresh) return { converted: false }
+
+  await awardPoints({
+    userId: fresh.referrerUserId,
+    type: 'earn_converted',
+    points: STAGE_AWARDS.converted,
+    refId: fresh.id,
+    note: `Referral converted to paid customer (${source})`,
+    emitMessage: `💳 Aapka referral paying customer ban gaya — ${STAGE_AWARDS.converted} points mile!`,
+  })
+  await db.referral.update({
+    where: { id: fresh.id },
+    data: {
+      status: 'converted',
+      convertedAt: new Date(),
+      activatedAt: fresh.activatedAt ?? new Date(),
+    },
+  })
+
+  // Milestone bonuses — exact-count trigger keeps each milestone once-only
+  // (idempotency also enforced via (type, refId) on the triggering referral).
+  const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+  const conversions = await db.referral.count({
+    where: {
+      referrerUserId: fresh.referrerUserId,
+      status: 'converted',
+      convertedAt: { gte: yearAgo },
+    },
+  })
+
+  let milestoneAwarded: string | null = null
+  for (const m of MILESTONE_BONUSES) {
+    if (conversions !== m.conversions) continue
+    const awarded = await awardPoints({
+      userId: fresh.referrerUserId,
+      type: m.type,
+      points: m.points,
+      refId: fresh.id,
+      note: `${m.label} — ${m.conversions} paid referrals in 12 months`,
+      emitMessage:
+        m.conversions === 10
+          ? `🏆 Aap ban gaye REFERRAL CHAMPION — ${m.points} bonus points mile!`
+          : `🏆 ${m.label}! ${m.points} bonus points mile!`,
+    })
+    if (awarded) milestoneAwarded = m.label
+  }
+
+  console.log(
+    `[referral] converted (${source}) referee=${refereeUserId} referrer=${fresh.referrerUserId} (12-mo conversions: ${conversions}${milestoneAwarded ? `, milestone: ${milestoneAwarded}` : ''})`
+  )
+  return { converted: true, milestoneAwarded }
+}
+
+/**
+ * Reverse the conversion award when a referee takes the 60-day-guarantee
+ * refund (plan §1.1 clawback). The ledger may go negative — future earnings
+ * offset it first, and the catalog's spendable check blocks redemptions
+ * while negative. Idempotent per referral; a later re-conversion does NOT
+ * re-award stage 3 (conservative anti-fraud, one shot per referral).
+ */
+export async function applyClawback(
+  refereeUserId: string,
+  reason = 'refund'
+): Promise<{ clawedBack: boolean }> {
+  const referral = await db.referral.findUnique({ where: { refereeUserId } })
+  if (!referral || referral.status !== 'converted') return { clawedBack: false }
+
+  const done = await awardPoints({
+    userId: referral.referrerUserId,
+    type: 'clawback',
+    points: -STAGE_AWARDS.converted,
+    refId: referral.id,
+    note: `Clawback: conversion award reversed (${reason})`,
+    emitMessage: `⚠️ Referee refund process hua — ${STAGE_AWARDS.converted} points reverse kiye gaye.`,
+  })
+  // Downgrade status back to the highest stage actually earned.
+  await db.referral.update({
+    where: { id: referral.id },
+    data: { status: referral.habitAt ? 'habit' : 'activated', convertedAt: null },
+  })
+  if (done) {
+    console.log(`[referral] clawback (-${STAGE_AWARDS.converted}) referee=${refereeUserId} (${reason})`)
+  }
+  return { clawedBack: done }
+}
+
+// ─── Daily jobs (Phase 2 — run via /api/cron/referral-daily) ──────────────
+
+export interface DailyJobsResult {
+  ranAt: string
+  /** pending referrals > 90 days auto-expired */
+  expiredReferrals: number
+  /** distinct users whose stale points got materialized */
+  usersSwept: number
+  /** 'expire' ledger rows written */
+  expiredPointsEntries: number
+  /** total points expired */
+  expiredPoints: number
+  /** referrals re-checked for stage progression */
+  stageSweeps: number
+}
+
+interface FifoLot {
+  entryId: string
+  remaining: number
+  expiresAt: Date | null
+}
+
+/**
+ * Replay a user's ledger chronologically to compute remaining earn "lots"
+ * after all spends consumed them FIFO (oldest-expiring first).
+ * Materialized 'expire' entries zero their source lot, so partially-spent
+ * lots are never double-deducted on re-runs.
+ */
+async function replayFifoLots(userId: string): Promise<FifoLot[]> {
+  const entries = await db.pointsLedger.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, type: true, points: true, refId: true, expiresAt: true },
+    take: 2000,
+  })
+
+  const lots = new Map<string, FifoLot>()
+  const consume = (amountIn: number) => {
+    let amount = amountIn
+    const byExpiry = [...lots.values()].sort((a, b) => {
+      const ea = a.expiresAt ? a.expiresAt.getTime() : Number.MAX_SAFE_INTEGER
+      const eb = b.expiresAt ? b.expiresAt.getTime() : Number.MAX_SAFE_INTEGER
+      return ea - eb
+    })
+    for (const lot of byExpiry) {
+      if (amount <= 0) break
+      const take = Math.min(lot.remaining, amount)
+      lot.remaining -= take
+      amount -= take
+    }
+  }
+
+  for (const e of entries) {
+    if (e.points > 0) {
+      lots.set(e.id, { entryId: e.id, remaining: e.points, expiresAt: e.expiresAt })
+    } else if (e.type === 'expire' && e.refId) {
+      // Already-materialized expiry — the source lot is gone.
+      const lot = lots.get(e.refId)
+      if (lot) lot.remaining = 0
+    } else {
+      consume(-e.points)
+    }
+  }
+  return [...lots.values()].filter((l) => l.remaining > 0)
+}
+
+/**
+ * Daily maintenance — idempotent, safe to re-run any time (plan §4 cron):
+ *  a) auto-expire pending referrals older than 90 days (edge case §10)
+ *  b) FIFO points-expiry materialization: unspent lots past their 18-month
+ *     validity get an 'expire' ledger row so users see WHY balance dropped
+ *  c) sweep active referrals for missed stage progressions
+ */
+export async function runDailyReferralJobs(): Promise<DailyJobsResult> {
+  const now = new Date()
+
+  // (a) pending referrals that never activated
+  const pendingCutoff = new Date(
+    now.getTime() - REFERRAL_PENDING_EXPIRY_DAYS * 24 * 60 * 60 * 1000
+  )
+  const expired = await db.referral.updateMany({
+    where: { status: 'pending', createdAt: { lt: pendingCutoff } },
+    data: { status: 'expired', expiredAt: now },
+  })
+
+  // (b) FIFO expiry materialization — per-user replay, so only truly-unspent
+  // amounts expire (partial redemptions are never double-deducted)
+  const staleUsers = await db.pointsLedger.groupBy({
+    by: ['userId'],
+    where: { points: { gt: 0 }, expiresAt: { lte: now } },
+    orderBy: { userId: 'asc' },
+    take: 100,
+  })
+  let expiredPointsEntries = 0
+  let expiredPoints = 0
+  for (const u of staleUsers) {
+    const lots = await replayFifoLots(u.userId)
+    for (const lot of lots) {
+      if (!lot.expiresAt || lot.expiresAt > now || lot.remaining <= 0) continue
+      const done = await awardPoints({
+        userId: u.userId,
+        type: 'expire',
+        points: -lot.remaining,
+        refId: lot.entryId,
+        note: `${lot.remaining} points expire ho gaye (18-month validity khatam)`,
+      })
+      if (done) {
+        expiredPointsEntries++
+        expiredPoints += lot.remaining
+      }
+    }
+  }
+
+  // (c) stage sweep — catches habit progressions for referees whose bookings
+  // bypassed the booking-route hook (imported data, manual fixes etc.)
+  const active = await db.referral.findMany({
+    where: { status: { in: ['pending', 'activated'] } },
+    select: { refereeUserId: true },
+    take: 500,
+  })
+  for (const r of active) {
+    await checkReferralStages(r.refereeUserId)
+  }
+
+  const result: DailyJobsResult = {
+    ranAt: now.toISOString(),
+    expiredReferrals: expired.count,
+    usersSwept: staleUsers.length,
+    expiredPointsEntries,
+    expiredPoints,
+    stageSweeps: active.length,
+  }
+  console.log(`[referral] daily jobs: ${JSON.stringify(result)}`)
+  return result
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

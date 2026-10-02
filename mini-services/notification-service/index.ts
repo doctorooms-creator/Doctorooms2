@@ -273,6 +273,51 @@ httpServer.on('request', async (req, res) => {
   res.end(JSON.stringify({ error: 'Not found. Use POST /emit, GET /online-doctors, or GET /stats' }))
 })
 
+// ── Referral daily-jobs scheduler (Phase 2) ────────────────────────────────
+// The Next.js app has no internal cron — this long-running service triggers
+// the idempotent cron endpoint once after boot and at most once per 20h.
+// The endpoint does the actual work: pending-referral expiry sweeps, FIFO
+// points-expiry materialization, stage progression.
+// CRON_SECRET lives in this service's own .env (gitignored) and must match
+// the root app's .env.
+const CRON_SECRET = process.env.CRON_SECRET || ''
+const CRON_URL = 'http://localhost:3000/api/cron/referral-daily'
+let lastCronRun = 0
+
+async function runReferralDailyCron() {
+  if (!CRON_SECRET) {
+    console.log('[Cron] CRON_SECRET not set — referral daily jobs disabled')
+    return
+  }
+  try {
+    const res = await fetch(CRON_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-cron-secret': CRON_SECRET },
+    })
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    if (res.ok) {
+      lastCronRun = Date.now()
+      console.log(`[Cron] referral daily jobs OK → ${JSON.stringify(data)}`)
+    } else {
+      console.log(`[Cron] referral daily jobs failed (${res.status}) → ${JSON.stringify(data)}`)
+    }
+  } catch (err) {
+    console.log('[Cron] referral daily jobs error:', err)
+  }
+}
+
+// 45s boot delay lets the Next.js dev server warm up first.
+setTimeout(() => {
+  void runReferralDailyCron()
+}, 45_000)
+
+// Re-check every 6h; the 20h gate keeps it effectively daily (idempotent anyway).
+setInterval(() => {
+  if (Date.now() - lastCronRun > 20 * 60 * 60 * 1000) {
+    void runReferralDailyCron()
+  }
+}, 6 * 60 * 60 * 1000)
+
 const PORT = 3005
 httpServer.listen(PORT, () => {
   console.log(`[Notification Service] Socket.io + HTTP on port ${PORT}`)

@@ -1,10 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/api-auth'
+import {
+  awardPoints,
+  getWalletSummary,
+  markReferralConverted,
+  applyClawback,
+} from '@/lib/referral'
 
 /**
  * GET /api/admin/referrals
- * Admin analytics: funnel by stage, points economy, top referrers.
+ * Admin analytics: funnel by stage, points economy, top referrers,
+ * milestone stats and a fraud review queue (plan §5 rule 4).
+ *
+ * POST /api/admin/referrals   body: { action, ... }
+ * Ops tools (all admin-only):
+ *   adjust          { userId, points, note }   — manual ledger correction
+ *   mark-converted  { refereeUserId }          — conversion captured outside webhook
+ *   clawback        { refereeUserId }          — reverse a conversion award (refund)
+ *   expire-referral { referralId }             — force-expire a pending referral
  */
 export async function GET(req: NextRequest) {
   try {
@@ -13,6 +27,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 401 })
     }
 
+    const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+
     const [
       totalCodes,
       referralsByStatus,
@@ -20,6 +37,10 @@ export async function GET(req: NextRequest) {
       pointsRedeemed,
       redemptionsByItem,
       topReferrerRows,
+      recentByReferrer,
+      balances,
+      milestonesAwarded,
+      stalePending,
     ] = await Promise.all([
       db.referralCode.count(),
       db.referral.groupBy({ by: ['status'], _count: { _all: true } }),
@@ -32,15 +53,41 @@ export async function GET(req: NextRequest) {
         orderBy: { _count: { id: 'desc' } },
         take: 10,
       }),
+      // Fraud heuristic 1: >10 referrals created in the last 30 days
+      db.referral.groupBy({
+        by: ['referrerUserId'],
+        where: { createdAt: { gte: monthAgo } },
+        _count: { _all: true },
+        orderBy: { referrerUserId: 'asc' },
+      }),
+      // Fraud heuristic 2: negative ledger balance (clawback exceeded earnings)
+      db.pointsLedger.groupBy({ by: ['userId'], _sum: { points: true } }),
+      db.pointsLedger.groupBy({
+        by: ['type'],
+        where: { type: { in: ['earn_milestone_5', 'earn_milestone_10'] } },
+        _count: { _all: true },
+      }),
+      // Info: pending referrals drifting toward the 90-day auto-expiry
+      db.referral.count({ where: { status: 'pending', createdAt: { lt: sixtyDaysAgo } } }),
     ])
 
-    // Resolve top referrer names
+    // Resolve names for top referrers + fraud-flagged users
     const topIds = topReferrerRows.map((r) => r.referrerUserId)
+    const burstIds = recentByReferrer
+      .filter((r) => r._count._all > 10)
+      .map((r) => r.referrerUserId)
+    const negativeIds = balances
+      .filter((b) => (b._sum.points ?? 0) < 0)
+      .map((b) => b.userId)
+    const flagIds = [...new Set([...burstIds, ...negativeIds])]
+
     const users = await db.user.findMany({
-      where: { id: { in: topIds } },
+      where: { id: { in: [...topIds, ...flagIds] } },
       select: { id: true, name: true },
     })
     const nameMap = new Map(users.map((u) => [u.id, u.name]))
+    const recentCountMap = new Map(recentByReferrer.map((r) => [r.referrerUserId, r._count._all]))
+    const balanceMap = new Map(balances.map((b) => [b.userId, b._sum.points ?? 0]))
 
     const funnel = Object.fromEntries(referralsByStatus.map((r) => [r.status, r._count._all]))
 
@@ -49,7 +96,7 @@ export async function GET(req: NextRequest) {
       funnel,
       activatedRate: funnel.pending
         ? Math.round(((funnel.activated ?? 0) + (funnel.habit ?? 0) + (funnel.converted ?? 0)) /
-            Math.max(referralsByStatus.reduce((s, r) => s + r._count._all, 0), 1) * 100)
+              Math.max(referralsByStatus.reduce((s, r) => s + r._count._all, 0), 1) * 100)
         : 0,
       pointsIssued: pointsIssued._sum.points ?? 0,
       pointsRedeemed: Math.abs(pointsRedeemed._sum.points ?? 0),
@@ -62,9 +109,123 @@ export async function GET(req: NextRequest) {
         name: nameMap.get(r.referrerUserId) ?? 'Unknown',
         referrals: r._count._all,
       })),
+      milestones: milestonesAwarded.map((m) => ({
+        type: m.type,
+        count: m._count._all,
+      })),
+      stalePending,
+      fraudQueue: flagIds.map((id) => ({
+        userId: id,
+        name: nameMap.get(id) ?? 'Unknown',
+        reasons: [
+          ...(recentCountMap.get(id) && recentCountMap.get(id)! > 10
+            ? [`>10 referrals in last 30 days (${recentCountMap.get(id)})`]
+            : []),
+          ...((balanceMap.get(id) ?? 0) < 0
+            ? [`negative points balance (${balanceMap.get(id)}) — clawback exceeded earnings`]
+            : []),
+        ],
+        // Approximate live balance (includes expired earns — review signal only)
+        balance: balanceMap.get(id) ?? 0,
+      })),
     })
   } catch (err) {
     console.error('[admin/referrals] error:', err)
     return NextResponse.json({ error: 'Failed to load referral stats' }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const admin = await requireRole(req, 'admin')
+    if (!admin) {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 401 })
+    }
+
+    const { action, ...body } = (await req.json()) as Record<string, string | number>
+
+    switch (action) {
+      // ── Manual ledger correction (append-only 'adjust' entry) ──
+      case 'adjust': {
+        const userId = String(body.userId || '')
+        const points = Number(body.points || 0)
+        const note = String(body.note || '')
+        if (!userId || points === 0 || !note) {
+          return NextResponse.json(
+            { error: 'userId, non-zero points and note are required' },
+            { status: 400 }
+          )
+        }
+        await awardPoints({
+          userId,
+          type: 'adjust',
+          points,
+          note: `[admin: ${admin.name}] ${note}`,
+        })
+        return NextResponse.json({
+          success: true,
+          action,
+          wallet: await getWalletSummary(userId),
+        })
+      }
+
+      // ── Conversion captured outside the webhook (cheque/UPI manual etc.) ──
+      case 'mark-converted': {
+        const refereeUserId = String(body.refereeUserId || '')
+        if (!refereeUserId) {
+          return NextResponse.json({ error: 'refereeUserId required' }, { status: 400 })
+        }
+        const result = await markReferralConverted(refereeUserId, `admin: ${admin.name}`)
+        if (!result.converted) {
+          return NextResponse.json({ error: 'No referral found for that user' }, { status: 404 })
+        }
+        return NextResponse.json({ success: true, action, ...result })
+      }
+
+      // ── Reverse a conversion award (60-day-guarantee refund) ──
+      case 'clawback': {
+        const refereeUserId = String(body.refereeUserId || '')
+        if (!refereeUserId) {
+          return NextResponse.json({ error: 'refereeUserId required' }, { status: 400 })
+        }
+        const result = await applyClawback(refereeUserId, `admin: ${admin.name}`)
+        if (!result.clawedBack) {
+          return NextResponse.json(
+            { error: 'Referral is not in converted state (or already clawed back)' },
+            { status: 400 }
+          )
+        }
+        return NextResponse.json({ success: true, action, ...result })
+      }
+
+      // ── Force-expire a pending referral (fraud kill) ──
+      case 'expire-referral': {
+        const referralId = String(body.referralId || '')
+        if (!referralId) {
+          return NextResponse.json({ error: 'referralId required' }, { status: 400 })
+        }
+        const referral = await db.referral.findUnique({ where: { id: referralId } })
+        if (!referral || referral.status !== 'pending') {
+          return NextResponse.json(
+            { error: 'Referral not found or not pending' },
+            { status: 400 }
+          )
+        }
+        await db.referral.update({
+          where: { id: referralId },
+          data: { status: 'expired', expiredAt: new Date() },
+        })
+        return NextResponse.json({ success: true, action })
+      }
+
+      default:
+        return NextResponse.json(
+          { error: 'Unknown action. Use: adjust | mark-converted | clawback | expire-referral' },
+          { status: 400 }
+        )
+    }
+  } catch (err) {
+    console.error('[admin/referrals POST] error:', err)
+    return NextResponse.json({ error: 'Action failed' }, { status: 500 })
   }
 }

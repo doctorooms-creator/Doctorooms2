@@ -3,11 +3,23 @@ import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/api-auth'
 import { getWalletSummary, REDEEM_CATALOG, awardPoints } from '@/lib/referral'
 
+/** Catalog items that map to a Subscription period (plan §1.4). */
+const SUBSCRIPTION_ITEMS: Record<string, { planKey: 'pro' | 'hospital'; days: number }> = {
+  pro_month: { planKey: 'pro', days: 30 },
+  pro_year: { planKey: 'pro', days: 365 },
+  hospital_month: { planKey: 'hospital', days: 30 },
+}
+
+/** Catalog items that only record an entitlement grant (plan-system hooks). */
+const ENTITLEMENT_ITEMS = new Set(['ai_500pack', 'whatsapp_1000pack', 'seat_year'])
+
 /**
  * POST /api/referral/redeem  body: { itemType }
- * Redeem catalog items with points.
- *  - pro_month  → extends/creates the doctor's hospital Subscription (source: points)
- *  - ai_500pack → recorded grant (enforcement lands with usage counters)
+ * Redeem catalog items with points (Phase 2 — full catalog):
+ *  - pro_month / pro_year / hospital_month → extends/creates the doctor's
+ *    hospital Subscription (source: points)
+ *  - ai_500pack / whatsapp_1000pack / seat_year → recorded grant
+ *    (enforcement lands with usage counters / plan gating)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -42,12 +54,13 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // ── pro_month needs a hospital to attach the subscription to ──
+    // ── Subscription items need a hospital to attach the period to ──
     // Resolution order matches how the app links doctors to hospitals:
     // 1. Doctor.hospitalId (primary/direct field)
     // 2. First active DoctorHospital link (multi-hospital doctors)
     let hospitalId: string | null = null
-    if (itemType === 'pro_month') {
+    const subItem = SUBSCRIPTION_ITEMS[itemType]
+    if (subItem) {
       const doctor = await db.doctor.findFirst({
         where: { userId },
         select: { id: true, hospitalId: true },
@@ -101,27 +114,27 @@ export async function POST(req: NextRequest) {
 
     // Apply the actual benefit
     let subscriptionInfo: Record<string, unknown> | null = null
-    if (itemType === 'pro_month' && hospitalId) {
+    if (subItem && hospitalId) {
       const existing = await db.subscription.findUnique({ where: { hospitalId } })
       const now = new Date()
       const base =
         existing?.currentPeriodEnd && existing.currentPeriodEnd > now
           ? existing.currentPeriodEnd
           : now
-      const newEnd = new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000)
+      const newEnd = new Date(base.getTime() + subItem.days * 24 * 60 * 60 * 1000)
 
       const sub = await db.subscription.upsert({
         where: { hospitalId },
         create: {
           hospitalId,
-          planKey: 'pro',
+          planKey: subItem.planKey,
           status: 'active',
           source: 'points',
           currentPeriodStart: now,
           currentPeriodEnd: newEnd,
         },
         update: {
-          planKey: 'pro',
+          planKey: subItem.planKey,
           status: 'active',
           source: 'points',
           currentPeriodEnd: newEnd,
@@ -142,6 +155,7 @@ export async function POST(req: NextRequest) {
       pointsSpent: item.points,
       wallet: walletAfter,
       subscription: subscriptionInfo,
+      applied: subItem ? 'subscription' : ENTITLEMENT_ITEMS.has(itemType) ? 'entitlement-recorded' : 'unknown',
     })
   } catch (err) {
     console.error('[referral/redeem] error:', err)

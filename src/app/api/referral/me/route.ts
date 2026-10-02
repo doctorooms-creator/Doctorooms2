@@ -8,6 +8,7 @@ import {
   maskName,
   STAGE_META,
   REDEEM_CATALOG,
+  MILESTONE_BONUSES,
 } from '@/lib/referral'
 
 /**
@@ -96,6 +97,23 @@ export async function GET(req: NextRequest) {
       fullReferralEquivalents: Math.floor(totalEarned / 2000),
     }
 
+    // 6. Milestones (rolling 12-month conversions) + champion badge (Phase 2)
+    const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)
+    const [rollingConversions, championEntry] = await Promise.all([
+      db.referral.count({
+        where: { referrerUserId: userId, status: 'converted', convertedAt: { gte: yearAgo } },
+      }),
+      db.pointsLedger.findFirst({
+        where: { userId, type: 'earn_milestone_10' },
+        select: { id: true },
+      }),
+    ])
+    const milestones = {
+      rollingConversions,
+      champion: !!championEntry,
+      targets: MILESTONE_BONUSES.map((m) => ({ conversions: m.conversions, points: m.points })),
+    }
+
     return NextResponse.json({
       code,
       shareUrl: `/r/${code}`,
@@ -108,6 +126,7 @@ export async function GET(req: NextRequest) {
       })),
       catalog: REDEEM_CATALOG,
       stats,
+      milestones,
     })
   } catch (err) {
     console.error('[referral/me] error:', err)

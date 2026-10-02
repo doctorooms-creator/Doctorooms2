@@ -94,6 +94,11 @@ const PUBLIC_API_PATTERNS = [
   '/api/contact',
   '/api/auth/session',
   '/api/payments/razorpay/webhook',
+  // Server-to-server endpoints with their own strong auth (no session cookie):
+  //   /api/cron/*       → x-cron-secret header (shared via .env, never public)
+  //   /api/webhooks/*   → HMAC-SHA256 signature verification
+  '/api/cron/referral-daily',
+  '/api/webhooks/razorpay',
 ]
 
 function isPublicRoute(pathname: string): boolean {

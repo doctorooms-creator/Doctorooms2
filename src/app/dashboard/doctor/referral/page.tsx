@@ -21,6 +21,7 @@ import {
   Lock,
   CalendarClock,
   RefreshCw,
+  Crown,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -77,6 +78,11 @@ interface ReferralMe {
     converted: number
     totalEarned: number
     fullReferralEquivalents: number
+  }
+  milestones: {
+    rollingConversions: number
+    champion: boolean
+    targets: { conversions: number; points: number }[]
   }
 }
 
@@ -178,6 +184,11 @@ export default function ReferralPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Gift className="h-6 w-6 text-teal-600" />
             Referral Program
+            {data.milestones.champion && (
+              <Badge className="gap-1 bg-gradient-to-r from-amber-400 to-orange-500 text-white border-0 shadow-sm">
+                <Crown className="h-3.5 w-3.5" /> Referral Champion
+              </Badge>
+            )}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             Har genuine referral = <span className="font-semibold text-emerald-600">1 mahina Pro FREE</span> (2,000 points)
@@ -321,8 +332,60 @@ export default function ReferralPage() {
                 ))}
               </div>
               <p className="text-[11px] text-muted-foreground mt-3">
-                💡 Do active (free) referrals = 1,000+1,000 = 1 month Pro free. Points wallet mein
-                jama hote hain — kabhi expire nahi hote 18 mahine tak.
+                💡 Do active (free) referrals = 1,000+1,000 = 1 month Pro free. Points 18 mahine
+                tak valid rehte hain — wallet mein jama hote hain.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Milestone bonuses (Phase 2) */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-amber-500" />
+                Milestone Bonuses
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {data.milestones.targets.map((m) => {
+                  const progress = Math.min(
+                    100,
+                    Math.round((data.milestones.rollingConversions / m.conversions) * 100)
+                  )
+                  const unlocked = data.milestones.rollingConversions >= m.conversions
+                  return (
+                    <div
+                      key={m.conversions}
+                      className={`rounded-xl border p-3 ${
+                        unlocked
+                          ? 'border-amber-300 dark:border-amber-700 bg-amber-50/60 dark:bg-amber-950/20'
+                          : 'border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                          {m.conversions === 10 && <Crown className="h-3.5 w-3.5 text-amber-500" />}
+                          {m.conversions}th paid referral
+                          {m.conversions === 10 && (
+                            <span className="text-[10px] font-medium text-amber-600">
+                              + Champion badge
+                            </span>
+                          )}
+                        </p>
+                        <span className="text-xs font-bold text-amber-600">+{m.points.toLocaleString('en-IN')}</span>
+                      </div>
+                      <Progress value={progress} className="h-1.5 mt-2" />
+                      <p className="text-[10px] text-muted-foreground mt-1.5">
+                        {data.milestones.rollingConversions}/{m.conversions} paid referrals (last 12 months)
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-3">
+                🏆 Milestone points bhi wallet mein jama hote hain — har milestone par bonus
+                automatically mil jata hai.
               </p>
             </CardContent>
           </Card>
