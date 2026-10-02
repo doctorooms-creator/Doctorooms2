@@ -1,0 +1,623 @@
+     1→'use client'
+     2→
+     3→import { useState, useMemo } from 'react'
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→import { motion } from 'framer-motion'
+     6→import { Card, CardContent } from '@/components/ui/card'
+     7→import { Button } from '@/components/ui/button'
+     8→import { Input } from '@/components/ui/input'
+     9→import { Badge } from '@/components/ui/badge'
+    10→import {
+    11→  Select,
+    12→  SelectContent,
+    13→  SelectItem,
+    14→  SelectTrigger,
+    15→  SelectValue,
+    16→} from '@/components/ui/select'
+    17→import {
+    18→  DropdownMenu,
+    19→  DropdownMenuContent,
+    20→  DropdownMenuItem,
+    21→  DropdownMenuTrigger,
+    22→} from '@/components/ui/dropdown-menu'
+    23→import {
+    24→  Dialog,
+    25→  DialogContent,
+    26→  DialogHeader,
+    27→  DialogTitle,
+    28→} from '@/components/ui/dialog'
+    29→import {
+    30→  FileText,
+    31→  Search,
+    32→  Calendar,
+    33→  Pill,
+    34→  Eye,
+    35→  Thermometer,
+    36→  Weight,
+    37→  Activity,
+    38→  Droplets,
+    39→  Package,
+    40→  CheckCircle2,
+    41→  MoreHorizontal,
+    42→  Filter,
+    43→} from 'lucide-react'
+    44→import { format } from 'date-fns'
+    45→import { cn } from '@/lib/utils'
+    46→import { toast } from 'sonner'
+    47→import { mergeVitalsWithLabels } from '@/lib/prescription-labels'
+    48→
+    49→interface PMedicine {
+    50→  id: string
+    51→  medicine: string
+    52→  morning: boolean
+    53→  afternoon: boolean
+    54→  evening: boolean
+    55→  tab: number
+    56→  dose: string
+    57→  description: string
+    58→}
+    59→
+    60→interface PLabel {
+    61→  id: string
+    62→  label: string
+    63→  labelEn?: string
+    64→  value: string
+    65→  labelUnit: string
+    66→  showUnit?: boolean
+    67→}
+    68→
+    69→interface Prescription {
+    70→  id: string
+    71→  patientName: string
+    72→  patientAge?: string
+    73→  disease: string
+    74→  weight?: string
+    75→  bp?: string
+    76→  temperature?: string
+    77→  description?: string
+    78→  createdAt: string
+    79→  medicines: PMedicine[]
+    80→  labels: PLabel[]
+    81→  doctorName?: string
+    82→  departmentName?: string
+    83→  hospitalName?: string
+    84→  fulfillmentStatus?: string
+    85→  packedBy?: string
+    86→  packedAt?: string | null
+    87→  packedByName?: string
+    88→  doctorId?: string
+    89→  departmentId?: string
+    90→}
+    91→
+    92→interface PrescriptionsResponse {
+    93→  isHospitalMode: boolean
+    94→  prescriptions: Prescription[]
+    95→  fulfillmentStats?: Record<string, number>
+    96→}
+    97→
+    98→export default function PharmacistPrescriptionsPage() {
+    99→  const queryClient = useQueryClient()
+   100→  const [search, setSearch] = useState('')
+   101→  const [debouncedSearch, setDebouncedSearch] = useState('')
+   102→  const [viewOpen, setViewOpen] = useState(false)
+   103→  const [selectedRx, setSelectedRx] = useState<Prescription | null>(null)
+   104→
+   105→  // Vitals + custom labels merged the same way the prescription print merges
+   106→  // them: vital-named labels (Pulse Rate, SpO2…) fill empty vital slots,
+   107→  // duplicates drop, the rest are additional measurements.
+   108→  const mergedSelected = useMemo(
+   109→    () =>
+   110→      selectedRx
+   111→        ? mergeVitalsWithLabels(
+   112→            { weight: selectedRx.weight || '', bp: selectedRx.bp || '', temperature: selectedRx.temperature || '' },
+   113→            selectedRx.labels
+   114→          )
+   115→        : null,
+   116→    [selectedRx]
+   117→  )
+   118→
+   119→  // Hospital mode filters
+   120→  const [filterDoctor, setFilterDoctor] = useState('')
+   121→  const [filterDept, setFilterDept] = useState('')
+   122→  const [filterStatus, setFilterStatus] = useState('')
+   123→
+   124→  const handleSearch = (value: string) => {
+   125→    setSearch(value)
+   126→    setTimeout(() => setDebouncedSearch(value), 300)
+   127→  }
+   128→
+   129→  const { data, isLoading } = useQuery<PrescriptionsResponse>({
+   130→    queryKey: ['pharmacist-prescriptions', debouncedSearch, filterDoctor, filterDept, filterStatus],
+   131→    queryFn: () => {
+   132→      const params = new URLSearchParams()
+   133→      if (debouncedSearch) params.set('search', debouncedSearch)
+   134→      if (filterDoctor) params.set('doctorId', filterDoctor)
+   135→      if (filterDept) params.set('departmentId', filterDept)
+   136→      if (filterStatus) params.set('fulfillmentStatus', filterStatus)
+   137→      return fetch(`/api/dashboard/pharmacist/prescriptions?${params.toString()}`, { credentials: 'include' })
+   138→        .then((r) => r.json())
+   139→    },
+   140→  })
+   141→
+   142→  const isHospitalMode = data?.isHospitalMode ?? false
+   143→
+   144→  // Extract unique doctors and departments from prescription data for filter dropdowns
+   145→  const prescriptionsList = data?.prescriptions ?? []
+   146→  const doctors = useMemo(() => {
+   147→    const map = new Map<string, { id: string; name: string }>()
+   148→    for (const rx of prescriptionsList) {
+   149→      if (rx.doctorId && rx.doctorName && !map.has(rx.doctorId)) {
+   150→        map.set(rx.doctorId, { id: rx.doctorId, name: rx.doctorName })
+   151→      }
+   152→    }
+   153→    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+   154→  }, [prescriptionsList])
+   155→  const departments = useMemo(() => {
+   156→    const map = new Map<string, { id: string; name: string }>()
+   157→    for (const rx of prescriptionsList) {
+   158→      if (rx.departmentId && rx.departmentName && !map.has(rx.departmentId)) {
+   159→        map.set(rx.departmentId, { id: rx.departmentId, name: rx.departmentName })
+   160→      }
+   161→    }
+   162→    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name))
+   163→  }, [prescriptionsList])
+   164→
+   165→  const fulfillMutation = useMutation({
+   166→    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+   167→      const res = await fetch(`/api/dashboard/pharmacist/prescriptions/${id}/fulfill`, {
+   168→        method: 'PUT',
+   169→        headers: { 'Content-Type': 'application/json' },
+   170→        body: JSON.stringify({ status }),
+   171→        credentials: 'include',
+   172→      })
+   173→      if (!res.ok) {
+   174→        const errData = await res.json()
+   175→        throw new Error(errData.error || 'Failed to update')
+   176→      }
+   177→      return res.json()
+   178→    },
+   179→    onSuccess: () => {
+   180→      queryClient.invalidateQueries({ queryKey: ['pharmacist-prescriptions'] })
+   181→      toast.success('Prescription updated successfully')
+   182→    },
+   183→    onError: (err: Error) => {
+   184→      toast.error(err.message)
+   185→    },
+   186→  })
+   187→
+   188→  const handleView = (rx: Prescription) => {
+   189→    setSelectedRx(rx)
+   190→    setViewOpen(true)
+   191→  }
+   192→
+   193→  const getFulfillmentBadge = (status?: string) => {
+   194→    switch (status) {
+   195→      case 'Pending':
+   196→        return (
+   197→          <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800">
+   198→            Pending
+   199→          </Badge>
+   200→        )
+   201→      case 'Packed':
+   202→        return (
+   203→          <Badge className="bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-400 dark:border-teal-800">
+   204→            <Package className="mr-1 h-3 w-3" />
+   205→            Packed
+   206→          </Badge>
+   207→        )
+   208→      case 'Dispensed':
+   209→        return (
+   210→          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+   211→            <CheckCircle2 className="mr-1 h-3 w-3" />
+   212→            Dispensed
+   213→          </Badge>
+   214→        )
+   215→      default:
+   216→        return null
+   217→    }
+   218→  }
+   219→
+   220→  return (
+   221→    <div className="space-y-6">
+   222→      {/* Header with search */}
+   223→      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+   224→        <div className="relative max-w-md flex-1">
+   225→          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+   226→          <Input
+   227→            placeholder="Search by patient name..."
+   228→            value={search}
+   229→            onChange={(e) => handleSearch(e.target.value)}
+   230→            className="pl-9"
+   231→          />
+   232→        </div>
+   233→        {isHospitalMode && (
+   234→          <Badge variant="outline" className="w-fit border-teal-300 text-teal-700 dark:border-teal-700 dark:text-teal-400">
+   235→            <Filter className="mr-1 h-3 w-3" />
+   236→            Hospital Mode
+   237→          </Badge>
+   238→        )}
+   239→      </div>
+   240→
+   241→      {/* Hospital mode filter bar */}
+   242→      {isHospitalMode && (
+   243→        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card p-3">
+   244→          <span className="text-sm font-medium text-muted-foreground">Filters:</span>
+   245→          <Select value={filterDoctor || '__all__'} onValueChange={(v) => setFilterDoctor(v === '__all__' ? '' : v)}>
+   246→            <SelectTrigger size="sm" className="w-[180px]">
+   247→              <SelectValue placeholder="All Doctors" />
+   248→            </SelectTrigger>
+   249→            <SelectContent>
+   250→              <SelectItem value="__all__">All Doctors</SelectItem>
+   251→              {doctors.map((d) => (
+   252→                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+   253→              ))}
+   254→            </SelectContent>
+   255→          </Select>
+   256→          <Select value={filterDept || '__all__'} onValueChange={(v) => setFilterDept(v === '__all__' ? '' : v)}>
+   257→            <SelectTrigger size="sm" className="w-[180px]">
+   258→              <SelectValue placeholder="All Departments" />
+   259→            </SelectTrigger>
+   260→            <SelectContent>
+   261→              <SelectItem value="__all__">All Departments</SelectItem>
+   262→              {departments.map((d) => (
+   263→                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+   264→              ))}
+   265→            </SelectContent>
+   266→          </Select>
+   267→          <Select value={filterStatus || '__all__'} onValueChange={(v) => setFilterStatus(v === '__all__' ? '' : v)}>
+   268→            <SelectTrigger size="sm" className="w-[170px]">
+   269→              <SelectValue placeholder="All Statuses" />
+   270→            </SelectTrigger>
+   271→            <SelectContent>
+   272→              <SelectItem value="__all__">All Statuses</SelectItem>
+   273→              <SelectItem value="Pending">Pending</SelectItem>
+   274→              <SelectItem value="Packed">Packed</SelectItem>
+   275→              <SelectItem value="Dispensed">Dispensed</SelectItem>
+   276→            </SelectContent>
+   277→          </Select>
+   278→          {(filterDoctor || filterDept || filterStatus) && (
+   279→            <Button
+   280→              variant="ghost"
+   281→              size="sm"
+   282→              className="text-xs text-muted-foreground hover:text-foreground"
+   283→              onClick={() => { setFilterDoctor(''); setFilterDept(''); setFilterStatus('') }}
+   284→            >
+   285→              Clear filters
+   286→            </Button>
+   287→          )}
+   288→        </div>
+   289→      )}
+   290→
+   291→      {/* Prescription cards */}
+   292→      {isLoading && (
+   293→        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   294→          {Array.from({ length: 6 }).map((_, i) => (
+   295→            <div key={i} className="rounded-xl border border-border bg-card p-5 space-y-3">
+   296→              <div className="h-5 w-28 animate-pulse rounded bg-muted" />
+   297→              <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+   298→              <div className="space-y-2">
+   299→                <div className="h-3 w-full animate-pulse rounded bg-muted" />
+   300→                <div className="h-3 w-3/4 animate-pulse rounded bg-muted" />
+   301→              </div>
+   302→            </div>
+   303→          ))}
+   304→        </div>
+   305→      )}
+   306→
+   307→      {!isLoading && data?.prescriptions?.length === 0 && (
+   308→        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+   309→          <FileText className="h-12 w-12 mb-3 opacity-40" />
+   310→          <p className="font-medium">No prescriptions found</p>
+   311→          <p className="text-sm mt-1">Prescriptions will appear here once the doctor creates them.</p>
+   312→        </div>
+   313→      )}
+   314→
+   315→      {!isLoading && data?.prescriptions && data.prescriptions.length > 0 && (
+   316→        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   317→          {data.prescriptions.map((rx, i) => (
+   318→            <motion.div
+   319→              key={rx.id}
+   320→              initial={{ opacity: 0, y: 15 }}
+   321→              animate={{ opacity: 1, y: 0 }}
+   322→              transition={{ delay: i * 0.04 }}
+   323→            >
+   324→              <Card className="group transition-all hover:shadow-md hover:border-teal-300 dark:hover:border-teal-700">
+   325→                <CardContent className="p-5 space-y-3">
+   326→                  <div className="flex items-start justify-between">
+   327→                    <div className="min-w-0 flex-1">
+   328→                      {/* Hospital mode: doctor & department badge */}
+   329→                      {isHospitalMode && rx.doctorName && (
+   330→                        <Badge
+   331→                          variant="outline"
+   332→                          className="mb-1.5 border-teal-300 bg-teal-50 text-teal-700 text-[10px] dark:border-teal-700 dark:bg-teal-950/40 dark:text-teal-400"
+   333→                        >
+   334→                          {rx.doctorName}{rx.departmentName ? ` · ${rx.departmentName}` : ''}
+   335→                        </Badge>
+   336→                      )}
+   337→                      <p className="font-semibold text-sm">{rx.patientName}</p>
+   338→                      <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+   339→                        <Calendar className="h-3 w-3" />
+   340→                        {format(new Date(rx.createdAt), 'MMM d, yyyy')}
+   341→                        {rx.patientAge && <span>· Age: {rx.patientAge}</span>}
+   342→                      </div>
+   343→                    </div>
+   344→                    <div className="flex items-center gap-1">
+   345→                      {isHospitalMode && getFulfillmentBadge(rx.fulfillmentStatus)}
+   346→                      {isHospitalMode && rx.fulfillmentStatus !== 'Dispensed' && (
+   347→                        <DropdownMenu>
+   348→                          <DropdownMenuTrigger asChild>
+   349→                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-teal-600">
+   350→                              <MoreHorizontal className="h-4 w-4" />
+   351→                              <span className="sr-only">Actions</span>
+   352→                            </Button>
+   353→                          </DropdownMenuTrigger>
+   354→                          <DropdownMenuContent align="end">
+   355→                            <DropdownMenuItem
+   356→                              onClick={() => fulfillMutation.mutate({ id: rx.id, status: 'Packed' })}
+   357→                              disabled={fulfillMutation.isPending}
+   358→                            >
+   359→                              <Package className="mr-2 h-4 w-4" />
+   360→                              Mark as Packed
+   361→                            </DropdownMenuItem>
+   362→                            <DropdownMenuItem
+   363→                              onClick={() => fulfillMutation.mutate({ id: rx.id, status: 'Dispensed' })}
+   364→                              disabled={fulfillMutation.isPending}
+   365→                            >
+   366→                              <CheckCircle2 className="mr-2 h-4 w-4" />
+   367→                              Mark as Dispensed
+   368→                            </DropdownMenuItem>
+   369→                          </DropdownMenuContent>
+   370→                        </DropdownMenu>
+   371→                      )}
+   372→                      <Button
+   373→                        size="icon"
+   374→                        variant="ghost"
+   375→                        className="h-8 w-8 text-teal-600 hover:text-teal-700 dark:text-teal-400"
+   376→                        onClick={() => handleView(rx)}
+   377→                      >
+   378→                        <Eye className="h-4 w-4" />
+   379→                      </Button>
+   380→                    </div>
+   381→                  </div>
+   382→
+   383→                  {rx.disease && (
+   384→                    <Badge variant="secondary" className="text-xs">{rx.disease}</Badge>
+   385→                  )}
+   386→
+   387→                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   388→                    <span className="flex items-center gap-1">
+   389→                      <Pill className="h-3 w-3" /> {rx.medicines.length} medicine{rx.medicines.length !== 1 ? 's' : ''}
+   390→                    </span>
+   391→                    {rx.labels.length > 0 && (
+   392→                      <span>{rx.labels.length} label{rx.labels.length !== 1 ? 's' : ''}</span>
+   393→                    )}
+   394→                  </div>
+   395→
+   396→                  {rx.medicines.length > 0 && (
+   397→                    <div className="flex flex-wrap gap-1">
+   398→                      {rx.medicines.slice(0, 3).map((m) => (
+   399→                        <Badge key={m.id} variant="outline" className="text-[10px]">
+   400→                          {m.medicine}
+   401→                        </Badge>
+   402→                      ))}
+   403→                      {rx.medicines.length > 3 && (
+   404→                        <Badge variant="outline" className="text-[10px]">
+   405→                          +{rx.medicines.length - 3} more
+   406→                        </Badge>
+   407→                      )}
+   408→                    </div>
+   409→                  )}
+   410→
+   411→                  {rx.packedByName && rx.packedAt && (
+   412→                    <p className="text-[10px] text-muted-foreground">
+   413→                      Packed by {rx.packedByName} at {format(new Date(rx.packedAt), 'h:mm a')}
+   414→                    </p>
+   415→                  )}
+   416→                </CardContent>
+   417→              </Card>
+   418→            </motion.div>
+   419→          ))}
+   420→        </div>
+   421→      )}
+   422→
+   423→      {/* View prescription dialog */}
+   424→      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+   425→        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+   426→          <DialogHeader>
+   427→            <DialogTitle>Prescription Details</DialogTitle>
+   428→          </DialogHeader>
+   429→          {selectedRx && (
+   430→            <div className="space-y-5 pt-2">
+   431→              {/* Patient info */}
+   432→              <div className="rounded-lg border border-border p-4 space-y-3">
+   433→                <div className="flex items-start justify-between gap-2">
+   434→                  <div className="min-w-0 flex-1">
+   435→                    {isHospitalMode && selectedRx.doctorName && (
+   436→                      <Badge
+   437→                        variant="outline"
+   438→                        className="mb-2 border-teal-300 bg-teal-50 text-teal-700 text-xs dark:border-teal-700 dark:bg-teal-950/40 dark:text-teal-400"
+   439→                      >
+   440→                        {selectedRx.doctorName}{selectedRx.departmentName ? ` · ${selectedRx.departmentName}` : ''}
+   441→                      </Badge>
+   442→                    )}
+   443→                    <h3 className="font-semibold text-lg">{selectedRx.patientName}</h3>
+   444→                    <p className="text-sm text-muted-foreground">
+   445→                      {format(new Date(selectedRx.createdAt), 'MMMM d, yyyy · h:mm a')}
+   446→                    </p>
+   447→                  </div>
+   448→                  <div className="flex flex-col items-end gap-1">
+   449→                    {selectedRx.patientAge && (
+   450→                      <Badge variant="outline">Age: {selectedRx.patientAge}</Badge>
+   451→                    )}
+   452→                    {isHospitalMode && getFulfillmentBadge(selectedRx.fulfillmentStatus)}
+   453→                  </div>
+   454→                </div>
+   455→
+   456→                {selectedRx.disease && (
+   457→                  <div>
+   458→                    <p className="text-sm text-muted-foreground">Diagnosis</p>
+   459→                    <p className="text-sm font-medium">{selectedRx.disease}</p>
+   460→                  </div>
+   461→                )}
+   462→
+   463→                {/* Vitals & measurements — merged like the prescription print */}
+   464→                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+   465→                  {mergedSelected?.vitals.weight && (
+   466→                    <div className="rounded-md bg-muted p-2.5 text-center">
+   467→                      <Weight className="mx-auto h-4 w-4 text-teal-500" />
+   468→                      <p className="mt-1 text-xs text-muted-foreground">Weight</p>
+   469→                      <p className="text-sm font-semibold">{mergedSelected.vitals.weight} kg</p>
+   470→                    </div>
+   471→                  )}
+   472→                  {mergedSelected?.vitals.bp && (
+   473→                    <div className="rounded-md bg-muted p-2.5 text-center">
+   474→                      <Activity className="mx-auto h-4 w-4 text-teal-500" />
+   475→                      <p className="mt-1 text-xs text-muted-foreground">BP</p>
+   476→                      <p className="text-sm font-semibold">{mergedSelected.vitals.bp}</p>
+   477→                    </div>
+   478→                  )}
+   479→                  {mergedSelected?.vitals.temperature && (
+   480→                    <div className="rounded-md bg-muted p-2.5 text-center">
+   481→                      <Thermometer className="mx-auto h-4 w-4 text-teal-500" />
+   482→                      <p className="mt-1 text-xs text-muted-foreground">Temp</p>
+   483→                      <p className="text-sm font-semibold">{mergedSelected.vitals.temperature}°F</p>
+   484→                    </div>
+   485→                  )}
+   486→                  {mergedSelected?.vitals.pulse && (
+   487→                    <div className="rounded-md bg-muted p-2.5 text-center">
+   488→                      <Activity className="mx-auto h-4 w-4 text-teal-500" />
+   489→                      <p className="mt-1 text-xs text-muted-foreground">Pulse</p>
+   490→                      <p className="text-sm font-semibold">{mergedSelected.vitals.pulse} bpm</p>
+   491→                    </div>
+   492→                  )}
+   493→                  {mergedSelected?.vitals.spo2 && (
+   494→                    <div className="rounded-md bg-muted p-2.5 text-center">
+   495→                      <Activity className="mx-auto h-4 w-4 text-teal-500" />
+   496→                      <p className="mt-1 text-xs text-muted-foreground">SpO2</p>
+   497→                      <p className="text-sm font-semibold">{mergedSelected.vitals.spo2}%</p>
+   498→                    </div>
+   499→                  )}
+   500→                  {(mergedSelected?.extraLabels.filter((l) => l.value && String(l.value).trim() !== '').length || 0) > 0 && (
+   501→                    <div className="rounded-md bg-muted p-2.5 text-center">
+   502→                      <Droplets className="mx-auto h-4 w-4 text-teal-500" />
+   503→                      <p className="mt-1 text-xs text-muted-foreground">Measurements</p>
+   504→                      <p className="text-sm font-semibold">{mergedSelected?.extraLabels.filter((l) => l.value && String(l.value).trim() !== '').length}</p>
+   505→                    </div>
+   506→                  )}
+   507→                </div>
+   508→
+   509→                {/* Packed info in dialog */}
+   510→                {selectedRx.packedByName && selectedRx.packedAt && (
+   511→                  <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+   512→                    <Package className="h-3.5 w-3.5" />
+   513→                    <span>
+   514→                      Packed by <span className="font-medium text-foreground">{selectedRx.packedByName}</span>{' '}
+   515→                      at {format(new Date(selectedRx.packedAt), 'MMMM d, yyyy · h:mm a')}
+   516→                    </span>
+   517→                  </div>
+   518→                )}
+   519→              </div>
+   520→
+   521→              {/* Description */}
+   522→              {selectedRx.description && (
+   523→                <div>
+   524→                  <p className="text-sm text-muted-foreground mb-1">Notes</p>
+   525→                  <p className="text-sm rounded-lg bg-muted p-3">{selectedRx.description}</p>
+   526→                </div>
+   527→              )}
+   528→
+   529→              {/* Additional measurements — custom labels that are NOT common vitals */}
+   530→              {(mergedSelected?.extraLabels.filter((l) => l.value && String(l.value).trim() !== '').length || 0) > 0 && (
+   531→                <div>
+   532→                  <p className="text-sm text-muted-foreground mb-2">Additional Measurements</p>
+   533→                  <div className="grid grid-cols-2 gap-2">
+   534→                    {mergedSelected!.extraLabels.filter((l) => l.value && String(l.value).trim() !== '').map((l, i) => (
+   535→                      <div key={`${l.labelEn || l.label}-${i}`} className="rounded-lg border border-border p-2.5">
+   536→                        <p className="text-xs text-muted-foreground">{l.labelEn || l.label}</p>
+   537→                        <p className="text-sm font-medium">
+   538→                          {l.value}{l.showUnit !== false && l.labelUnit ? ` ${l.labelUnit}` : ''}
+   539→                        </p>
+   540→                      </div>
+   541→                    ))}
+   542→                  </div>
+   543→                </div>
+   544→              )}
+   545→
+   546→              {/* Medicines */}
+   547→              {selectedRx.medicines.length > 0 && (
+   548→                <div>
+   549→                  <p className="text-sm text-muted-foreground mb-2">Medicines</p>
+   550→                  <div className="space-y-2">
+   551→                    {selectedRx.medicines.map((m) => (
+   552→                      <div key={m.id} className="rounded-lg border border-border p-3">
+   553→                        <div className="flex items-start justify-between">
+   554→                          <div>
+   555→                            <p className="text-sm font-medium">{m.medicine}</p>
+   556→                            <div className="flex items-center gap-2 mt-1">
+   557→                              <span className="text-xs text-muted-foreground">{m.tab} tab{m.tab !== 1 ? 's' : ''}</span>
+   558→                              {m.dose && (
+   559→                                <Badge variant="outline" className="text-[10px]">{m.dose}</Badge>
+   560→                              )}
+   561→                            </div>
+   562→                          </div>
+   563→                          <div className="flex gap-1">
+   564→                            {m.morning && (
+   565→                              <span className="rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-900/50 dark:text-teal-400">
+   566→                                M
+   567→                              </span>
+   568→                            )}
+   569→                            {m.afternoon && (
+   570→                              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/50 dark:text-amber-400">
+   571→                                A
+   572→                              </span>
+   573→                            )}
+   574→                            {m.evening && (
+   575→                              <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/50 dark:text-violet-400">
+   576→                                E
+   577→                              </span>
+   578→                            )}
+   579→                          </div>
+   580→                        </div>
+   581→                        {m.description && (
+   582→                          <p className="mt-1.5 text-xs text-muted-foreground">{m.description}</p>
+   583→                        )}
+   584→                      </div>
+   585→                    ))}
+   586→                  </div>
+   587→                </div>
+   588→              )}
+   589→
+   590→              {/* Fulfillment actions in dialog (hospital mode) */}
+   591→              {isHospitalMode && selectedRx.fulfillmentStatus !== 'Dispensed' && (
+   592→                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+   593→                  <span className="text-sm font-medium text-muted-foreground">Actions:</span>
+   594→                  <Button
+   595→                    size="sm"
+   596→                    variant="outline"
+   597→                    className="text-teal-600 border-teal-300 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-700"
+   598→                    onClick={() => fulfillMutation.mutate({ id: selectedRx.id, status: 'Packed' })}
+   599→                    disabled={fulfillMutation.isPending}
+   600→                  >
+   601→                    <Package className="mr-1.5 h-3.5 w-3.5" />
+   602→                    Mark as Packed
+   603→                  </Button>
+   604→                  <Button
+   605→                    size="sm"
+   606→                    variant="outline"
+   607→                    className="text-emerald-600 border-emerald-300 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-700"
+   608→                    onClick={() => fulfillMutation.mutate({ id: selectedRx.id, status: 'Dispensed' })}
+   609→                    disabled={fulfillMutation.isPending}
+   610→                  >
+   611→                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+   612→                    Mark as Dispensed
+   613→                  </Button>
+   614→                </div>
+   615→              )}
+   616→            </div>
+   617→          )}
+   618→        </DialogContent>
+   619→      </Dialog>
+   620→    </div>
+   621→  )
+   622→}
+   623→

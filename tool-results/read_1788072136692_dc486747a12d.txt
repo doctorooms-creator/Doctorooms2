@@ -1,0 +1,1016 @@
+     1→'use client'
+     2→
+     3→import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→import { motion, AnimatePresence } from 'framer-motion'
+     6→import { Button } from '@/components/ui/button'
+     7→import {
+     8→  Card,
+     9→  CardContent,
+    10→  CardHeader,
+    11→  CardTitle,
+    12→} from '@/components/ui/card'
+    13→import { Input } from '@/components/ui/input'
+    14→import { Label } from '@/components/ui/label'
+    15→import { Badge } from '@/components/ui/badge'
+    16→import {
+    17→  Select,
+    18→  SelectContent,
+    19→  SelectItem,
+    20→  SelectTrigger,
+    21→  SelectValue,
+    22→} from '@/components/ui/select'
+    23→import { SlotGrid, type SlotInventory } from '@/components/reception/slot-grid'
+    24→import {
+    25→  UserPlus,
+    26→  Loader2,
+    27→  Clock,
+    28→  UserRound,
+    29→  Video,
+    30→  Users,
+    31→  AlertCircle,
+    32→  RefreshCw,
+    33→  Stethoscope,
+    34→  Building2,
+    35→  Filter,
+    36→} from 'lucide-react'
+    37→import { toast } from 'sonner'
+    38→import { cn } from '@/lib/utils'
+    39→
+    40→// ============ Types ============
+    41→
+    42→interface QueueItem {
+    43→  id: string
+    44→  appointmentNo: string
+    45→  patientName: string
+    46→  patientImg: string | null
+    47→  disease: string
+    48→  timeSlot: string | null
+    49→  bookingMode: string
+    50→  bookingType: string
+    51→  createdAt: string
+    52→  status: string
+    53→  queuePosition: number
+    54→  // Hospital mode fields
+    55→  doctorId?: string
+    56→  doctorName?: string
+    57→  departmentId?: string | null
+    58→  tokenNumber?: string | null
+    59→  tokenOrder?: number
+    60→}
+    61→
+    62→interface QueueData {
+    63→ date: string
+    64→  totalInQueue: number
+    65→  queue: QueueItem[]
+    66→  opdLimit?: number
+    67→  opdCompletedToday: number
+    68→  isHospitalMode?: boolean
+    69→}
+    70→
+    71→interface ScheduleSlot {
+    72→  day: string
+    73→  timeSlots: string[]
+    74→  startTime: string
+    75→  endTime: string
+    76→  slotDuration: number
+    77→}
+    78→
+    79→interface DoctorScheduleEntry {
+    80→  id: string
+    81→  name: string
+    82→  profileImg: string | null
+    83→  specialization: string
+    84→  designation: string
+    85→  fees: number
+    86→  schedules: (ScheduleSlot | null)[]
+    87→}
+    88→
+    89→interface Department {
+    90→  department: {
+    91→    id: string
+    92→    name: string
+    93→    shortCode: string
+    94→    icon: string
+    95→  }
+    96→  doctors: DoctorScheduleEntry[]
+    97→}
+    98→
+    99→// ============ Constants ============
+   100→
+   101→const GENDER_OPTIONS = [
+   102→  { value: 'Male', label: 'Male' },
+   103→  { value: 'Female', label: 'Female' },
+   104→  { value: 'Other', label: 'Other' },
+   105→]
+   106→
+   107→// ============ Component ============
+   108→
+   109→export default function WalkInPage() {
+   110→  const queryClient = useQueryClient()
+   111→  const queueRef = useRef<HTMLDivElement>(null)
+   112→
+   113→  // Form state
+   114→  const [patientName, setPatientName] = useState('')
+   115→  const [mobileNo, setMobileNo] = useState('')
+   116→  const [gender, setGender] = useState('')
+   117→  const [age, setAge] = useState('')
+   118→  const [disease, setDisease] = useState('')
+   119→  const [timeSlot, setTimeSlot] = useState('')
+   120→  const [bookingMode, setBookingMode] = useState<string>('InPerson')
+   121→  const [lastAddedId, setLastAddedId] = useState<string | null>(null)
+   122→
+   123→  // Hospital mode state
+   124→  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('')
+   125→  const [selectedDoctorId, setSelectedDoctorId] = useState<string>('')
+   126→  const [queueDoctorFilter, setQueueDoctorFilter] = useState<string>('all')
+   127→
+   128→  // Fetch today's queue (returns isHospitalMode flag)
+   129→  const { data: queueData, isLoading: queueLoading } = useQuery<QueueData>({
+   130→    queryKey: ['walkin-queue'],
+   131→    queryFn: () =>
+   132→      fetch('/api/dashboard/receptionist/walk-in').then((r) => r.json()),
+   133→    refetchInterval: 15_000,
+   134→  })
+   135→
+   136→  const isHospitalMode = queueData?.isHospitalMode === true
+   137→
+   138→  // Fetch departments & doctors for hospital mode
+   139→  const { data: hospitalScheduleData, isLoading: hospitalScheduleLoading } = useQuery<{
+   140→    isHospitalMode: boolean
+   141→    departments: Department[]
+   142→    todayName: string
+   143→  }>({
+   144→    queryKey: ['walkin-hospital-schedule'],
+   145→    queryFn: () =>
+   146→      fetch('/api/dashboard/receptionist/schedule').then((r) => r.json()),
+   147→    enabled: isHospitalMode,
+   148→  })
+   149→
+   150→  const departments = hospitalScheduleData?.departments ?? []
+   151→
+   152→  // Get selected department's doctors
+   153→  const departmentDoctors = useMemo(() => {
+   154→    if (!selectedDepartmentId) return []
+   155→    const dept = departments.find(
+   156→      (d) => d.department.id === selectedDepartmentId
+   157→    )
+   158→    return dept?.doctors ?? []
+   159→  }, [departments, selectedDepartmentId])
+   160→
+   161→  // Fetch clinic-mode doctor schedule (gives us the linked doctor's id for
+   162→  // the live slot inventory)
+   163→  const { data: clinicScheduleResponse, isLoading: clinicScheduleLoading } =
+   164→    useQuery<{
+   165→      doctor?: { id: string; name: string }
+   166→      schedules: (ScheduleSlot | null)[]
+   167→      todayName: string
+   168→    }>({
+   169→      queryKey: ['walkin-doctor-schedule'],
+   170→      queryFn: () =>
+   171→        fetch('/api/dashboard/receptionist/schedule').then((r) => r.json()),
+   172→      enabled: !isHospitalMode,
+   173→    })
+   174→
+   175→  // ── Live slot inventory (CTO Plan Phase 2, item 2c) ──
+   176→  // Today's date in IST (YYYY-MM-DD) — the same timezone the slot API and
+   177→  // queue endpoints use. Recomputed every render so a page left open past
+   178→  // midnight IST rolls over on the next poll.
+   179→  const todayStr = new Intl.DateTimeFormat('en-CA', {
+   180→    timeZone: 'Asia/Calcutta',
+   181→  }).format(new Date())
+   182→
+   183→  // Resolve the doctor whose slots we show: clinic mode → the linked
+   184→  // doctor, hospital mode → the doctor selected in the form.
+   185→  const slotDoctorId = isHospitalMode
+   186→    ? selectedDoctorId
+   187→    : (clinicScheduleResponse?.doctor?.id ?? '')
+   188→
+   189→  const {
+   190→    data: slotInventory,
+   191→    isLoading: slotsLoading,
+   192→    isError: slotsError,
+   193→    refetch: refetchSlots,
+   194→  } = useQuery<SlotInventory>({
+   195→    queryKey: ['slot-inventory', slotDoctorId, todayStr],
+   196→    queryFn: async () => {
+   197→      const res = await fetch(
+   198→        `/api/slots?doctorId=${encodeURIComponent(slotDoctorId)}&date=${todayStr}`
+   199→      )
+   200→      if (!res.ok) {
+   201→        throw new Error('Failed to load slot inventory')
+   202→      }
+   203→      return res.json() as Promise<SlotInventory>
+   204→    },
+   205→    enabled: !!slotDoctorId,
+   206→    refetchInterval: 15_000, // matches queue polling
+   207→  })
+   208→
+   209→  // Slot-selection bookkeeping. `timeSlot` stays '' for "queue tail" so the
+   210→  // submit body (timeSlot || null) keeps making the backend stamp
+   211→  // currentTimeIST(). `queueTailPicked` records an explicit tail choice so
+   212→  // auto-select never overrides it; `autoPickedSlot` drives the
+   213→  // "Auto: next free slot" hint chip.
+   214→  const [queueTailPicked, setQueueTailPicked] = useState(false)
+   215→  const [autoPickedSlot, setAutoPickedSlot] = useState(false)
+   216→
+   217→  const resetSlotSelection = useCallback(() => {
+   218→    setTimeSlot('')
+   219→    setQueueTailPicked(false)
+   220→    setAutoPickedSlot(false)
+   221→  }, [])
+   222→
+   223→  const handleSlotSelect = useCallback((time: string) => {
+   224→    setTimeSlot(time)
+   225→    setQueueTailPicked(time === '')
+   226→    setAutoPickedSlot(false) // manual choice overrides the auto hint
+   227→  }, [])
+   228→
+   229→  // Auto-select "next free": when the inventory loads and the current
+   230→  // selection is empty or no longer valid (taken/past/not in the list —
+   231→  // e.g. another receptionist claimed it between polls), fall back to the
+   232→  // next free slot. Guards: never overrides an explicit "queue tail"
+   233→  // choice, and only fires while the current value is empty/invalid, so a
+   234→  // valid user selection is never fought.
+   235→  useEffect(() => {
+   236→    if (!slotInventory || !slotDoctorId) return
+   237→    if (queueTailPicked) return
+   238→    const next = slotInventory.nextFreeSlot
+   239→    if (!next) return
+   240→    const current = slotInventory.slots.find((s) => s.time === timeSlot)
+   241→    if (!timeSlot || current?.status !== 'free') {
+   242→      setTimeSlot(next)
+   243→      setAutoPickedSlot(true)
+   244→    }
+   245→  }, [slotInventory, slotDoctorId, timeSlot, queueTailPicked])
+   246→
+   247→  // Walk-in mutation
+   248→  const walkInMutation = useMutation({
+   249→    mutationFn: (body: Record<string, unknown>) =>
+   250→      fetch('/api/dashboard/receptionist/walk-in', {
+   251→        method: 'POST',
+   252→        headers: { 'Content-Type': 'application/json' },
+   253→        body: JSON.stringify(body),
+   254→      }).then((r) => r.json()),
+   255→    onSuccess: (result) => {
+   256→      if (result.success) {
+   257→        if (isHospitalMode && result.booking?.tokenNumber) {
+   258→          toast.success(
+   259→            `Token ${result.booking.tokenNumber} assigned! Queue #${result.queuePosition}`
+   260→          )
+   261→        } else {
+   262→          toast.success(
+   263→            `Patient added to queue #${result.queuePosition}!`
+   264→          )
+   265→        }
+   266→        setLastAddedId(result.booking.id)
+   267→        // Reset form
+   268→        setPatientName('')
+   269→        setMobileNo('')
+   270→        setGender('')
+   271→        setAge('')
+   272→        setDisease('')
+   273→        resetSlotSelection() // also re-arms "next free slot" auto-pick
+   274→        setBookingMode('InPerson')
+   275→        // Reset hospital mode selections
+   276→        setSelectedDepartmentId('')
+   277→        setSelectedDoctorId('')
+   278→        // Invalidate and refetch queue
+   279→        queryClient.invalidateQueries({ queryKey: ['walkin-queue'] })
+   280→        // Refresh the live slot grid (the booked slot now shows as taken)
+   281→        queryClient.invalidateQueries({ queryKey: ['slot-inventory'] })
+   282→        queryClient.invalidateQueries({ queryKey: ['receptionist-stats'] })
+   283→        queryClient.invalidateQueries({
+   284→          queryKey: ['receptionist-appointments'],
+   285→        })
+   286→        // Scroll to queue after a tick
+   287→        setTimeout(() => {
+   288→          queueRef.current?.scrollIntoView({
+   289→            behavior: 'smooth',
+   290→            block: 'start',
+   291→          })
+   292→        }, 300)
+   293→      } else {
+   294→        toast.error(result.error || 'Failed to register patient')
+   295→        // Slot conflicts (e.g. "Time slot 10:30 is already booked", 409 from
+   296→        // the race-safe claim) — refresh the live grid so the newly taken
+   297→        // slot shows as booked
+   298→        if (result.error && /slot/i.test(result.error)) {
+   299→          queryClient.invalidateQueries({ queryKey: ['slot-inventory'] })
+   300→        }
+   301→      }
+   302→    },
+   303→    onError: (err: Error) => {
+   304→      toast.error(
+   305→        err?.message && /slot/i.test(err.message)
+   306→          ? err.message
+   307→          : 'Failed to register walk-in patient'
+   308→      )
+   309→      // Our slot view may be stale after a failed submit — refresh the grid
+   310→      queryClient.invalidateQueries({ queryKey: ['slot-inventory'] })
+   311→    },
+   312→  })
+   313→
+   314→  const handleSubmit = useCallback(
+   315→    (e: React.FormEvent) => {
+   316→      e.preventDefault()
+   317→      if (!patientName.trim() || !disease.trim()) {
+   318→        toast.error('Patient name and disease/reason are required')
+   319→        return
+   320→      }
+   321→      if (isHospitalMode && (!selectedDepartmentId || !selectedDoctorId)) {
+   322→        toast.error('Please select both department and doctor')
+   323→        return
+   324→      }
+   325→
+   326→      const body: Record<string, unknown> = {
+   327→        patientName: patientName.trim(),
+   328→        mobileNo: mobileNo.trim(),
+   329→        gender,
+   330→        age: age ? parseInt(age, 10) : null,
+   331→        disease: disease.trim(),
+   332→        timeSlot: timeSlot || null,
+   333→        bookingMode,
+   334→      }
+   335→
+   336→      if (isHospitalMode) {
+   337→        body.departmentId = selectedDepartmentId
+   338→        body.doctorId = selectedDoctorId
+   339→      }
+   340→
+   341→      walkInMutation.mutate(body)
+   342→    },
+   343→    [
+   344→      patientName,
+   345→      mobileNo,
+   346→      gender,
+   347→      age,
+   348→      disease,
+   349→      timeSlot,
+   350→      bookingMode,
+   351→      walkInMutation,
+   352→      isHospitalMode,
+   353→      selectedDepartmentId,
+   354→      selectedDoctorId,
+   355→    ]
+   356→  )
+   357→
+   358→  const isSubmitting = walkInMutation.isPending
+   359→  const queue = queueData?.queue ?? []
+   360→  const opdLimit = queueData?.opdLimit ?? 0
+   361→  const totalInQueue = queueData?.totalInQueue ?? 0
+   362→  const opdCompletedToday = queueData?.opdCompletedToday ?? 0
+   363→
+   364→  // Filtered queue for hospital mode
+   365→  const filteredQueue = useMemo(() => {
+   366→    if (!isHospitalMode || queueDoctorFilter === 'all') return queue
+   367→    return queue.filter((item) => item.doctorId === queueDoctorFilter)
+   368→  }, [queue, isHospitalMode, queueDoctorFilter])
+   369→
+   370→  // Unique doctors in queue for filter dropdown
+   371→  const queueDoctorOptions = useMemo(() => {
+   372→    if (!isHospitalMode) return []
+   373→    const seen = new Map<string, string>()
+   374→    for (const item of queue) {
+   375→      if (item.doctorId && item.doctorName) {
+   376→        seen.set(item.doctorId, item.doctorName)
+   377→      }
+   378→    }
+   379→    return Array.from(seen.entries()).map(([id, name]) => ({
+   380→      id,
+   381→      name,
+   382→    }))
+   383→  }, [queue, isHospitalMode])
+   384→
+   385→  // Check if form is valid for submit
+   386→  const canSubmit =
+   387→    patientName.trim() &&
+   388→    disease.trim() &&
+   389→    (!isHospitalMode || (selectedDepartmentId && selectedDoctorId))
+   390→
+   391→  return (
+   392→    <div className="space-y-6">
+   393→      {/* Header */}
+   394→      <div className="flex items-center gap-3">
+   395→        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/40">
+   396→          <UserPlus className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+   397→        </div>
+   398→        <div>
+   399→          <h2 className="text-xl font-semibold tracking-tight">
+   400→            Walk-in Registration
+   401→          </h2>
+   402→          <p className="text-sm text-muted-foreground">
+   403→            {isHospitalMode
+   404→              ? 'Register walk-in patients to a department and doctor'
+   405→              : 'Register walk-in patients directly to the queue'}
+   406→          </p>
+   407→        </div>
+   408→        {isHospitalMode && (
+   409→          <Badge className="ml-2 bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-400">
+   410→            <Building2 className="mr-1 h-3 w-3" />
+   411→            Hospital Mode
+   412→          </Badge>
+   413→        )}
+   414→      </div>
+   415→
+   416→      <div className="grid gap-6 lg:grid-cols-[380px_1fr]">
+   417→        {/* ============ LEFT: Registration Form ============ */}
+   418→        <motion.div
+   419→          initial={{ opacity: 0, x: -20 }}
+   420→          animate={{ opacity: 1, x: 0 }}
+   421→          transition={{ duration: 0.3 }}
+   422→        >
+   423→          <Card>
+   424→            <CardHeader className="pb-3">
+   425→              <CardTitle className="text-base">Quick Registration</CardTitle>
+   426→            </CardHeader>
+   427→            <CardContent>
+   428→              <form onSubmit={handleSubmit} className="space-y-3">
+   429→                {/* ── Hospital Mode: Department + Doctor Selection ── */}
+   430→                {isHospitalMode && (
+   431→                  <motion.div
+   432→                    initial={{ opacity: 0, height: 0 }}
+   433→                    animate={{ opacity: 1, height: 'auto' }}
+   434→                    transition={{ duration: 0.3 }}
+   435→                    className="space-y-3"
+   436→                  >
+   437→                    {/* Department Select */}
+   438→                    <div className="space-y-1">
+   439→                      <Label
+   440→                        htmlFor="department"
+   441→                        className="text-xs font-medium"
+   442→                      >
+   443→                        <Building2 className="mr-1 inline h-3 w-3" />
+   444→                        Department <span className="text-red-500">*</span>
+   445→                      </Label>
+   446→                      <Select
+   447→                        value={selectedDepartmentId}
+   448→                        onValueChange={(val) => {
+   449→                          setSelectedDepartmentId(val)
+   450→                          setSelectedDoctorId('')
+   451→                          resetSlotSelection()
+   452→                        }}
+   453→                        disabled={
+   454→                          isSubmitting || hospitalScheduleLoading
+   455→                        }
+   456→                      >
+   457→                        <SelectTrigger className="h-9 w-full">
+   458→                          <SelectValue placeholder="Select department" />
+   459→                        </SelectTrigger>
+   460→                        <SelectContent>
+   461→                          {departments.length === 0 &&
+   462→                            !hospitalScheduleLoading && (
+   463→                              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+   464→                                No departments available
+   465→                              </div>
+   466→                            )}
+   467→                          {hospitalScheduleLoading && (
+   468→                            <div className="flex items-center gap-2 px-2 py-1.5">
+   469→                              <Loader2 className="h-3 w-3 animate-spin" />
+   470→                              <span className="text-xs text-muted-foreground">
+   471→                                Loading departments...
+   472→                              </span>
+   473→                            </div>
+   474→                          )}
+   475→                          {departments.map((dept) => (
+   476→                            <SelectItem
+   477→                              key={dept.department.id}
+   478→                              value={dept.department.id}
+   479→                            >
+   480→                              <span className="flex items-center gap-2">
+   481→                                {dept.department.icon && (
+   482→                                  <span>{dept.department.icon}</span>
+   483→                                )}
+   484→                                <span className="font-medium">
+   485→                                  {dept.department.name}
+   486→                                </span>
+   487→                                {dept.department.shortCode && (
+   488→                                  <span className="text-muted-foreground">
+   489→                                    ({dept.department.shortCode})
+   490→                                  </span>
+   491→                                )}
+   492→                              </span>
+   493→                            </SelectItem>
+   494→                          ))}
+   495→                        </SelectContent>
+   496→                      </Select>
+   497→                    </div>
+   498→
+   499→                    {/* Doctor Select */}
+   500→                    <div className="space-y-1">
+   501→                      <Label
+   502→                        htmlFor="doctor"
+   503→                        className="text-xs font-medium"
+   504→                      >
+   505→                        <Stethoscope className="mr-1 inline h-3 w-3" />
+   506→                        Doctor <span className="text-red-500">*</span>
+   507→                      </Label>
+   508→                      <Select
+   509→                        value={selectedDoctorId}
+   510→                        onValueChange={(val) => {
+   511→                          setSelectedDoctorId(val)
+   512→                          resetSlotSelection()
+   513→                        }}
+   514→                        disabled={
+   515→                          isSubmitting || !selectedDepartmentId
+   516→                        }
+   517→                      >
+   518→                        <SelectTrigger className="h-9 w-full">
+   519→                          <SelectValue placeholder={
+   520→                            selectedDepartmentId
+   521→                              ? 'Select doctor'
+   522→                              : 'Select a department first'
+   523→                          } />
+   524→                        </SelectTrigger>
+   525→                        <SelectContent>
+   526→                          {departmentDoctors.length === 0 &&
+   527→                            selectedDepartmentId && (
+   528→                              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+   529→                                No doctors in this department
+   530→                              </div>
+   531→                            )}
+   532→                          {departmentDoctors.map((doc) => (
+   533→                            <SelectItem key={doc.id} value={doc.id}>
+   534→                              <span className="flex items-center gap-2">
+   535→                                <span className="font-medium">
+   536→                                  {doc.name}
+   537→                                </span>
+   538→                                {doc.specialization && (
+   539→                                  <span className="text-xs text-muted-foreground">
+   540→                                    {doc.specialization}
+   541→                                  </span>
+   542→                                )}
+   543→                              </span>
+   544→                            </SelectItem>
+   545→                          ))}
+   546→                        </SelectContent>
+   547→                      </Select>
+   548→                    </div>
+   549→
+   550→                    {/* Divider */}
+   551→                    <div className="flex items-center gap-2 pt-1">
+   552→                      <div className="h-px flex-1 bg-border" />
+   553→                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+   554→                        Patient Details
+   555→                      </span>
+   556→                      <div className="h-px flex-1 bg-border" />
+   557→                    </div>
+   558→                  </motion.div>
+   559→                )}
+   560→
+   561→                {/* Patient Name */}
+   562→                <div className="space-y-1">
+   563→                  <Label htmlFor="patientName" className="text-xs font-medium">
+   564→                    Patient Name <span className="text-red-500">*</span>
+   565→                  </Label>
+   566→                  <Input
+   567→                    id="patientName"
+   568→                    placeholder="Full name"
+   569→                    value={patientName}
+   570→                    onChange={(e) => setPatientName(e.target.value)}
+   571→                    disabled={isSubmitting}
+   572→                    autoFocus
+   573→                    className="h-9"
+   574→                  />
+   575→                </div>
+   576→
+   577→                {/* Mobile + Gender row */}
+   578→                <div className="grid grid-cols-2 gap-3">
+   579→                  <div className="space-y-1">
+   580→                    <Label htmlFor="mobileNo" className="text-xs font-medium">
+   581→                      Mobile No.
+   582→                    </Label>
+   583→                    <Input
+   584→                      id="mobileNo"
+   585→                      placeholder="Phone number"
+   586→                      value={mobileNo}
+   587→                      onChange={(e) => setMobileNo(e.target.value)}
+   588→                      disabled={isSubmitting}
+   589→                      className="h-9"
+   590→                    />
+   591→                  </div>
+   592→                  <div className="space-y-1">
+   593→                    <Label htmlFor="gender" className="text-xs font-medium">
+   594→                      Gender
+   595→                    </Label>
+   596→                    <Select
+   597→                      value={gender}
+   598→                      onValueChange={setGender}
+   599→                      disabled={isSubmitting}
+   600→                    >
+   601→                      <SelectTrigger className="h-9 w-full">
+   602→                        <SelectValue placeholder="Select" />
+   603→                      </SelectTrigger>
+   604→                      <SelectContent>
+   605→                        {GENDER_OPTIONS.map((g) => (
+   606→                          <SelectItem key={g.value} value={g.value}>
+   607→                            {g.label}
+   608→                          </SelectItem>
+   609→                        ))}
+   610→                      </SelectContent>
+   611→                    </Select>
+   612→                  </div>
+   613→                </div>
+   614→
+   615→                {/* Age */}
+   616→                <div className="space-y-1">
+   617→                  <Label htmlFor="age" className="text-xs font-medium">
+   618→                    Age
+   619→                  </Label>
+   620→                  <Input
+   621→                    id="age"
+   622→                    type="number"
+   623→                    placeholder="Age"
+   624→                    min={0}
+   625→                    max={150}
+   626→                    value={age}
+   627→                    onChange={(e) => setAge(e.target.value)}
+   628→                    disabled={isSubmitting}
+   629→                    className="h-9"
+   630→                  />
+   631→                </div>
+   632→
+   633→                {/* Disease/Reason */}
+   634→                <div className="space-y-1">
+   635→                  <Label htmlFor="disease" className="text-xs font-medium">
+   636→                    Disease / Reason <span className="text-red-500">*</span>
+   637→                  </Label>
+   638→                  <Input
+   639→                    id="disease"
+   640→                    placeholder="e.g. Fever, Headache, Check-up"
+   641→                    value={disease}
+   642→                    onChange={(e) => setDisease(e.target.value)}
+   643→                    disabled={isSubmitting}
+   644→                    className="h-9"
+   645→                  />
+   646→                </div>
+   647→
+   648→                {/* Time Slot — live slot grid (optional) */}
+   649→                <div className="space-y-2">
+   650→                  <Label className="text-xs font-medium">
+   651→                    Time Slot{' '}
+   652→                    <span className="text-muted-foreground font-normal">
+   653→                      (optional)
+   654→                    </span>
+   655→                  </Label>
+   656→                  {isHospitalMode && !selectedDoctorId ? (
+   657→                    <p className="text-xs italic text-muted-foreground">
+   658→                      Select a doctor to see live slot availability
+   659→                    </p>
+   660→                  ) : (
+   661→                    <SlotGrid
+   662→                      inventory={slotInventory}
+   663→                      isLoading={
+   664→                        slotsLoading ||
+   665→                        (!isHospitalMode && clinicScheduleLoading)
+   666→                      }
+   667→                      isError={slotsError}
+   668→                      onRetry={() => refetchSlots()}
+   669→                      selectedTime={timeSlot}
+   670→                      onSelect={handleSlotSelect}
+   671→                      autoHint={autoPickedSlot}
+   672→                      disabled={isSubmitting}
+   673→                    />
+   674→                  )}
+   675→                </div>
+   676→
+   677→                {/* Booking Mode Toggle */}
+   678→                <div className="space-y-1">
+   679→                  <Label className="text-xs font-medium">Booking Mode</Label>
+   680→                  <div className="flex gap-2">
+   681→                    <Button
+   682→                      type="button"
+   683→                      variant={
+   684→                        bookingMode === 'InPerson' ? 'default' : 'outline'
+   685→                      }
+   686→                      size="sm"
+   687→                      className={cn(
+   688→                        'flex-1 gap-1.5 h-9',
+   689→                        bookingMode === 'InPerson' &&
+   690→                          'bg-teal-600 text-white hover:bg-teal-700'
+   691→                      )}
+   692→                      onClick={() => setBookingMode('InPerson')}
+   693→                      disabled={isSubmitting}
+   694→                    >
+   695→                      <UserRound className="h-3.5 w-3.5" />
+   696→                      In Person
+   697→                    </Button>
+   698→                    <Button
+   699→                      type="button"
+   700→                      variant={
+   701→                        bookingMode === 'VideoCall' ? 'default' : 'outline'
+   702→                      }
+   703→                      size="sm"
+   704→                      className={cn(
+   705→                        'flex-1 gap-1.5 h-9',
+   706→                        bookingMode === 'VideoCall' &&
+   707→                          'bg-teal-600 text-white hover:bg-teal-700'
+   708→                      )}
+   709→                      onClick={() => setBookingMode('VideoCall')}
+   710→                      disabled={isSubmitting}
+   711→                    >
+   712→                      <Video className="h-3.5 w-3.5" />
+   713→                      Video Call
+   714→                    </Button>
+   715→                  </div>
+   716→                </div>
+   717→
+   718→                {/* Submit */}
+   719→                <Button
+   720→                  type="submit"
+   721→                  disabled={isSubmitting || !canSubmit}
+   722→                  className="w-full gap-2 bg-teal-600 text-white hover:bg-teal-700 h-10 font-medium"
+   723→                >
+   724→                  {isSubmitting ? (
+   725→                    <>
+   726→                      <Loader2 className="h-4 w-4 animate-spin" />
+   727→                      Registering...
+   728→                    </>
+   729→                  ) : (
+   730→                    <>
+   731→                      <UserPlus className="h-4 w-4" />
+   732→                      Add to Queue
+   733→                    </>
+   734→                  )}
+   735→                </Button>
+   736→              </form>
+   737→            </CardContent>
+   738→          </Card>
+   739→        </motion.div>
+   740→
+   741→        {/* ============ RIGHT: Today's Queue ============ */}
+   742→        <motion.div
+   743→          ref={queueRef}
+   744→          initial={{ opacity: 0, x: 20 }}
+   745→          animate={{ opacity: 1, x: 0 }}
+   746→          transition={{ duration: 0.3, delay: 0.1 }}
+   747→        >
+   748→          <Card>
+   749→            <CardHeader className="pb-3">
+   750→              <div className="flex items-center justify-between">
+   751→                <div className="flex items-center gap-2">
+   752→                  <CardTitle className="text-base">Today&apos;s Queue</CardTitle>
+   753→                  {isHospitalMode ? (
+   754→                    <Badge
+   755→                      variant="secondary"
+   756→                      className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+   757→                    >
+   758→                      {filteredQueue.length} patients
+   759→                    </Badge>
+   760→                  ) : (
+   761→                    <Badge
+   762→                      variant="secondary"
+   763→                      className="bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400"
+   764→                    >
+   765→                      {totalInQueue}/{opdLimit}
+   766→                    </Badge>
+   767→                  )}
+   768→                </div>
+   769→                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+   770→                  <RefreshCw
+   771→                    className={cn(
+   772→                      'h-3.5 w-3.5',
+   773→                      queueLoading && 'animate-spin'
+   774→                    )}
+   775→                  />
+   776→                  <span>Auto-refresh 15s</span>
+   777→                </div>
+   778→              </div>
+   779→            </CardHeader>
+   780→            <CardContent>
+   781→              {/* Hospital mode: Doctor filter dropdown */}
+   782→              {isHospitalMode && queueDoctorOptions.length > 0 && (
+   783→                <div className="mb-3">
+   784→                  <div className="flex items-center gap-2">
+   785→                    <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+   786→                    <Select
+   787→                      value={queueDoctorFilter}
+   788→                      onValueChange={setQueueDoctorFilter}
+   789→                    >
+   790→                      <SelectTrigger className="h-8 w-full max-w-xs text-xs">
+   791→                        <SelectValue placeholder="Filter by doctor" />
+   792→                      </SelectTrigger>
+   793→                      <SelectContent>
+   794→                        <SelectItem value="all">
+   795→                          All Doctors ({queue.length})
+   796→                        </SelectItem>
+   797→                        {queueDoctorOptions.map((doc) => {
+   798→                          const count = queue.filter(
+   799→                            (q) => q.doctorId === doc.id
+   800→                          ).length
+   801→                          return (
+   802→                            <SelectItem key={doc.id} value={doc.id}>
+   803→                              {doc.name} ({count})
+   804→                            </SelectItem>
+   805→                          )
+   806→                        })}
+   807→                      </SelectContent>
+   808→                    </Select>
+   809→                  </div>
+   810→                </div>
+   811→              )}
+   812→
+   813→              {/* OPD progress bar (clinic mode only) */}
+   814→              {!isHospitalMode && (
+   815→                <div className="mb-4">
+   816→                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+   817→                    <span>Completed: {opdCompletedToday}</span>
+   818→                    <span>In Queue: {totalInQueue}</span>
+   819→                    <span>Limit: {opdLimit}</span>
+   820→                  </div>
+   821→                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+   822→                    <motion.div
+   823→                      className="h-full rounded-full bg-teal-500"
+   824→                      initial={{ width: 0 }}
+   825→                      animate={{
+   826→                        width: `${Math.min(
+   827→                          ((opdCompletedToday + totalInQueue) / opdLimit) * 100,
+   828→                          100
+   829→                        )}%`,
+   830→                      }}
+   831→                      transition={{ duration: 0.5, ease: 'easeOut' }}
+   832→                    />
+   833→                  </div>
+   834→                </div>
+   835→              )}
+   836→
+   837→              {/* Hospital mode summary */}
+   838→              {isHospitalMode && (
+   839→                <div className="mb-4 flex items-center gap-4 text-xs text-muted-foreground">
+   840→                  <span>Completed: {opdCompletedToday}</span>
+   841→                  <span>In Queue: {filteredQueue.length}</span>
+   842→                </div>
+   843→              )}
+   844→
+   845→              {/* Queue list */}
+   846→              {queueLoading ? (
+   847→                <div className="space-y-2">
+   848→                  {Array.from({ length: 4 }).map((_, i) => (
+   849→                    <div
+   850→                      key={i}
+   851→                      className="flex items-center gap-3 rounded-lg border border-border/50 p-3"
+   852→                    >
+   853→                      <div className="h-8 w-8 animate-pulse rounded-full bg-muted" />
+   854→                      <div className="flex-1 space-y-1.5">
+   855→                        <div className="h-3.5 w-28 animate-pulse rounded bg-muted" />
+   856→                        <div className="h-3 w-40 animate-pulse rounded bg-muted" />
+   857→                      </div>
+   858→                      <div className="h-3 w-16 animate-pulse rounded bg-muted" />
+   859→                    </div>
+   860→                  ))}
+   861→                </div>
+   862→              ) : filteredQueue.length === 0 ? (
+   863→                <div className="flex flex-col items-center justify-center py-12 text-center">
+   864→                  <Users className="mb-3 h-12 w-12 text-muted-foreground/30" />
+   865→                  <p className="text-sm font-medium text-muted-foreground">
+   866→                    {queueDoctorFilter !== 'all'
+   867→                      ? 'No patients for this doctor'
+   868→                      : 'No patients in queue'}
+   869→                  </p>
+   870→                  <p className="mt-1 text-xs text-muted-foreground/70">
+   871→                    Walk-in patients will appear here
+   872→                  </p>
+   873→                </div>
+   874→              ) : (
+   875→                <div className="max-h-[400px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+   876→                  <AnimatePresence mode="popLayout">
+   877→                    {filteredQueue.map((item) => {
+   878→                      const isJustAdded = item.id === lastAddedId
+   879→                      const ModeIcon =
+   880→                        item.bookingMode === 'VideoCall'
+   881→                          ? Video
+   882→                          : UserRound
+   883→
+   884→                      return (
+   885→                        <motion.div
+   886→                          key={item.id}
+   887→                          layout
+   888→                          initial={
+   889→                            isJustAdded
+   890→                              ? {
+   891→                                  opacity: 0,
+   892→                                  scale: 0.95,
+   893→                                  y: -10,
+   894→                                }
+   895→                              : { opacity: 0, y: 10 }
+   896→                          }
+   897→                          animate={{
+   898→                            opacity: 1,
+   899→                            scale: 1,
+   900→                            y: 0,
+   901→                            backgroundColor: isJustAdded
+   902→                              ? 'rgba(20, 184, 166, 0.08)'
+   903→                              : 'transparent',
+   904→                          }}
+   905→                          exit={{
+   906→                            opacity: 0,
+   907→                            scale: 0.95,
+   908→                            y: -10,
+   909→                          }}
+   910→                          transition={{
+   911→                            layout: {
+   912→                              type: 'spring',
+   913→                              stiffness: 350,
+   914→                              damping: 30,
+   915→                            },
+   916→                            opacity: { duration: 0.2 },
+   917→                            scale: { duration: 0.2 },
+   918→                            backgroundColor: {
+   919→                              duration: 2,
+   920→                              delay: 1,
+   921→                            },
+   922→                          }}
+   923→                          className={cn(
+   924→                            'flex items-center gap-3 rounded-lg border p-3 transition-colors',
+   925→                            isJustAdded
+   926→                              ? 'border-teal-300 dark:border-teal-700'
+   927→                              : 'border-border/50 hover:border-border',
+   928→                            item.status === 'Visited' && 'opacity-60'
+   929→                          )}
+   930→                        >
+   931→                          {/* Queue position / Token badge (amber — palette rule: teal/emerald/amber/rose only) */}
+   932→                          {isHospitalMode && item.tokenNumber ? (
+   933→                            <div className="flex h-8 shrink-0 items-center justify-center rounded-md bg-amber-100 px-2 text-xs font-bold text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+   934→                              {item.tokenNumber}
+   935→                            </div>
+   936→                          ) : (
+   937→                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700 dark:bg-teal-900/40 dark:text-teal-400">
+   938→                              {item.queuePosition}
+   939→                            </div>
+   940→                          )}
+   941→
+   942→                          {/* Patient info */}
+   943→                          <div className="min-w-0 flex-1">
+   944→                            <div className="flex items-center gap-2">
+   945→                              <p className="truncate text-sm font-medium">
+   946→                                {item.patientName}
+   947→                              </p>
+   948→                              {item.bookingType === 'By Receptionist' && (
+   949→                                <Badge
+   950→                                  variant="outline"
+   951→                                  className="h-4 shrink-0 px-1.5 text-[10px] font-normal text-teal-600 dark:text-teal-400"
+   952→                                >
+   953→                                  Walk-in
+   954→                                </Badge>
+   955→                              )}
+   956→                            </div>
+   957→                            <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+   958→                              {/* Hospital mode: show doctor name */}
+   959→                              {isHospitalMode && item.doctorName && (
+   960→                                <span className="flex shrink-0 items-center gap-0.5 font-medium text-amber-600 dark:text-amber-400">
+   961→                                  <Stethoscope className="h-3 w-3" />
+   962→                                  {item.doctorName}
+   963→                                </span>
+   964→                              )}
+   965→                              {item.disease && (
+   966→                                <span className="truncate max-w-[140px]">
+   967→                                  {item.disease}
+   968→                                </span>
+   969→                              )}
+   970→                              {item.timeSlot && (
+   971→                                <span className="flex shrink-0 items-center gap-0.5">
+   972→                                  <Clock className="h-3 w-3" />
+   973→                                  {item.timeSlot}
+   974→                                </span>
+   975→                              )}
+   976→                            </div>
+   977→                          </div>
+   978→
+   979→                          {/* Status + Mode */}
+   980→                          <div className="flex shrink-0 flex-col items-end gap-1">
+   981→                            <Badge
+   982→                              variant="secondary"
+   983→                              className={cn(
+   984→                                'text-[10px]',
+   985→                                item.status === 'Approve'
+   986→                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+   987→                                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+   988→                              )}
+   989→                            >
+   990→                              {item.status === 'Approve'
+   991→                                ? 'Waiting'
+   992→                                : 'In Consultation'}
+   993→                            </Badge>
+   994→                            <div className="flex items-center gap-1 text-muted-foreground">
+   995→                              <ModeIcon className="h-3 w-3" />
+   996→                              <span className="text-[10px]">
+   997→                                {item.bookingMode === 'VideoCall'
+   998→                                  ? 'Video'
+   999→                                  : 'In-Person'}
+  1000→                              </span>
+  1001→                            </div>
+  1002→                          </div>
+  1003→                        </motion.div>
+  1004→                      )
+  1005→                    })}
+  1006→                  </AnimatePresence>
+  1007→                </div>
+  1008→              )}
+  1009→            </CardContent>
+  1010→          </Card>
+  1011→        </motion.div>
+  1012→      </div>
+  1013→    </div>
+  1014→  )
+  1015→}
+  1016→

@@ -1,0 +1,676 @@
+     1→'use client'
+     2→
+     3→import { useEffect } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import { format } from 'date-fns'
+     6→import { X } from 'lucide-react'
+     7→import { doctorDisplayName } from '@/lib/utils'
+     8→
+     9→// ─── Data Types ───────────────────────────────────────────
+    10→
+    11→export interface PrintData {
+    12→  patient: {
+    13→    name: string
+    14→    age: string
+    15→    gender: string
+    16→    bloodGroup: string
+    17→  }
+    18→  doctor: {
+    19→    name: string
+    20→    specialization: string
+    21→    education: string
+    22→    registrationDetail: string
+    23→    city: string
+    24→    state: string
+    25→    address: string
+    26→    hospitalAddress: string
+    27→    phoneNo: string
+    28→    mobileNo: string
+    29→  }
+    30→  hospital: {
+    31→    hospitalName: string
+    32→    departmentName: string
+    33→    departmentFloor: string
+    34→    departmentOpdRoom: string
+    35→  } | null
+    36→  settings: {
+    37→    logo: string
+    38→    header: string
+    39→    fullHeader: string
+    40→    isFullHeader: boolean
+    41→    footer: string
+    42→    showCoInPrint: boolean
+    43→    showNextVisit: boolean
+    44→    printLayout: string
+    45→  }
+    46→  complaints: {
+    47→    coId: string
+    48→    coDetail: string
+    49→    coDetailEn: string
+    50→  }[]
+    51→  vitals: {
+    52→    weight: string
+    53→    bp: string
+    54→    temperature: string
+    55→    pulse: string
+    56→    spo2: string
+    57→  }
+    58→  labels: {
+    59→    label: string
+    60→    labelEn: string
+    61→    value: string
+    62→    labelUnit: string
+    63→    showUnit: boolean
+    64→  }[]
+    65→  medicines: {
+    66→    medicine: string
+    67→    dose: string
+    68→    morning: number
+    69→    afternoon: number
+    70→    evening: number
+    71→    tab: number
+    72→    description: string
+    73→  }[]
+    74→  tables: {
+    75→    rows: number
+    76→    cols: number
+    77→    headerLabel: string[]
+    78→    colsLabel: string[]
+    79→    footerLabel: string[]
+    80→    extraLabel: string
+    81→    cellValues: Record<string, string>
+    82→  }[]
+    83→  suggestions: {
+    84→    coId: string | null
+    85→    question: string
+    86→    questionEn: string
+    87→    suggestions: string
+    88→    suggestionsEn: string
+    89→  }[]
+    90→  nextVisit?: string
+    91→  createdAt: string
+    92→}
+    93→
+    94→// ─── Legacy type alias for backward compatibility ─────────
+    95→export type PrescriptionPrintData = PrintData
+    96→
+    97→interface PrescriptionPrintViewProps {
+    98→  data: PrintData
+    99→  onClose: () => void
+   100→  onPrint: () => void
+   101→  /** Auto-trigger the print dialog ~150ms after mount (default: true). Set false when the caller wants explicit Print buttons. */
+   102→  autoPrint?: boolean
+   103→  /** Extra actions (e.g. "Mark Visit Complete") rendered in a floating bar above the document. Hidden in print. */
+   104→  extraActions?: React.ReactNode
+   105→}
+   106→
+   107→// ─── Shared styles ────────────────────────────────────────
+   108→
+   109→const COLORS = {
+   110→  teal: '#0d9488',
+   111→  tealLight: '#f0fdfa',
+   112→  tealBorder: '#99f6e4',
+   113→  gray700: '#374151',
+   114→  gray500: '#6b7280',
+   115→  gray400: '#9ca3af',
+   116→  gray100: '#f9fafb',
+   117→  border: '#e5e7eb',
+   118→  text: '#1a1a1a',
+   119→}
+   120→
+   121→const sectionTitle: React.CSSProperties = {
+   122→  margin: '0 0 6px 0',
+   123→  fontSize: '12px',
+   124→  fontWeight: 700,
+   125→  color: COLORS.teal,
+   126→  textTransform: 'uppercase',
+   127→  letterSpacing: '0.5px',
+   128→}
+   129→
+   130→// ─── Component ───────────────────────────────────────────
+   131→
+   132→// Detect whether a string is an image URL/URI (vs plain text header content).
+   133→// Accepts http(s) URLs, root-relative paths (/foo.png), and data: image URLs.
+   134→function isImageUrl(s: string): boolean {
+   135→  if (!s) return false
+   136→  const t = s.trim()
+   137→  return /^(https?:\/\/|\/[^/\s]+|data:image\/)/i.test(t)
+   138→}
+   139→
+   140→// Split a header text string into display lines (preserving explicit \n).
+   141→function splitHeaderLines(s: string): string[] {
+   142→  return (s || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+   143→}
+   144→
+   145→export function PrescriptionPrintView({ data, onClose, onPrint, autoPrint = true, extraActions }: PrescriptionPrintViewProps) {
+   146→  const { patient, doctor, hospital, settings, complaints, vitals, medicines, tables, suggestions, nextVisit, createdAt } = data
+   147→  // Only show label slots that actually have a value — empty slots print as
+   148→  // confusing "Label: unit" chips with no reading.
+   149→  const labels = (data.labels || []).filter((l) => l.value && String(l.value).trim() !== '')
+   150→
+   151→  // Advice grouped complaint-wise (mirrors wizard Step 5/6 sections).
+   152→  // Legacy rows without coId fall under "General Advice".
+   153→  const adviceGroups = (() => {
+   154→    const coNameMap = new Map<string, { coDetail: string; coDetailEn: string }>()
+   155→    for (const c of complaints || []) {
+   156→      if (c.coId && (c.coDetail || c.coDetailEn)) {
+   157→        coNameMap.set(c.coId, { coDetail: c.coDetail, coDetailEn: c.coDetailEn })
+   158→      }
+   159→    }
+   160→    const all = suggestions || []
+   161→    const general = all.filter((s) => !s.coId)
+   162→    const other = all.filter((s) => s.coId && !coNameMap.has(s.coId))
+   163→    const sections: Array<{ key: string; name: string; items: typeof all }> = []
+   164→    for (const [coId, names] of coNameMap) {
+   165→      const items = all.filter((s) => s.coId === coId)
+   166→      if (items.length > 0) {
+   167→        sections.push({ key: coId, name: names.coDetailEn || names.coDetail, items })
+   168→      }
+   169→    }
+   170→    if (other.length > 0) {
+   171→      sections.push({ key: '__other__', name: 'Other Advice', items: other })
+   172→    }
+   173→    if (general.length > 0) {
+   174→      sections.push({ key: '__general__', name: 'General Advice', items: general })
+   175→    }
+   176→    return sections
+   177→  })()
+   178→
+   179→  useEffect(() => {
+   180→    if (!autoPrint) return
+   181→    const timer = setTimeout(() => {
+   182→      onPrint()
+   183→    }, 150)
+   184→    return () => clearTimeout(timer)
+   185→  }, [autoPrint, onPrint])
+   186→
+   187→  // Determine which time columns are needed based on medicine data
+   188→  const hasMorning = medicines.some((m) => m.morning > 0)
+   189→  const hasAfternoon = medicines.some((m) => m.afternoon > 0)
+   190→  const hasEvening = medicines.some((m) => m.evening > 0)
+   191→
+   192→  return (
+   193→    <>
+   194→      {/* Print-only styles */}
+   195→      <style dangerouslySetInnerHTML={{ __html: `
+   196→          @media print {
+   197→          body * { visibility: hidden; }
+   198→          .prescription-print-area, .prescription-print-area * { visibility: visible; }
+   199→          .prescription-print-area { position: absolute; left: 0; top: 0; width: 100%; }
+   200→          .print-close-btn, .print-actions-bar { display: none !important; }
+   201→          @page { size: A4; margin: 10mm; }
+   202→        }
+   203→      ` }} />
+   204→
+   205→      <AnimatePresence>
+   206→        <motion.div
+   207→          className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 overflow-y-auto py-8"
+   208→          initial={{ opacity: 0 }}
+   209→          animate={{ opacity: 1 }}
+   210→          exit={{ opacity: 0 }}
+   211→          onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+   212→        >
+   213→          {/* Extra actions bar (e.g. Print + Mark Visit Complete) - hidden in print */}
+   214→          {extraActions && (
+   215→            <div className="print-actions-bar fixed top-4 left-1/2 z-[60] -translate-x-1/2 flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 shadow-lg">
+   216→              {extraActions}
+   217→            </div>
+   218→          )}
+   219→
+   220→          {/* Close button - hidden in print */}
+   221→          <button
+   222→            onClick={onClose}
+   223→            className="print-close-btn fixed top-4 right-4 z-[60] rounded-full bg-white/90 p-2 shadow-lg hover:bg-white transition-colors"
+   224→            aria-label="Close print preview"
+   225→          >
+   226→            <X className="h-5 w-5 text-gray-600" />
+   227→          </button>
+   228→
+   229→          {/* Prescription document */}
+   230→          <motion.div
+   231→            className="prescription-print-area bg-white rounded-lg shadow-2xl"
+   232→            style={{ width: '210mm', maxWidth: '95vw' }}
+   233→            initial={{ opacity: 0, y: 30, scale: 0.97 }}
+   234→            animate={{ opacity: 1, y: 0, scale: 1 }}
+   235→            exit={{ opacity: 0, y: 30, scale: 0.97 }}
+   236→            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+   237→          >
+   238→            <div style={{ padding: '24px 32px', fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif', color: COLORS.text, fontSize: '13px', lineHeight: '1.5' }}>
+   239→
+   240→              {/* ── Header ── */}
+   241→              <div style={{ borderBottom: `2px solid ${COLORS.teal}`, paddingBottom: '14px', marginBottom: '16px' }}>
+   242→                {/* Full header mode: doctor-provided letterhead (image OR custom text) */}
+   243→                {settings.isFullHeader && settings.fullHeader ? (
+   244→                  isImageUrl(settings.fullHeader) ? (
+   245→                    /* Image letterhead (e.g. uploaded clinic letterhead PNG) */
+   246→                    <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+   247→                      <img
+   248→                        src={settings.fullHeader}
+   249→                        alt="Doctor Header"
+   250→                        style={{ maxHeight: '120px', maxWidth: '100%', objectFit: 'contain' }}
+   251→                      />
+   252→                      {/* Hospital context line below full header image */}
+   253→                      {hospital && hospital.hospitalName && (
+   254→                        <div style={{ marginTop: '6px' }}>
+   255→                          <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: COLORS.text }}>{hospital.hospitalName}</p>
+   256→                          {(hospital.departmentName || hospital.departmentFloor || hospital.departmentOpdRoom) && (
+   257→                            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: COLORS.gray500, fontWeight: 500 }}>
+   258→                              {[hospital.departmentName, hospital.departmentFloor && `Floor ${hospital.departmentFloor}`, hospital.departmentOpdRoom].filter(Boolean).join(' · ')}
+   259→                            </p>
+   260→                          )}
+   261→                        </div>
+   262→                      )}
+   263→                    </div>
+   264→                  ) : (
+   265→                    /* Text letterhead (doctor typed multi-line clinic header — no image) */
+   266→                    <div style={{ textAlign: 'center' }}>
+   267→                      {splitHeaderLines(settings.fullHeader).map((line, i, arr) => (
+   268→                        <p
+   269→                          key={i}
+   270→                          style={{
+   271→                            margin: i === 0 ? '0 0 2px 0' : i === arr.length - 1 ? '2px 0 0 0' : '1px 0',
+   272→                            fontSize: i === 0 ? '20px' : '12px',
+   273→                            fontWeight: i === 0 ? 800 : 500,
+   274→                            color: i === 0 ? COLORS.teal : COLORS.gray700,
+   275→                            letterSpacing: i === 0 ? '0.3px' : 'normal',
+   276→                          }}
+   277→                        >
+   278→                          {line}
+   279→                        </p>
+   280→                      ))}
+   281→                      {/* Hospital context line below text header */}
+   282→                      {hospital && hospital.hospitalName && (
+   283→                        <div style={{ marginTop: '6px' }}>
+   284→                          <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: COLORS.text }}>{hospital.hospitalName}</p>
+   285→                          {(hospital.departmentName || hospital.departmentFloor || hospital.departmentOpdRoom) && (
+   286→                            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: COLORS.gray500, fontWeight: 500 }}>
+   287→                              {[hospital.departmentName, hospital.departmentFloor && `Floor ${hospital.departmentFloor}`, hospital.departmentOpdRoom].filter(Boolean).join(' · ')}
+   288→                            </p>
+   289→                          )}
+   290→                        </div>
+   291→                      )}
+   292→                    </div>
+   293→                  )
+   294→                ) : (
+   295→                  /* Standard header: logo + doctor info text */
+   296→                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+   297→                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+   298→                      {settings.logo && (
+   299→                        <div style={{ flexShrink: 0 }}>
+   300→                          <img
+   301→                            src={settings.logo}
+   302→                            alt="Logo"
+   303→                            style={{ height: '60px', width: '60px', objectFit: 'contain', borderRadius: '4px' }}
+   304→                          />
+   305→                        </div>
+   306→                      )}
+   307→                      <div>
+   308→                        {/* Hospital context — shown above doctor name when available */}
+   309→                        {hospital && hospital.hospitalName && (
+   310→                          <div style={{ marginBottom: '6px' }}>
+   311→                            <h2 style={{ margin: '0 0 3px 0', fontSize: '18px', fontWeight: 800, color: COLORS.text, letterSpacing: '0.2px' }}>
+   312→                              {hospital.hospitalName}
+   313→                            </h2>
+   314→                            {(hospital.departmentName || hospital.departmentFloor || hospital.departmentOpdRoom) && (
+   315→                              <p style={{ margin: 0, fontSize: '12px', color: COLORS.gray500, fontWeight: 500 }}>
+   316→                                {[hospital.departmentName, hospital.departmentFloor && `Floor ${hospital.departmentFloor}`, hospital.departmentOpdRoom].filter(Boolean).join(' · ')}
+   317→                              </p>
+   318→                            )}
+   319→                          </div>
+   320→                        )}
+   321→
+   322→                        {/* Doctor-supplied custom header text takes precedence over auto-generated block */}
+   323→                        {settings.header && settings.header.trim() ? (
+   324→                          <div>
+   325→                            {splitHeaderLines(settings.header).map((line, i, arr) => (
+   326→                              <p
+   327→                                key={i}
+   328→                                style={{
+   329→                                  margin: i === 0 ? '0 0 3px 0' : i === arr.length - 1 ? '0' : '0 0 3px 0',
+   330→                                  fontSize: i === 0 ? '20px' : '12px',
+   331→                                  fontWeight: i === 0 ? 700 : 500,
+   332→                                  color: i === 0 ? COLORS.teal : COLORS.gray500,
+   333→                                  letterSpacing: i === 0 ? '0.3px' : 'normal',
+   334→                                }}
+   335→                              >
+   336→                                {line}
+   337→                              </p>
+   338→                            ))}
+   339→                          </div>
+   340→                        ) : (
+   341→                          /* Auto-generated header from doctor profile */
+   342→                          <>
+   343→                            <h1 style={{ margin: '0 0 2px 0', fontSize: '20px', fontWeight: 700, color: COLORS.teal, letterSpacing: '0.3px' }}>
+   344→                              {doctorDisplayName(doctor.name) || 'Unknown'}
+   345→                            </h1>
+   346→                            {doctor.specialization && (
+   347→                              <p style={{ margin: '0 0 3px 0', fontSize: '13px', color: COLORS.gray700, fontWeight: 500 }}>
+   348→                                {doctor.specialization}
+   349→                              </p>
+   350→                            )}
+   351→                            {doctor.education && (
+   352→                              <p style={{ margin: '0 0 3px 0', fontSize: '12px', color: COLORS.gray500 }}>
+   353→                                {doctor.education}
+   354→                              </p>
+   355→                            )}
+   356→                            {doctor.registrationDetail && (
+   357→                              <p style={{ margin: '0', fontSize: '11px', color: COLORS.gray500 }}>
+   358→                                Reg. No: {doctor.registrationDetail}
+   359→                              </p>
+   360→                            )}
+   361→                          </>
+   362→                        )}
+   363→                      </div>
+   364→                    </div>
+   365→                    <div style={{ textAlign: 'right' }}>
+   366→                      <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: COLORS.gray700, fontWeight: 600 }}>
+   367→                        PRESCRIPTION
+   368→                      </p>
+   369→                      <p style={{ margin: '0 0 2px 0', fontSize: '11px', color: COLORS.gray500 }}>
+   370→                        Date: {format(new Date(createdAt), 'dd MMM yyyy')}
+   371→                      </p>
+   372→                      {(doctor.phoneNo || doctor.mobileNo) && (
+   373→                        <p style={{ margin: '0', fontSize: '11px', color: COLORS.gray500 }}>
+   374→                          Ph: {doctor.phoneNo || doctor.mobileNo}
+   375→                        </p>
+   376→                      )}
+   377→                    </div>
+   378→                  </div>
+   379→                )}
+   380→                {/* Address line */}
+   381→                {(doctor.hospitalAddress || doctor.address) && (
+   382→                  <p style={{ margin: settings.isFullHeader && settings.fullHeader ? '4px 0 0 0' : '8px 0 0 0', fontSize: '11px', color: COLORS.gray500 }}>
+   383→                    {doctor.hospitalAddress || doctor.address}{doctor.city ? `, ${doctor.city}` : ''}{doctor.state ? `, ${doctor.state}` : ''}
+   384→                  </p>
+   385→                )}
+   386→              </div>
+   387→
+   388→              {/* ── Patient Info ── */}
+   389→              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '6px 24px', padding: '10px 14px', backgroundColor: COLORS.gray100, borderRadius: '6px', marginBottom: '16px', fontSize: '12px' }}>
+   390→                <div>
+   391→                  <span style={{ color: COLORS.gray500 }}>Patient: </span>
+   392→                  <span style={{ fontWeight: 600 }}>{patient.name}</span>
+   393→                </div>
+   394→                {patient.age && (
+   395→                  <div>
+   396→                    <span style={{ color: COLORS.gray500 }}>Age: </span>
+   397→                    <span style={{ fontWeight: 500 }}>{patient.age}</span>
+   398→                  </div>
+   399→                )}
+   400→                {patient.gender && (
+   401→                  <div>
+   402→                    <span style={{ color: COLORS.gray500 }}>Gender: </span>
+   403→                    <span style={{ fontWeight: 500 }}>{patient.gender}</span>
+   404→                  </div>
+   405→                )}
+   406→                {patient.bloodGroup && (
+   407→                  <div>
+   408→                    <span style={{ color: COLORS.gray500 }}>Blood Group: </span>
+   409→                    <span style={{ fontWeight: 500 }}>{patient.bloodGroup}</span>
+   410→                  </div>
+   411→                )}
+   412→              </div>
+   413→
+   414→              {/* ── C/O Section (Chief Complaints) ── */}
+   415→              {settings.showCoInPrint && complaints && complaints.length > 0 && (
+   416→                <div style={{ marginBottom: '14px' }}>
+   417→                  <h3 style={sectionTitle}>Chief Complaints</h3>
+   418→                  <p style={{ margin: 0, fontSize: '13px', color: COLORS.text }}>
+   419→                    C/O: {complaints.map((c) => c.coDetailEn || c.coDetail).filter(Boolean).join(', ')}
+   420→                  </p>
+   421→                </div>
+   422→              )}
+   423→
+   424→              {/* ── Vitals ── */}
+   425→              {(vitals.bp || vitals.temperature || vitals.weight || vitals.pulse || vitals.spo2) && (
+   426→                <div style={{ marginBottom: '14px' }}>
+   427→                  <h3 style={sectionTitle}>Vitals</h3>
+   428→                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+   429→                    {vitals.weight && (
+   430→                      <div style={{ padding: '5px 12px', border: `1px solid ${COLORS.border}`, borderRadius: '4px', fontSize: '12px' }}>
+   431→                        <span style={{ color: COLORS.gray500 }}>Weight: </span>
+   432→                        <span style={{ fontWeight: 600 }}>{vitals.weight} kg</span>
+   433→                      </div>
+   434→                    )}
+   435→                    {vitals.bp && (
+   436→                      <div style={{ padding: '5px 12px', border: `1px solid ${COLORS.border}`, borderRadius: '4px', fontSize: '12px' }}>
+   437→                        <span style={{ color: COLORS.gray500 }}>BP: </span>
+   438→                        <span style={{ fontWeight: 600 }}>{vitals.bp} mmHg</span>
+   439→                      </div>
+   440→                    )}
+   441→                    {vitals.temperature && (
+   442→                      <div style={{ padding: '5px 12px', border: `1px solid ${COLORS.border}`, borderRadius: '4px', fontSize: '12px' }}>
+   443→                        <span style={{ color: COLORS.gray500 }}>Temp: </span>
+   444→                        <span style={{ fontWeight: 600 }}>{vitals.temperature}°F</span>
+   445→                      </div>
+   446→                    )}
+   447→                    {vitals.pulse && (
+   448→                      <div style={{ padding: '5px 12px', border: `1px solid ${COLORS.border}`, borderRadius: '4px', fontSize: '12px' }}>
+   449→                        <span style={{ color: COLORS.gray500 }}>Pulse: </span>
+   450→                        <span style={{ fontWeight: 600 }}>{vitals.pulse} bpm</span>
+   451→                      </div>
+   452→                    )}
+   453→                    {vitals.spo2 && (
+   454→                      <div style={{ padding: '5px 12px', border: `1px solid ${COLORS.border}`, borderRadius: '4px', fontSize: '12px' }}>
+   455→                        <span style={{ color: COLORS.gray500 }}>SpO2: </span>
+   456→                        <span style={{ fontWeight: 600 }}>{vitals.spo2}%</span>
+   457→                      </div>
+   458→                    )}
+   459→                  </div>
+   460→                </div>
+   461→              )}
+   462→
+   463→              {/* ── Labels / Lab Results ── */}
+   464→              {labels && labels.length > 0 && (
+   465→                <div style={{ marginBottom: '14px' }}>
+   466→                  <h3 style={sectionTitle}>Lab Results</h3>
+   467→                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+   468→                    {labels.map((l, i) => (
+   469→                      <span
+   470→                        key={i}
+   471→                        style={{
+   472→                          padding: '3px 10px',
+   473→                          backgroundColor: COLORS.tealLight,
+   474→                          border: `1px solid ${COLORS.tealBorder}`,
+   475→                          borderRadius: '4px',
+   476→                          fontSize: '11px',
+   477→                          color: COLORS.teal,
+   478→                          fontWeight: 500,
+   479→                        }}
+   480→                      >
+   481→                        {l.label || l.labelEn}: {l.value}{l.showUnit && l.labelUnit ? ` ${l.labelUnit}` : ''}
+   482→                      </span>
+   483→                    ))}
+   484→                  </div>
+   485→                </div>
+   486→              )}
+   487→
+   488→              {/* ── Medicines Table ── */}
+   489→              {medicines && medicines.length > 0 && (
+   490→                <div style={{ marginBottom: '14px' }}>
+   491→                  <h3 style={sectionTitle}>Rx - Medicines</h3>
+   492→                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+   493→                    <thead>
+   494→                      <tr style={{ borderBottom: `2px solid ${COLORS.teal}` }}>
+   495→                        <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: COLORS.gray700, fontSize: '11px' }}>#</th>
+   496→                        <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: COLORS.gray700, fontSize: '11px' }}>Medicine</th>
+   497→                        <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, color: COLORS.gray700, fontSize: '11px' }}>Dose</th>
+   498→                        {hasMorning && (
+   499→                          <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, color: COLORS.gray700, fontSize: '11px' }}>M</th>
+   500→                        )}
+   501→                        {hasAfternoon && (
+   502→                          <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, color: COLORS.gray700, fontSize: '11px' }}>A</th>
+   503→                        )}
+   504→                        {hasEvening && (
+   505→                          <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, color: COLORS.gray700, fontSize: '11px' }}>E</th>
+   506→                        )}
+   507→                        <th style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 600, color: COLORS.gray700, fontSize: '11px' }}>Days</th>
+   508→                        <th style={{ padding: '6px 8px', textAlign: 'left', fontWeight: 600, color: COLORS.gray700, fontSize: '11px' }}>Instructions</th>
+   509→                      </tr>
+   510→                    </thead>
+   511→                    <tbody>
+   512→                      {medicines.map((med, i) => (
+   513→                        <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
+   514→                          <td style={{ padding: '5px 8px', color: COLORS.gray500 }}>{i + 1}</td>
+   515→                          <td style={{ padding: '5px 8px', fontWeight: 600 }}>{med.medicine}</td>
+   516→                          <td style={{ padding: '5px 8px', textAlign: 'center' }}>{med.dose || '-'}</td>
+   517→                          {hasMorning && (
+   518→                            <td style={{ padding: '5px 8px', textAlign: 'center' }}>
+   519→                              {med.morning > 0 ? med.morning : '-'}
+   520→                            </td>
+   521→                          )}
+   522→                          {hasAfternoon && (
+   523→                            <td style={{ padding: '5px 8px', textAlign: 'center' }}>
+   524→                              {med.afternoon > 0 ? med.afternoon : '-'}
+   525→                            </td>
+   526→                          )}
+   527→                          {hasEvening && (
+   528→                            <td style={{ padding: '5px 8px', textAlign: 'center' }}>
+   529→                              {med.evening > 0 ? med.evening : '-'}
+   530→                            </td>
+   531→                          )}
+   532→                          <td style={{ padding: '5px 8px', textAlign: 'center' }}>{med.tab > 0 ? med.tab : '-'}</td>
+   533→                          <td style={{ padding: '5px 8px', color: COLORS.gray500 }}>{med.description || '-'}</td>
+   534→                        </tr>
+   535→                      ))}
+   536→                    </tbody>
+   537→                  </table>
+   538→                </div>
+   539→              )}
+   540→
+   541→              {/* ── Diagnosis Tables ── */}
+   542→              {tables && tables.length > 0 && (
+   543→                <div style={{ marginBottom: '14px' }}>
+   544→                  <h3 style={sectionTitle}>Diagnosis Tables</h3>
+   545→                  {tables.map((table, ti) => (
+   546→                    <div key={ti} style={{ marginBottom: '12px' }}>
+   547→                      {table.extraLabel && (
+   548→                        <p style={{ margin: '0 0 6px 0', fontSize: '12px', fontWeight: 600, color: COLORS.gray700 }}>
+   549→                          {table.extraLabel}
+   550→                        </p>
+   551→                      )}
+   552→                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', border: `1px solid ${COLORS.border}` }}>
+   553→                        {/* Column headers — headerLabel[0] is the row-label
+   554→                            column header (same geometry as the Step 3 grid). */}
+   555→                        {table.headerLabel && table.headerLabel.length > 0 && (
+   556→                          <thead>
+   557→                            <tr style={{ backgroundColor: COLORS.tealLight }}>
+   558→                              {table.headerLabel.map((h, hi) => (
+   559→                                <th key={hi} style={{ padding: '5px 8px', border: `1px solid ${COLORS.border}`, fontWeight: 600, color: COLORS.gray700, fontSize: '11px', textAlign: 'left' }}>
+   560→                                  {h}
+   561→                                </th>
+   562→                              ))}
+   563→                            </tr>
+   564→                          </thead>
+   565→                        )}
+   566→                        <tbody>
+   567→                          {Array.from({ length: table.rows }).map((_, ri) => (
+   568→                            <tr key={ri}>
+   569→                              <td style={{ padding: '4px 8px', border: `1px solid ${COLORS.border}`, fontWeight: 500, color: COLORS.gray500, fontSize: '11px' }}>
+   570→                                {table.colsLabel[ri] || ''}
+   571→                              </td>
+   572→                              {/* Value cells — keyed "row-col", cols 1..cols-1
+   573→                                  (col 0 is the row label above). */}
+   574→                              {Array.from({ length: Math.max(0, table.cols - 1) }).map((_, ci) => (
+   575→                                <td key={ci} style={{ padding: '4px 8px', border: `1px solid ${COLORS.border}`, color: COLORS.text }}>
+   576→                                  {table.cellValues?.[`${ri}-${ci + 1}`] || ''}
+   577→                                </td>
+   578→                              ))}
+   579→                            </tr>
+   580→                          ))}
+   581→                          {/* Footer rows */}
+   582→                          {table.footerLabel && table.footerLabel.length > 0 && table.footerLabel.map((f, fi) => (
+   583→                            <tr key={`footer-${fi}`}>
+   584→                              <td
+   585→                                colSpan={table.cols}
+   586→                                style={{ padding: '4px 8px', border: `1px solid ${COLORS.border}`, fontWeight: 500, color: COLORS.gray700, fontSize: '11px', textAlign: 'center' }}
+   587→                              >
+   588→                                {f}
+   589→                              </td>
+   590→                            </tr>
+   591→                          ))}
+   592→                        </tbody>
+   593→                      </table>
+   594→                    </div>
+   595→                  ))}
+   596→                </div>
+   597→              )}
+   598→
+   599→              {/* ── Suggestions / Advice ── */}
+   600→              {suggestions && suggestions.length > 0 && (
+   601→                <div style={{ marginBottom: '14px' }}>
+   602→                  <h3 style={sectionTitle}>Advice / Suggestions</h3>
+   603→                  <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+   604→                    {adviceGroups.map((sec) => (
+   605→                      <div key={sec.key}>
+   606→                        <p
+   607→                          style={{
+   608→                            margin: '0 0 2px 0',
+   609→                            fontSize: '11px',
+   610→                            fontWeight: 700,
+   611→                            color: COLORS.teal,
+   612→                            letterSpacing: '0.02em',
+   613→                          }}
+   614→                        >
+   615→                          {sec.name}
+   616→                        </p>
+   617→                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+   618→                          {sec.items.map((s, i) => (
+   619→                            <div key={i} style={{ display: 'flex', gap: '8px', fontSize: '12px' }}>
+   620→                              <span
+   621→                                style={{
+   622→                                  color: COLORS.teal,
+   623→                                  fontWeight: 600,
+   624→                                  whiteSpace: 'nowrap',
+   625→                                }}
+   626→                              >
+   627→                                &bull;{(s.questionEn || s.question) ? ` ${s.questionEn || s.question}:` : ''}
+   628→                              </span>
+   629→                              <span style={{ color: COLORS.gray700 }}>{s.suggestionsEn || s.suggestions}</span>
+   630→                            </div>
+   631→                          ))}
+   632→                        </div>
+   633→                      </div>
+   634→                    ))}
+   635→                  </div>
+   636→                </div>
+   637→              )}
+   638→
+   639→              {/* ── Next Visit ── */}
+   640→              {settings.showNextVisit && nextVisit && (
+   641→                <div style={{ marginBottom: '14px' }}>
+   642→                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', backgroundColor: COLORS.tealLight, border: `1px solid ${COLORS.tealBorder}`, borderRadius: '4px', fontSize: '12px' }}>
+   643→                    <span style={{ color: COLORS.gray500, fontWeight: 600 }}>Next Visit:</span>
+   644→                    <span style={{ color: COLORS.teal, fontWeight: 700 }}>{nextVisit}</span>
+   645→                  </div>
+   646→                </div>
+   647→              )}
+   648→
+   649→              {/* ── Footer / Signature ── */}
+   650→              <div style={{ marginTop: '24px', paddingTop: '14px', borderTop: `1px solid ${COLORS.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+   651→                <div style={{ fontSize: '10px', color: COLORS.gray400 }}>
+   652→                  {settings.footer && (
+   653→                    <p style={{ margin: '0 0 6px 0', fontSize: '11px', color: COLORS.gray500, fontStyle: 'italic', maxWidth: '280px' }}>
+   654→                      {settings.footer}
+   655→                    </p>
+   656→                  )}
+   657→                  <p style={{ margin: 0 }}>This is a computer-generated prescription.</p>
+   658→                  <p style={{ margin: '2px 0 0 0' }}>Generated on {format(new Date(createdAt), 'dd MMM yyyy \'at\' hh:mm a')}</p>
+   659→                </div>
+   660→                <div style={{ textAlign: 'center' }}>
+   661→                  <div style={{ width: '140px', borderBottom: `1px solid ${COLORS.text}`, marginBottom: '4px' }} />
+   662→                  <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: COLORS.text }}>{doctorDisplayName(doctor.name) || ''}</p>
+   663→                  {doctor.specialization && (
+   664→                    <p style={{ margin: '2px 0 0 0', fontSize: '10px', color: COLORS.gray500 }}>{doctor.specialization}</p>
+   665→                  )}
+   666→                </div>
+   667→              </div>
+   668→
+   669→            </div>
+   670→          </motion.div>
+   671→        </motion.div>
+   672→      </AnimatePresence>
+   673→    </>
+   674→  )
+   675→}
+   676→

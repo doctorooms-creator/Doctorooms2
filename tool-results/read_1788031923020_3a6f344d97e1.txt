@@ -1,0 +1,781 @@
+     1→     1→/**
+     2→     2→ * ============================================================
+     3→     3→ * SEED SCRIPT: Lab Module Demo Data — Doctorooms HMS
+     4→     4→ * ============================================================
+     5→     5→ *
+     6→     6→ * Seeds the Lab Module (Phase 6) with realistic end-to-end demo data
+     7→     7→ * so the lab pages are immediately populated.
+     8→     8→ *
+     9→     9→ *   LAB PARTNERS (3) — each backed by a User (role=lab_technician)
+    10→    10→ *     1. City Diagnostics  — blood + pathology   (reuses existing dev-lab-tech User)
+    11→    11→ *     2. Apex Radiology   — radiology + imaging  (new dev-lab-apex User)
+    12→    12→ *     3. Sun Diagnostic Center — both           (new dev-lab-sun User)
+    13→    13→ *
+    14→    14→ *   DOCTOR ↔ LAB ASSOCIATIONS (3+2)
+    15→    15→ *     - Dr. Rajesh Sharma (dev-doctor) → all 3 labs (10%, 12%, 8%)
+    16→    16→ *     - Dr. Anita Desai (dev-doctor-anita, if exists) → City Diagnostics + Sun Diagnostic (10% each)
+    17→    17→ *
+    18→    18→ *   EXTERNAL TEST ORDERS (10) for Rahul Verma (dev-patient)
+    19→    19→ *     - Spread across 3 labs, statuses Ordered/InProgress/Completed,
+    20→    20→ *       urgency Normal/Urgent, staggered over last 14 days.
+    21→    21→ *
+    22→    22→ *   LAB REPORT UPLOADS (5) — one per Completed order
+    23→    23→ *     - Mixed PDF / image files, blood-test reportData with parameters,
+    24→    24→ *       2 verified-by-doctor, 1 abnormal-flagged note.
+    25→    25→ *
+    26→    26→ *   LAB BILLINGS (5) — one per Completed order (auto-generated style)
+    27→    27→ *     - 3 Pending, 2 Paid (with paidAt + transactionRef).
+    28→    28→ *
+    29→    29→ * IDEMPOTENT:
+    30→    30→ *   - deleteMany on all lab module tables in reverse FK order:
+    31→    31→ *     CommissionPayment, LabBilling, LabReportUpload, ExternalTestOrder,
+    32→    32→ *     DoctorLabAssociation, LabTestCatalog, LabPartner.
+    33→    33→ *   - Does NOT delete User rows (only upserts dev-lab-apex / dev-lab-sun).
+    34→    34→ *   - Does NOT delete existing LabTechnician rows (separate from LabPartner).
+    35→    35→ *
+    36→    36→ * Usage:
+    37→    37→ *   bun run src/scripts/seed-lab-data.ts
+    38→    38→ * ============================================================
+    39→    39→ */
+    40→    40→
+    41→    41→import { db } from '../lib/db';
+    42→    42→import bcrypt from 'bcryptjs';
+    43→    43→
+    44→    44→// ──────────────────────────────────────────────────────────────
+    45→    45→// DATE HELPERS
+    46→    46→// ──────────────────────────────────────────────────────────────
+    47→    47→
+    48→    48→const NOW = new Date();
+    49→    49→const TODAY = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate(), 10, 0, 0, 0);
+    50→    50→
+    51→    51→/** Date N days ago at 10:00 local. */
+    52→    52→function daysAgo(days: number): Date {
+    53→    53→  const d = new Date(TODAY);
+    54→    54→  d.setDate(d.getDate() - days);
+    55→    55→  return d;
+    56→    56→}
+    57→    57→
+    58→    58→// ──────────────────────────────────────────────────────────────
+    59→    59→// 1. CLEAR EXISTING LAB MODULE DATA (children first — reverse FK order)
+    60→    60→// ──────────────────────────────────────────────────────────────
+    61→    61→
+    62→    62→async function clearLabData() {
+    63→    63→  console.log('🧹 Clearing existing Lab Module data (FK-safe order)...');
+    64→    64→  await db.commissionPayment.deleteMany();
+    65→    65→  await db.labBilling.deleteMany();
+    66→    66→  await db.labReportUpload.deleteMany();
+    67→    67→  await db.externalTestOrder.deleteMany();
+    68→    68→  await db.doctorLabAssociation.deleteMany();
+    69→    69→  await db.labTestCatalog.deleteMany();
+    70→    70→  await db.labPartner.deleteMany();
+    71→    71→  // NOTE: intentionally NOT deleting User rows or LabTechnician rows.
+    72→    72→  console.log('  ✓ Lab Module tables cleared (Users + LabTechnician untouched)');
+    73→    73→}
+    74→    74→
+    75→    75→// ──────────────────────────────────────────────────────────────
+    76→    76→// 2. ENSURE NEW LAB TECH USERS EXIST (upsert, do not touch existing passwords)
+    77→    77→// ──────────────────────────────────────────────────────────────
+    78→    78→
+    79→    79→async function ensureLabUsers() {
+    80→    80→  console.log('\n👤 Ensuring lab technician Users exist...');
+    81→    81→
+    82→    82→  // dev-lab-tech already exists from seed-test-data.ts (Amit Kumar).
+    83→    83→  // Do NOT modify it — just confirm it exists.
+    84→    84→  const existingLabTech = await db.user.findUnique({ where: { id: 'dev-lab-tech' } });
+    85→    85→  if (existingLabTech) {
+    86→    86→    console.log(`  ✓ dev-lab-tech already exists (${existingLabTech.name}) — reusing as City Diagnostics user`);
+    87→    87→  } else {
+    88→    88→    throw new Error('dev-lab-tech User not found. Run seed-test-data.ts first.');
+    89→    89→  }
+    90→    90→
+    91→    91→  // dev-lab-apex — new user; upsert to be idempotent.
+    92→    92→  const apexHash = bcrypt.hashSync('lab12345', 10);
+    93→    93→  const apexUser = await db.user.upsert({
+    94→    94→    where: { id: 'dev-lab-apex' },
+    95→    95→    update: {}, // do not modify existing rows
+    96→    96→    create: {
+    97→    97→      id: 'dev-lab-apex',
+    98→    98→      name: 'Apex Radiology Center',
+    99→    99→      email: 'apex.radiology@doctorooms.com',
+   100→   100→      password: apexHash,
+   101→   101→      gender: 'Male',
+   102→   102→      role: 'lab_technician',
+   103→   103→      status: 'Active',
+   104→   104→      mobileNo: '+91 9876543221',
+   105→   105→    },
+   106→   106→  });
+   107→   107→  console.log(`  ✓ dev-lab-apex ready (id=${apexUser.id}, name=${apexUser.name})`);
+   108→   108→
+   109→   109→  // dev-lab-sun — new user; upsert to be idempotent.
+   110→   110→  const sunHash = bcrypt.hashSync('lab12345', 10);
+   111→   111→  const sunUser = await db.user.upsert({
+   112→   112→    where: { id: 'dev-lab-sun' },
+   113→   113→    update: {},
+   114→   114→    create: {
+   115→   115→      id: 'dev-lab-sun',
+   116→   116→      name: 'Sun Diagnostic Center',
+   117→   117→      email: 'sun.diagnostic@doctorooms.com',
+   118→   118→      password: sunHash,
+   119→   119→      gender: 'Male',
+   120→   120→      role: 'lab_technician',
+   121→   121→      status: 'Active',
+   122→   122→      mobileNo: '+91 9876543222',
+   123→   123→    },
+   124→   124→  });
+   125→   125→  console.log(`  ✓ dev-lab-sun ready (id=${sunUser.id}, name=${sunUser.name})`);
+   126→   126→
+   127→   127→  return { apexUser, sunUser, labTechUser: existingLabTech };
+   128→   128→}
+   129→   129→
+   130→   130→// ──────────────────────────────────────────────────────────────
+   131→   131→// 3. CREATE 3 LAB PARTNERS
+   132→   132→// ──────────────────────────────────────────────────────────────
+   133→   133→
+   134→   134→async function createLabPartners() {
+   135→   135→  console.log('\n🧪 Creating 3 Lab Partners...');
+   136→   136→
+   137→   137→  const cityDiagnostics = await db.labPartner.create({
+   138→   138→    data: {
+   139→   139→      userId: 'dev-lab-tech',
+   140→   140→      hospitalId: null,
+   141→   141→      labName: 'City Diagnostics',
+   142→   142→      ownerName: 'Ramesh Patel',
+   143→   143→      email: 'city.diagnostics@doctorooms.com',
+   144→   144→      mobile: '+91 9876543220',
+   145→   145→      altMobile: '+91 80 2345 6789',
+   146→   146→      address: '45 MG Road, Indiranagar',
+   147→   147→      state: 'Karnataka',
+   148→   148→      city: 'Bengaluru',
+   149→   149→      pincode: '560038',
+   150→   150→      gstNo: '29ABCDE1234F1Z5',
+   151→   151→      registrationNo: 'KAR-LAB-2018-0456',
+   152→   152→      specializations: 'blood',
+   153→   153→      testsAvailable: JSON.stringify([
+   154→   154→        'CBC', 'LFT', 'KFT', 'Lipid Profile', 'Urine Routine',
+   155→   155→        'Blood Sugar', 'Thyroid Profile', 'HbA1c',
+   156→   156→      ]),
+   157→   157→      status: 'Active',
+   158→   158→      createdBy: 'dev-admin',
+   159→   159→    },
+   160→   160→  });
+   161→   161→  console.log(`  ✓ City Diagnostics created (id=${cityDiagnostics.id}, userId=dev-lab-tech)`);
+   162→   162→
+   163→   163→  const apexRadiology = await db.labPartner.create({
+   164→   164→    data: {
+   165→   165→      userId: 'dev-lab-apex',
+   166→   166→      hospitalId: null,
+   167→   167→      labName: 'Apex Radiology',
+   168→   168→      ownerName: 'Sunita Rao',
+   169→   169→      email: 'apex.radiology@doctorooms.com',
+   170→   170→      mobile: '+91 9876543221',
+   171→   171→      altMobile: '',
+   172→   172→      address: '12 Residency Road, Ashok Nagar',
+   173→   173→      state: 'Karnataka',
+   174→   174→      city: 'Bengaluru',
+   175→   175→      pincode: '560025',
+   176→   176→      gstNo: '29PQRSU5678K1Z2',
+   177→   177→      registrationNo: 'KAR-LAB-2019-0712',
+   178→   178→      specializations: 'radiology',
+   179→   179→      testsAvailable: JSON.stringify([
+   180→   180→        'X-Ray Chest', 'MRI Brain', 'CT Scan Head',
+   181→   181→        'Ultrasound Abdomen', 'ECG', 'Echocardiogram',
+   182→   182→      ]),
+   183→   183→      status: 'Active',
+   184→   184→      createdBy: 'dev-admin',
+   185→   185→    },
+   186→   186→  });
+   187→   187→  console.log(`  ✓ Apex Radiology created (id=${apexRadiology.id}, userId=dev-lab-apex)`);
+   188→   188→
+   189→   189→  const sunDiagnostic = await db.labPartner.create({
+   190→   190→    data: {
+   191→   191→      userId: 'dev-lab-sun',
+   192→   192→      hospitalId: null,
+   193→   193→      labName: 'Sun Diagnostic Center',
+   194→   194→      ownerName: 'Mohan Krishna',
+   195→   195→      email: 'sun.diagnostic@doctorooms.com',
+   196→   196→      mobile: '+91 9876543222',
+   197→   197→      altMobile: '',
+   198→   198→      address: '78 Brigade Road',
+   199→   199→      state: 'Karnataka',
+   200→   200→      city: 'Bengaluru',
+   201→   201→      pincode: '560025',
+   202→   202→      gstNo: '29LMNOP9012B1Z9',
+   203→   203→      registrationNo: 'KAR-LAB-2020-0334',
+   204→   204→      specializations: 'both',
+   205→   205→      testsAvailable: JSON.stringify([
+   206→   206→        'CBC', 'LFT', 'X-Ray Chest', 'Ultrasound',
+   207→   207→        'Thyroid Profile', 'Vitamin D', 'Vitamin B12',
+   208→   208→      ]),
+   209→   209→      status: 'Active',
+   210→   210→      createdBy: 'dev-admin',
+   211→   211→    },
+   212→   212→  });
+   213→   213→  console.log(`  ✓ Sun Diagnostic Center created (id=${sunDiagnostic.id}, userId=dev-lab-sun)`);
+   214→   214→
+   215→   215→  return { cityDiagnostics, apexRadiology, sunDiagnostic };
+   216→   216→}
+   217→   217→
+   218→   218→// ──────────────────────────────────────────────────────────────
+   219→   219→// 4. DOCTOR ↔ LAB ASSOCIATIONS
+   220→   220→// ──────────────────────────────────────────────────────────────
+   221→   221→
+   222→   222→async function createAssociations(labs: {
+   223→   223→  cityDiagnostics: { id: string };
+   224→   224→  apexRadiology: { id: string };
+   225→   225→  sunDiagnostic: { id: string };
+   226→   226→}) {
+   227→   227→  console.log('\n🤝 Creating Doctor ↔ Lab Associations...');
+   228→   228→
+   229→   229→  // Dr. Rajesh Sharma — doctor row
+   230→   230→  const drSharma = await db.doctor.findUnique({ where: { userId: 'dev-doctor' } });
+   231→   231→  if (!drSharma) throw new Error('Doctor row for dev-doctor not found. Run seed-test-data.ts first.');
+   232→   232→  console.log(`  ✓ Dr. Rajesh Sharma (Doctor.id=${drSharma.id})`);
+   233→   233→
+   234→   234→  const a1 = await db.doctorLabAssociation.create({
+   235→   235→    data: {
+   236→   236→      doctorId: drSharma.id,
+   237→   237→      labPartnerId: labs.cityDiagnostics.id,
+   238→   238→      commissionPercent: 10,
+   239→   239→      isActive: true,
+   240→   240→      associatedAt: daysAgo(30),
+   241→   241→      notes: 'Standard blood work partnership',
+   242→   242→    },
+   243→   243→  });
+   244→   244→  console.log(`  ✓ Dr. Sharma ↔ City Diagnostics @ 10% (id=${a1.id})`);
+   245→   245→
+   246→   246→  const a2 = await db.doctorLabAssociation.create({
+   247→   247→    data: {
+   248→   248→      doctorId: drSharma.id,
+   249→   249→      labPartnerId: labs.apexRadiology.id,
+   250→   250→      commissionPercent: 12,
+   251→   251→      isActive: true,
+   252→   252→      associatedAt: daysAgo(28),
+   253→   253→      notes: 'Radiology partnership — higher margin on imaging',
+   254→   254→    },
+   255→   255→  });
+   256→   256→  console.log(`  ✓ Dr. Sharma ↔ Apex Radiology @ 12% (id=${a2.id})`);
+   257→   257→
+   258→   258→  const a3 = await db.doctorLabAssociation.create({
+   259→   259→    data: {
+   260→   260→      doctorId: drSharma.id,
+   261→   261→      labPartnerId: labs.sunDiagnostic.id,
+   262→   262→      commissionPercent: 8,
+   263→   263→      isActive: true,
+   264→   264→      associatedAt: daysAgo(25),
+   265→   265→      notes: 'Multi-specialty diagnostic center',
+   266→   266→    },
+   267→   267→  });
+   268→   268→  console.log(`  ✓ Dr. Sharma ↔ Sun Diagnostic @ 8% (id=${a3.id})`);
+   269→   269→
+   270→   270→  // Dr. Anita Desai (best-effort, silent skip if not present)
+   271→   271→  try {
+   272→   272→    const drAnita = await db.doctor.findFirst({
+   273→   273→      where: { user: { name: { contains: 'Anita' } } },
+   274→   274→    });
+   275→   275→    if (drAnita) {
+   276→   276→      console.log(`  ✓ Dr. Anita Desai found (Doctor.id=${drAnita.id}) — adding associations`);
+   277→   277→
+   278→   278→      const a4 = await db.doctorLabAssociation.create({
+   279→   279→        data: {
+   280→   280→          doctorId: drAnita.id,
+   281→   281→          labPartnerId: labs.cityDiagnostics.id,
+   282→   282→          commissionPercent: 10,
+   283→   283→          isActive: true,
+   284→   284→          associatedAt: daysAgo(20),
+   285→   285→          notes: 'Blood work partnership',
+   286→   286→        },
+   287→   287→      });
+   288→   288→      console.log(`    ✓ Dr. Anita ↔ City Diagnostics @ 10% (id=${a4.id})`);
+   289→   289→
+   290→   290→      const a5 = await db.doctorLabAssociation.create({
+   291→   291→        data: {
+   292→   292→          doctorId: drAnita.id,
+   293→   293→          labPartnerId: labs.sunDiagnostic.id,
+   294→   294→          commissionPercent: 10,
+   295→   295→          isActive: true,
+   296→   296→          associatedAt: daysAgo(18),
+   297→   297→          notes: 'Multi-specialty partnership',
+   298→   298→        },
+   299→   299→      });
+   300→   300→      console.log(`    ✓ Dr. Anita ↔ Sun Diagnostic @ 10% (id=${a5.id})`);
+   301→   301→    } else {
+   302→   302→      console.log('  ℹ Dr. Anita Desai not found — skipping her associations');
+   303→   303→    }
+   304→   304→  } catch (err) {
+   305→   305→    console.log(`  ℹ Could not add Dr. Anita associations (skipped silently): ${(err as Error).message}`);
+   306→   306→  }
+   307→   307→
+   308→   308→  return { drSharma };
+   309→   309→}
+   310→   310→
+   311→   311→// ──────────────────────────────────────────────────────────────
+   312→   312→// 5. EXTERNAL TEST ORDERS (10) — Rahul Verma (dev-patient) by Dr. Sharma
+   313→   313→// ──────────────────────────────────────────────────────────────
+   314→   314→
+   315→   315→interface OrderSpec {
+   316→   316→  testName: string;
+   317→   317→  testType: string;
+   318→   318→  testFee: number;
+   319→   319→  labKey: 'cityDiagnostics' | 'apexRadiology' | 'sunDiagnostic';
+   320→   320→  status: 'Ordered' | 'InProgress' | 'Completed';
+   321→   321→  urgency: 'Normal' | 'Urgent';
+   322→   322→  orderedDaysAgo: number;
+   323→   323→  completedDaysAgo?: number; // only for Completed
+   324→   324→  notes: string;
+   325→   325→}
+   326→   326→
+   327→   327→const ORDER_SPECS: OrderSpec[] = [
+   328→   328→  // 1. CBC @ City Diagnostics — Ordered (2 days ago)
+   329→   329→  {
+   330→   330→    testName: 'CBC',
+   331→   331→    testType: 'Blood',
+   332→   332→    testFee: 250,
+   333→   333→    labKey: 'cityDiagnostics',
+   334→   334→    status: 'Ordered',
+   335→   335→    urgency: 'Normal',
+   336→   336→    orderedDaysAgo: 2,
+   337→   337→    notes: 'Check for anemia — patient reports fatigue',
+   338→   338→  },
+   339→   339→  // 2. Lipid Profile @ City Diagnostics — Ordered (4 days ago)
+   340→   340→  {
+   341→   341→    testName: 'Lipid Profile',
+   342→   342→    testType: 'Blood',
+   343→   343→    testFee: 300,
+   344→   344→    labKey: 'cityDiagnostics',
+   345→   345→    status: 'Ordered',
+   346→   346→    urgency: 'Normal',
+   347→   347→    orderedDaysAgo: 4,
+   348→   348→    notes: 'Routine health check — annual screening',
+   349→   349→  },
+   350→   350→  // 3. MRI Brain @ Apex Radiology — InProgress (urgent, 5 days ago)
+   351→   351→  {
+   352→   352→    testName: 'MRI Brain',
+   353→   353→    testType: 'Radiology',
+   354→   354→    testFee: 3000,
+   355→   355→    labKey: 'apexRadiology',
+   356→   356→    status: 'InProgress',
+   357→   357→    urgency: 'Urgent',
+   358→   358→    orderedDaysAgo: 5,
+   359→   359→    notes: 'Suspected stroke — urgent MRI ordered. Patient presented with sudden-onset headache and slurred speech.',
+   360→   360→  },
+   361→   361→  // 4. CT Scan Head @ Apex Radiology — Completed (7 days ago, completed 5 days ago)
+   362→   362→  {
+   363→   363→    testName: 'CT Scan Head',
+   364→   364→    testType: 'Radiology',
+   365→   365→    testFee: 1500,
+   366→   366→    labKey: 'apexRadiology',
+   367→   367→    status: 'Completed',
+   368→   368→    urgency: 'Normal',
+   369→   369→    orderedDaysAgo: 7,
+   370→   370→    completedDaysAgo: 5,
+   371→   371→    notes: 'Follow-up on headache evaluation',
+   372→   372→  },
+   373→   373→  // 5. X-Ray Chest @ Apex Radiology — Completed (8 days ago, completed 6 days ago)
+   374→   374→  {
+   375→   375→    testName: 'X-Ray Chest',
+   376→   376→    testType: 'Radiology',
+   377→   377→    testFee: 400,
+   378→   378→    labKey: 'apexRadiology',
+   379→   379→    status: 'Completed',
+   380→   380→    urgency: 'Normal',
+   381→   381→    orderedDaysAgo: 8,
+   382→   382→    completedDaysAgo: 6,
+   383→   383→    notes: 'Persistent cough — rule out pneumonia',
+   384→   384→  },
+   385→   385→  // 6. Ultrasound Abdomen @ Sun Diagnostic — InProgress (6 days ago)
+   386→   386→  {
+   387→   387→    testName: 'Ultrasound Abdomen',
+   388→   388→    testType: 'Radiology',
+   389→   389→    testFee: 800,
+   390→   390→    labKey: 'sunDiagnostic',
+   391→   391→    status: 'InProgress',
+   392→   392→    urgency: 'Normal',
+   393→   393→    orderedDaysAgo: 6,
+   394→   394→    notes: 'Evaluate epigastric discomfort',
+   395→   395→  },
+   396→   396→  // 7. Thyroid Profile @ Sun Diagnostic — Completed (10 days ago, completed 8 days ago)
+   397→   397→  {
+   398→   398→    testName: 'Thyroid Profile',
+   399→   399→    testType: 'Blood',
+   400→   400→    testFee: 350,
+   401→   401→    labKey: 'sunDiagnostic',
+   402→   402→    status: 'Completed',
+   403→   403→    urgency: 'Normal',
+   404→   404→    orderedDaysAgo: 10,
+   405→   405→    completedDaysAgo: 8,
+   406→   406→    notes: 'Follow-up on thyroid medication — check TSH response',
+   407→   407→  },
+   408→   408→  // 8. Vitamin D @ Sun Diagnostic — Ordered (3 days ago)
+   409→   409→  {
+   410→   410→    testName: 'Vitamin D',
+   411→   411→    testType: 'Blood',
+   412→   412→    testFee: 500,
+   413→   413→    labKey: 'sunDiagnostic',
+   414→   414→    status: 'Ordered',
+   415→   415→    urgency: 'Normal',
+   416→   416→    orderedDaysAgo: 3,
+   417→   417→    notes: 'Vitamin deficiency screen — generalised muscle aches',
+   418→   418→  },
+   419→   419→  // 9. Vitamin B12 @ City Diagnostics — Completed (12 days ago, completed 10 days ago)
+   420→   420→  {
+   421→   421→    testName: 'Vitamin B12',
+   422→   422→    testType: 'Blood',
+   423→   423→    testFee: 450,
+   424→   424→    labKey: 'cityDiagnostics',
+   425→   425→    status: 'Completed',
+   426→   426→    urgency: 'Normal',
+   427→   427→    orderedDaysAgo: 12,
+   428→   428→    completedDaysAgo: 10,
+   429→   429→    notes: 'Vitamin deficiency screen — tingling in fingers',
+   430→   430→  },
+   431→   431→  // 10. Urine Routine @ City Diagnostics — Completed (14 days ago, completed 12 days ago)
+   432→   432→  {
+   433→   433→    testName: 'Urine Routine',
+   434→   434→    testType: 'Blood',
+   435→   435→    testFee: 250,
+   436→   436→    labKey: 'cityDiagnostics',
+   437→   437→    status: 'Completed',
+   438→   438→    urgency: 'Normal',
+   439→   439→    orderedDaysAgo: 14,
+   440→   440→    completedDaysAgo: 12,
+   441→   441→    notes: 'Routine health check',
+   442→   442→  },
+   443→   443→];
+   444→   444→
+   445→   445→async function createExternalOrders(labs: {
+   446→   446→  cityDiagnostics: { id: string };
+   447→   447→  apexRadiology: { id: string };
+   448→   448→  sunDiagnostic: { id: string };
+   449→   449→}, drSharma: { id: string }) {
+   450→   450→  console.log('\n📋 Creating 10 External Test Orders for Rahul Verma...');
+   451→   451→
+   452→   452→  const createdOrders: Array<{
+   453→   453→    id: string;
+   454→   454→    orderNo: string;
+   455→   455→    spec: OrderSpec;
+   456→   456→    labPartnerId: string;
+   457→   457→    commissionPercent: number;
+   458→   458→    completedAt: Date | null;
+   459→   459→  }> = [];
+   460→   460→
+   461→   461→  // Per-lab commission % (mirrors Dr. Sharma's associations created above)
+   462→   462→  const commissionByLab: Record<string, number> = {
+   463→   463→    cityDiagnostics: 10,
+   464→   464→    apexRadiology: 12,
+   465→   465→    sunDiagnostic: 8,
+   466→   466→  };
+   467→   467→
+   468→   468→  for (let i = 0; i < ORDER_SPECS.length; i++) {
+   469→   469→    const spec = ORDER_SPECS[i]!;
+   470→   470→    const lab = labs[spec.labKey];
+   471→   471→    const commissionPercent = commissionByLab[spec.labKey]!;
+   472→   472→    const orderedAt = daysAgo(spec.orderedDaysAgo);
+   473→   473→    const completedAt = spec.completedDaysAgo != null ? daysAgo(spec.completedDaysAgo) : null;
+   474→   474→
+   475→   475→    const order = await db.externalTestOrder.create({
+   476→   476→      data: {
+   477→   477→        doctorId: drSharma.id,
+   478→   478→        patientId: 'dev-patient',
+   479→   479→        labPartnerId: lab.id,
+   480→   480→        bookingId: null,
+   481→   481→        testName: spec.testName,
+   482→   482→        testType: spec.testType,
+   483→   483→        testFee: spec.testFee,
+   484→   484→        status: spec.status,
+   485→   485→        urgency: spec.urgency,
+   486→   486→        orderedAt,
+   487→   487→        completedAt,
+   488→   488→        notes: spec.notes,
+   489→   489→      },
+   490→   490→    });
+   491→   491→    console.log(
+   492→   492→      `  ✓ Order ${i + 1}/10: ${spec.testName} @ ${spec.labKey} — ${spec.status}` +
+   493→   493→      ` (${spec.urgency}) ordered ${spec.orderedDaysAgo}d ago` +
+   494→   494→      (spec.completedDaysAgo != null ? ` completed ${spec.completedDaysAgo}d ago` : '') +
+   495→   495→      ` (id=${order.id}, orderNo=${order.orderNo})`
+   496→   496→    );
+   497→   497→
+   498→   498→    createdOrders.push({
+   499→   499→      id: order.id,
+   500→   500→      orderNo: order.orderNo,
+   501→   501→      spec,
+   502→   502→      labPartnerId: lab.id,
+   503→   503→      commissionPercent,
+   504→   504→      completedAt,
+   505→   505→    });
+   506→   506→  }
+   507→   507→
+   508→   508→  return { createdOrders };
+   509→   509→}
+   510→   510→
+   511→   511→// ──────────────────────────────────────────────────────────────
+   512→   512→// 6. LAB REPORT UPLOADS (5 — one per Completed order)
+   513→   513→// ──────────────────────────────────────────────────────────────
+   514→   514→
+   515→   515→interface ReportSpec {
+   516→   516→  fileUrl: string;
+   517→   517→  fileName: string;
+   518→   518→  fileType: string;
+   519→   519→  fileSize: number;
+   520→   520→  reportData: string; // JSON string
+   521→   521→  verifiedByDoctor: boolean;
+   522→   522→  notes: string;
+   523→   523→}
+   524→   524→
+   525→   525→// Per-order report specs keyed by index in ORDER_SPECS (1-based)
+   526→   526→const REPORT_SPECS: Record<number, ReportSpec> = {
+   527→   527→  // Order 4 — CT Scan Head (radiology) — verified, normal
+   528→   528→  4: {
+   529→   529→    fileUrl: '/uploads/lab-reports/sample-1.pdf',
+   530→   530→    fileName: 'CT_Scan_Head_Rahul_Verma_2025.pdf',
+   531→   531→    fileType: 'application/pdf',
+   532→   532→    fileSize: 482000,
+   533→   533→    reportData: '[]',
+   534→   534→    verifiedByDoctor: true,
+   535→   535→    notes: 'Test completed. Results within normal range.',
+   536→   536→  },
+   537→   537→  // Order 5 — X-Ray Chest (radiology) — unverified, normal
+   538→   538→  5: {
+   539→   539→    fileUrl: '/uploads/lab-reports/sample-2.jpg',
+   540→   540→    fileName: 'X-Ray_Chest_Rahul_Verma.jpg',
+   541→   541→    fileType: 'image/jpeg',
+   542→   542→    fileSize: 318000,
+   543→   543→    reportData: '[]',
+   544→   544→    verifiedByDoctor: false,
+   545→   545→    notes: 'Test completed. Results within normal range.',
+   546→   546→  },
+   547→   547→  // Order 7 — Thyroid Profile (blood) — verified, normal
+   548→   548→  7: {
+   549→   549→    fileUrl: '/uploads/lab-reports/sample-3.pdf',
+   550→   550→    fileName: 'Thyroid_Profile_Rahul_Verma_2025.pdf',
+   551→   551→    fileType: 'application/pdf',
+   552→   552→    fileSize: 267500,
+   553→   553→    reportData: JSON.stringify([
+   554→   554→      { param: 'TSH', value: '3.2', unit: 'mIU/L', normal: '0.4-4.0', abnormal: false },
+   555→   555→      { param: 'T3', value: '120', unit: 'ng/dL', normal: '80-200', abnormal: false },
+   556→   556→      { param: 'T4', value: '8.5', unit: 'µg/dL', normal: '5.0-12.0', abnormal: false },
+   557→   557→    ]),
+   558→   558→    verifiedByDoctor: true,
+   559→   559→    notes: 'Test completed. Results within normal range. Continue current thyroxine dose.',
+   560→   560→  },
+   561→   561→  // Order 9 — Vitamin B12 (blood) — unverified, ABNORMAL (Hb 8.5 demo)
+   562→   562→  9: {
+   563→   563→    fileUrl: '/uploads/lab-reports/sample-4.jpg',
+   564→   564→    fileName: 'Vitamin_B12_Rahul_Verma.jpg',
+   565→   565→    fileType: 'image/jpeg',
+   566→   566→    fileSize: 295000,
+   567→   567→    reportData: JSON.stringify([
+   568→   568→      { param: 'Vitamin B12', value: '210', unit: 'pg/mL', normal: '200-900', abnormal: false },
+   569→   569→      { param: 'Hb', value: '8.5', unit: 'g/dL', normal: '13-17', abnormal: true },
+   570→   570→      { param: 'Hct', value: '28.1', unit: '%', normal: '40-50', abnormal: true },
+   571→   571→    ]),
+   572→   572→    verifiedByDoctor: false,
+   573→   573→    notes: '⚠️ Abnormal — Hb 8.5 (low). Patient may have iron-deficiency anemia. Recommend iron supplement.',
+   574→   574→  },
+   575→   575→  // Order 10 — Urine Routine (blood) — unverified, normal
+   576→   576→  10: {
+   577→   577→    fileUrl: '/uploads/lab-reports/sample-5.pdf',
+   578→   578→    fileName: 'Urine_Routine_Rahul_Verma_2025.pdf',
+   579→   579→    fileType: 'application/pdf',
+   580→   580→    fileSize: 254000,
+   581→   581→    reportData: JSON.stringify([
+   582→   582→      { param: 'Colour', value: 'Pale Yellow', unit: '', normal: 'Pale Yellow', abnormal: false },
+   583→   583→      { param: 'pH', value: '6.0', unit: '', normal: '5.0-8.0', abnormal: false },
+   584→   584→      { param: 'Specific Gravity', value: '1.020', unit: '', normal: '1.005-1.030', abnormal: false },
+   585→   585→      { param: 'Protein', value: 'Nil', unit: '', normal: 'Nil', abnormal: false },
+   586→   586→    ]),
+   587→   587→    verifiedByDoctor: false,
+   588→   588→    notes: 'Test completed. Results within normal range.',
+   589→   589→  },
+   590→   590→};
+   591→   591→
+   592→   592→async function createReportUploads(createdOrders: Array<{
+   593→   593→  id: string;
+   594→   594→  orderNo: string;
+   595→   595→  spec: OrderSpec;
+   596→   596→  labPartnerId: string;
+   597→   597→  completedAt: Date | null;
+   598→   598→}>) {
+   599→   599→  console.log('\n📄 Creating Lab Report Uploads (one per Completed order)...');
+   600→   600→
+   601→   601→  const completed = createdOrders.filter(
+   602→   602→    (o, idx) => o.spec.status === 'Completed' && REPORT_SPECS[idx + 1] != null,
+   603→   603→  );
+   604→   604→
+   605→   605→  // Map labPartnerId → user (uploadedBy) — the lab partner's own User.id
+   606→   606→  const labUserByPartnerId: Record<string, string> = {};
+   607→   607→  const partners = await db.labPartner.findMany({ select: { id: true, userId: true } });
+   608→   608→  for (const p of partners) labUserByPartnerId[p.id] = p.userId;
+   609→   609→
+   610→   610→  const createdUploads: Array<{
+   611→   611→    id: string;
+   612→   612→    orderId: string;
+   613→   613→    labPartnerId: string;
+   614→   614→    uploadedBy: string;
+   615→   615→    completedAt: Date;
+   616→   616→    spec: ReportSpec;
+   617→   617→  }> = [];
+   618→   618→
+   619→   619→  for (const ord of completed) {
+   620→   620→    const idx = createdOrders.indexOf(ord) + 1;
+   621→   621→    const spec = REPORT_SPECS[idx]!;
+   622→   622→    const uploadedBy = labUserByPartnerId[ord.labPartnerId] ?? 'dev-lab-tech';
+   623→   623→    const completedAt = ord.completedAt ?? new Date();
+   624→   624→
+   625→   625→    const upload = await db.labReportUpload.create({
+   626→   626→      data: {
+   627→   627→        externalTestOrderId: ord.id,
+   628→   628→        labPartnerId: ord.labPartnerId,
+   629→   629→        fileUrl: spec.fileUrl,
+   630→   630→        fileName: spec.fileName,
+   631→   631→        fileType: spec.fileType,
+   632→   632→        fileSize: spec.fileSize,
+   633→   633→        reportData: spec.reportData,
+   634→   634→        uploadedAt: completedAt,
+   635→   635→        uploadedBy,
+   636→   636→        verifiedByDoctor: spec.verifiedByDoctor,
+   637→   637→        verifiedAt: spec.verifiedByDoctor
+   638→   638→          ? new Date(completedAt.getTime() + 24 * 60 * 60 * 1000) // verified 1 day after upload
+   639→   639→          : null,
+   640→   640→        notes: spec.notes,
+   641→   641→      },
+   642→   642→    });
+   643→   643→    const abnormalTag = spec.notes.startsWith('⚠️') ? ' [ABNORMAL]' : '';
+   644→   644→    console.log(
+   645→   645→      `  ✓ Report for Order #${idx} (${ord.spec.testName}): ${spec.fileName}` +
+   646→   646→      ` (${spec.fileType}, ${Math.round(spec.fileSize / 1000)} KB)` +
+   647→   647→      ` verified=${spec.verifiedByDoctor}${abnormalTag} (id=${upload.id})`
+   648→   648→    );
+   649→   649→    createdUploads.push({
+   650→   650→      id: upload.id,
+   651→   651→      orderId: ord.id,
+   652→   652→      labPartnerId: ord.labPartnerId,
+   653→   653→      uploadedBy,
+   654→   654→      completedAt,
+   655→   655→      spec,
+   656→   656→    });
+   657→   657→  }
+   658→   658→
+   659→   659→  return { createdUploads, completedOrders: completed };
+   660→   660→}
+   661→   661→
+   662→   662→// ──────────────────────────────────────────────────────────────
+   663→   663→// 7. LAB BILLINGS (5 — one per Completed order)
+   664→   664→// ──────────────────────────────────────────────────────────────
+   665→   665→
+   666→   666→async function createLabBillings(
+   667→   667→  createdOrders: Array<{
+   668→   668→    id: string;
+   669→   669→    orderNo: string;
+   670→   670→    spec: OrderSpec;
+   671→   671→    labPartnerId: string;
+   672→   672→    commissionPercent: number;
+   673→   673→    completedAt: Date | null;
+   674→   674→  }>,
+   675→   675→  drSharma: { id: string },
+   676→   676→) {
+   677→   677→  console.log('\n💸 Creating Lab Billings (one per Completed order)...');
+   678→   678→
+   679→   679→  const completed = createdOrders.filter((o) => o.spec.status === 'Completed');
+   680→   680→
+   681→   681→  // Pick 2 of the 5 to mark Paid (the oldest two: Vitamin B12 #9, Urine Routine #10).
+   682→   682→  // Use a Set of order-spec.testName for clarity.
+   683→   683→  const paidTestNames = new Set(['Vitamin B12', 'Urine Routine']);
+   684→   684→
+   685→   685→  let billCounter = 0;
+   686→   686→  const createdBillings: Array<{ id: string; orderId: string; paid: boolean }> = [];
+   687→   687→
+   688→   688→  for (const ord of completed) {
+   689→   689→    billCounter++;
+   690→   690→    const amount = ord.spec.testFee;
+   691→   691→    const commissionAmount = Math.round((amount * ord.commissionPercent) / 100);
+   692→   692→    const billedAt = ord.completedAt ?? new Date();
+   693→   693→    const isPaid = paidTestNames.has(ord.spec.testName);
+   694→   694→    const paidAt = isPaid
+   695→   695→      ? new Date(billedAt.getTime() + 3 * 24 * 60 * 60 * 1000) // billedAt + 3 days
+   696→   696→      : null;
+   697→   697→    const transactionRef = isPaid
+   698→   698→      ? `BANK-TRF-2025-${String(billCounter).padStart(3, '0')}`
+   699→   699→      : '';
+   700→   700→
+   701→   701→    const billing = await db.labBilling.create({
+   702→   702→      data: {
+   703→   703→        labPartnerId: ord.labPartnerId,
+   704→   704→        doctorId: drSharma.id,
+   705→   705→        patientId: 'dev-patient',
+   706→   706→        testOrderId: ord.id,
+   707→   707→        amount,
+   708→   708→        commissionAmount,
+   709→   709→        commissionPercent: ord.commissionPercent,
+   710→   710→        paymentStatus: isPaid ? 'Paid' : 'Pending',
+   711→   711→        billedAt,
+   712→   712→        paidAt,
+   713→   713→        transactionRef,
+   714→   714→        notes: 'Auto-generated on report upload',
+   715→   715→      },
+   716→   716→    });
+   717→   717→    console.log(
+   718→   718→      `  ✓ Billing for ${ord.spec.testName}: ₹${amount} (commission ₹${commissionAmount} @ ${ord.commissionPercent}%) — ${isPaid ? 'Paid' : 'Pending'}` +
+   719→   719→      (isPaid ? ` ref=${transactionRef}` : '') +
+   720→   720→      ` (id=${billing.id})`
+   721→   721→    );
+   722→   722→    createdBillings.push({ id: billing.id, orderId: ord.id, paid: isPaid });
+   723→   723→  }
+   724→   724→
+   725→   725→  return { createdBillings };
+   726→   726→}
+   727→   727→
+   728→   728→// ──────────────────────────────────────────────────────────────
+   729→   729→// 8. SUMMARY
+   730→   730→// ──────────────────────────────────────────────────────────────
+   731→   731→
+   732→   732→async function printSummary() {
+   733→   733→  const [labs, assoc, orders, reports, billings, payments] = await Promise.all([
+   734→   734→    db.labPartner.count(),
+   735→   735→    db.doctorLabAssociation.count(),
+   736→   736→    db.externalTestOrder.count(),
+   737→   737→    db.labReportUpload.count(),
+   738→   738→    db.labBilling.count(),
+   739→   739→    db.commissionPayment.count(),
+   740→   740→  ]);
+   741→   741→
+   742→   742→  console.log('\n══════════════════════════════════════════════════════════');
+   743→   743→  console.log('  Lab Module Seed Complete — Summary');
+   744→   744→  console.log('══════════════════════════════════════════════════════════');
+   745→   745→  console.log(`  Lab Partners              : ${labs}`);
+   746→   746→  console.log(`  Doctor-Lab Associations   : ${assoc}`);
+   747→   747→  console.log(`  External Test Orders      : ${orders}`);
+   748→   748→  console.log(`  Lab Report Uploads        : ${reports}`);
+   749→   749→  console.log(`  Lab Billings              : ${billings}`);
+   750→   750→  console.log(`  Commission Payments       : ${payments}  (not seeded — admin pays out later)`);
+   751→   751→  console.log('══════════════════════════════════════════════════════════\n');
+   752→   752→}
+   753→   753→
+   754→   754→// ──────────────────────────────────────────────────────────────
+   755→   755→// MAIN
+   756→   756→// ──────────────────────────────────────────────────────────────
+   757→   757→
+   758→   758→async function main() {
+   759→   759→  console.log('══════════════════════════════════════════════════════════');
+   760→   760→  console.log('  Doctorooms HMS — Lab Module Demo Data Seed');
+   761→   761→  console.log('══════════════════════════════════════════════════════════\n');
+   762→   762→
+   763→   763→  await clearLabData();
+   764→   764→  await ensureLabUsers();
+   765→   765→  const labs = await createLabPartners();
+   766→   766→  const { drSharma } = await createAssociations(labs);
+   767→   767→  const { createdOrders } = await createExternalOrders(labs, drSharma);
+   768→   768→  await createReportUploads(createdOrders);
+   769→   769→  await createLabBillings(createdOrders, drSharma);
+   770→   770→  await printSummary();
+   771→   771→
+   772→   772→  console.log('✅ Lab module demo data seeded successfully.');
+   773→   773→}
+   774→   774→
+   775→   775→main().catch((err) => {
+   776→   776→  console.error('❌ Lab module seed failed:', err);
+   777→   777→  console.error(err instanceof Error ? err.stack : err);
+   778→   778→}).finally(async () => {
+   779→   779→  await db.$disconnect();
+   780→   780→});
+   781→   781→

@@ -1,0 +1,724 @@
+     1→'use client'
+     2→
+     3→import { useState } from 'react'
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→import { motion, AnimatePresence } from 'framer-motion'
+     6→import { toast } from 'sonner'
+     7→import {
+     8→  Cross,
+     9→  Plus,
+    10→  Clock,
+    11→  CalendarDays,
+    12→  User,
+    13→  Activity,
+    14→  Building2,
+    15→  AlertCircle,
+    16→  Loader2,
+    17→  Trash2,
+    18→} from 'lucide-react'
+    19→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    20→import { Button } from '@/components/ui/button'
+    21→import { Input } from '@/components/ui/input'
+    22→import { Label } from '@/components/ui/label'
+    23→import { Badge } from '@/components/ui/badge'
+    24→import {
+    25→  Select,
+    26→  SelectContent,
+    27→  SelectItem,
+    28→  SelectTrigger,
+    29→  SelectValue,
+    30→} from '@/components/ui/select'
+    31→import {
+    32→  Dialog,
+    33→  DialogContent,
+    34→  DialogHeader,
+    35→  DialogTitle,
+    36→  DialogFooter,
+    37→} from '@/components/ui/dialog'
+    38→import {
+    39→  Table,
+    40→  TableBody,
+    41→  TableCell,
+    42→  TableHead,
+    43→  TableHeader,
+    44→  TableRow,
+    45→} from '@/components/ui/table'
+    46→import { Textarea } from '@/components/ui/textarea'
+    47→import {
+    48→  AlertDialog,
+    49→  AlertDialogAction,
+    50→  AlertDialogCancel,
+    51→  AlertDialogContent,
+    52→  AlertDialogDescription,
+    53→  AlertDialogFooter,
+    54→  AlertDialogHeader,
+    55→  AlertDialogTitle,
+    56→} from '@/components/ui/alert-dialog'
+    57→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    58→import { cn } from '@/lib/utils'
+    59→
+    60→interface OT {
+    61→  id: string
+    62→  name: string
+    63→  otType: string
+    64→  floorNo: string
+    65→  status: string
+    66→  todayScheduleCount: number
+    67→}
+    68→
+    69→interface Surgery {
+    70→  id: string
+    71→  scheduleNo: string
+    72→  patientName: string
+    73→  patientAge: number
+    74→  patientGender: string
+    75→  admissionNo: string
+    76→  surgeonName: string
+    77→  surgeryName: string
+    78→  surgeryType: string
+    79→  scheduledStartTime: string
+    80→  estimatedDuration: number
+    81→  actualStartTime: string
+    82→  actualEndTime: string
+    83→  status: string
+    84→  notes: string
+    85→}
+    86→
+    87→interface OTBoard {
+    88→ id: string
+    89→ name: string
+    90→ otType: string
+    91→ floorNo: string
+    92→ status: string
+    93→ surgeries: Surgery[]
+    94→}
+    95→
+    96→interface ScheduleItem {
+    97→ id: string
+    98→ scheduleNo: string
+    99→ otName: string
+   100→ otType: string
+   101→ otFloor: string
+   102→ patientName: string
+   103→ patientAge: number
+   104→ patientGender: string
+   105→ admissionNo: string
+   106→ surgeonName: string
+   107→ surgeryName: string
+   108→ surgeryType: string
+   109→ scheduledDate: string
+   110→ scheduledStartTime: string
+   111→ estimatedDuration: number
+   112→ status: string
+   113→}
+   114→
+   115→const otStatusColors: Record<string, string> = {
+   116→  Available: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400',
+   117→  Occupied: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
+   118→  Scheduled: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400',
+   119→  Maintenance: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400',
+   120→}
+   121→
+   122→const surgeryStatusColors: Record<string, string> = {
+   123→  Scheduled: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400',
+   124→  InProgress: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400',
+   125→  Completed: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400',
+   126→  Cancelled: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+   127→  Postponed: 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-400',
+   128→}
+   129→
+   130→const otTypeColors: Record<string, string> = {
+   131→  Major: 'border-l-4 border-l-rose-500',
+   132→  Minor: 'border-l-4 border-l-amber-500',
+   133→  Emergency: 'border-l-4 border-l-red-600',
+   134→  DayCare: 'border-l-4 border-l-teal-500',
+   135→}
+   136→
+   137→export default function OtBoardClient() {
+   138→  const queryClient = useQueryClient()
+   139→  const [showAddOt, setShowAddOt] = useState(false)
+   140→  const [showSchedule, setShowSchedule] = useState(false)
+   141→  const [deleteId, setDeleteId] = useState<string | null>(null)
+   142→  const [tab, setTab] = useState('board')
+   143→
+   144→  // Add OT form
+   145→  const [otName, setOtName] = useState('')
+   146→  const [otType, setOtType] = useState('Major')
+   147→  const [otFloor, setOtFloor] = useState('')
+   148→
+   149→  // Schedule form
+   150→  const [schedOtId, setSchedOtId] = useState('')
+   151→  const [schedAdmissionId, setSchedAdmissionId] = useState('')
+   152→  const [schedSurgeonId, setSchedSurgeonId] = useState('')
+   153→  const [surgeryName, setSurgeryName] = useState('')
+   154→  const [surgeryType, setSurgeryType] = useState('Elective')
+   155→  const [schedDate, setSchedDate] = useState(new Date().toISOString().split('T')[0])
+   156→  const [schedTime, setSchedTime] = useState('09:00')
+   157→  const [estDuration, setEstDuration] = useState('60')
+   158→  const [schedNotes, setSchedNotes] = useState('')
+   159→
+   160→  // OT List
+   161→  const { data: otsData, isLoading: otsLoading } = useQuery<{ operationTheaters: OT[] }>({
+   162→    queryKey: ['operation-theaters'],
+   163→    queryFn: () => fetch('/api/operation-theaters').then((r) => r.json()),
+   164→    refetchInterval: 30000,
+   165→  })
+   166→
+   167→  // Today's OT Board
+   168→  const { data: boardData, isLoading: boardLoading } = useQuery<{ date: string; operationTheaters: OTBoard[] }>({
+   169→    queryKey: ['ot-today-board'],
+   170→    queryFn: () => fetch('/api/ot-board').then((r) => r.json()),
+   171→    refetchInterval: 30000,
+   172→  })
+   173→
+   174→  // Admitted patients for the Schedule Surgery picker (dialog open only)
+   175→  const { data: admittedData } = useQuery<{
+   176→    admissions: { id: string; admissionNo: string; patientName: string; patientAge: number; patientGender: string; wardName: string; bedNumber: string; doctorName: string }[]
+   177→  }>({
+   178→    queryKey: ['ot-admitted-patients'],
+   179→    queryFn: () => fetch('/api/ipd-admissions?status=Admitted&limit=100').then((r) => r.json()),
+   180→    enabled: showSchedule,
+   181→  })
+   182→
+   183→  // Hospital doctors for the surgeon picker (dialog open only)
+   184→  const { data: doctorsData } = useQuery<{ doctors: { id: string; name: string; specialization: string }[] }>({
+   185→    queryKey: ['ot-surgeon-options'],
+   186→    queryFn: () => fetch('/api/dashboard/hospital/doctors').then((r) => r.json()),
+   187→    enabled: showSchedule,
+   188→  })
+   189→
+   190→  // All schedules
+   191→  const { data: schedulesData, isLoading: schedLoading } = useQuery<{ schedules: ScheduleItem[] }>({
+   192→    queryKey: ['ot-schedules'],
+   193→    queryFn: () => fetch('/api/ot-schedules').then((r) => r.json()),
+   194→    enabled: tab === 'schedule',
+   195→  })
+   196→
+   197→  // Add OT mutation
+   198→  const addOtMutation = useMutation({
+   199→    mutationFn: (data: { name: string; otType: string; floorNo: string }) =>
+   200→      fetch('/api/operation-theaters', {
+   201→        method: 'POST',
+   202→        headers: { 'Content-Type': 'application/json' },
+   203→        body: JSON.stringify(data),
+   204→      }).then((r) => r.json()),
+   205→    onSuccess: () => {
+   206→      toast.success('Operation Theater added')
+   207→      setShowAddOt(false)
+   208→      setOtName('')
+   209→      setOtFloor('')
+   210→      setOtType('Major')
+   211→      queryClient.invalidateQueries({ queryKey: ['operation-theaters'] })
+   212→      queryClient.invalidateQueries({ queryKey: ['ot-today-board'] })
+   213→    },
+   214→    onError: () => toast.error('Failed to add OT'),
+   215→  })
+   216→
+   217→  // Delete OT mutation
+   218→  const deleteOtMutation = useMutation({
+   219→    mutationFn: (id: string) =>
+   220→      fetch(`/api/operation-theaters/${id}`, { method: 'DELETE' }).then((r) => r.json()),
+   221→    onSuccess: () => {
+   222→      toast.success('OT deleted')
+   223→      setDeleteId(null)
+   224→      queryClient.invalidateQueries({ queryKey: ['operation-theaters'] })
+   225→      queryClient.invalidateQueries({ queryKey: ['ot-today-board'] })
+   226→    },
+   227→    onError: () => toast.error('Failed to delete OT'),
+   228→  })
+   229→
+   230→  // Schedule surgery mutation
+   231→  const scheduleMutation = useMutation({
+   232→    mutationFn: (data: Record<string, unknown>) =>
+   233→      fetch('/api/ot-schedules', {
+   234→        method: 'POST',
+   235→        headers: { 'Content-Type': 'application/json' },
+   236→        body: JSON.stringify(data),
+   237→      }).then((r) => r.json()),
+   238→    onSuccess: () => {
+   239→      toast.success('Surgery scheduled')
+   240→      setShowSchedule(false)
+   241→      resetScheduleForm()
+   242→      queryClient.invalidateQueries({ queryKey: ['ot-today-board'] })
+   243→      queryClient.invalidateQueries({ queryKey: ['ot-schedules'] })
+   244→      queryClient.invalidateQueries({ queryKey: ['operation-theaters'] })
+   245→    },
+   246→    onError: () => toast.error('Failed to schedule surgery'),
+   247→  })
+   248→
+   249→  function resetScheduleForm() {
+   250→    setSchedOtId('')
+   251→    setSchedAdmissionId('')
+   252→    setSchedSurgeonId('')
+   253→    setSurgeryName('')
+   254→    setSurgeryType('Elective')
+   255→    setSchedDate(new Date().toISOString().split('T')[0])
+   256→    setSchedTime('09:00')
+   257→    setEstDuration('60')
+   258→    setSchedNotes('')
+   259→  }
+   260→
+   261→  const ots = otsData?.operationTheaters ?? []
+   262→  const board = boardData?.operationTheaters ?? []
+   263→  const schedules = schedulesData?.schedules ?? []
+   264→  const totalTodaySurgeries = board.reduce((acc, ot) => acc + ot.surgeries.length, 0)
+   265→  const inProgressCount = board.reduce(
+   266→    (acc, ot) => acc + ot.surgeries.filter((s) => s.status === 'InProgress').length,
+   267→    0
+   268→  )
+   269→
+   270→  return (
+   271→    <div className="space-y-6">
+   272→      {/* Stat cards */}
+   273→      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+   274→        <Card className="border-l-4 border-l-teal-500">
+   275→          <CardContent className="p-4">
+   276→            <div className="flex items-center justify-between">
+   277→              <div>
+   278→                <p className="text-xs text-muted-foreground">Total OTs</p>
+   279→                <p className="text-2xl font-bold">{ots.length}</p>
+   280→              </div>
+   281→              <div className="rounded-lg bg-teal-100 p-2.5 dark:bg-teal-900/40">
+   282→                <Building2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+   283→              </div>
+   284→            </div>
+   285→          </CardContent>
+   286→        </Card>
+   287→        <Card className="border-l-4 border-l-emerald-500">
+   288→          <CardContent className="p-4">
+   289→            <div className="flex items-center justify-between">
+   290→              <div>
+   291→                <p className="text-xs text-muted-foreground">Available</p>
+   292→                <p className="text-2xl font-bold">{ots.filter((o) => o.status === 'Available').length}</p>
+   293→              </div>
+   294→              <div className="rounded-lg bg-emerald-100 p-2.5 dark:bg-emerald-900/40">
+   295→                <Activity className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+   296→              </div>
+   297→            </div>
+   298→          </CardContent>
+   299→        </Card>
+   300→        <Card className="border-l-4 border-l-amber-500">
+   301→          <CardContent className="p-4">
+   302→            <div className="flex items-center justify-between">
+   303→              <div>
+   304→                <p className="text-xs text-muted-foreground">Today's Surgeries</p>
+   305→                <p className="text-2xl font-bold">{totalTodaySurgeries}</p>
+   306→              </div>
+   307→              <div className="rounded-lg bg-amber-100 p-2.5 dark:bg-amber-900/40">
+   308→                <CalendarDays className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+   309→              </div>
+   310→            </div>
+   311→          </CardContent>
+   312→        </Card>
+   313→        <Card className="border-l-4 border-l-rose-500">
+   314→          <CardContent className="p-4">
+   315→            <div className="flex items-center justify-between">
+   316→              <div>
+   317→                <p className="text-xs text-muted-foreground">In Progress</p>
+   318→                <p className="text-2xl font-bold">{inProgressCount}</p>
+   319→              </div>
+   320→              <div className="rounded-lg bg-rose-100 p-2.5 dark:bg-rose-900/40">
+   321→                <Cross className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+   322→              </div>
+   323→            </div>
+   324→          </CardContent>
+   325→        </Card>
+   326→      </div>
+   327→
+   328→      {/* Actions */}
+   329→      <div className="flex flex-wrap gap-3">
+   330→        <Button onClick={() => setShowAddOt(true)}>
+   331→          <Plus className="mr-2 h-4 w-4" /> Add OT
+   332→        </Button>
+   333→        <Button variant="outline" onClick={() => setShowSchedule(true)}>
+   334→          <CalendarDays className="mr-2 h-4 w-4" /> Schedule Surgery
+   335→        </Button>
+   336→      </div>
+   337→
+   338→      {/* Tabs */}
+   339→      <Tabs value={tab} onValueChange={setTab}>
+   340→        <TabsList>
+   341→          <TabsTrigger value="board">OT Board</TabsTrigger>
+   342→          <TabsTrigger value="schedule">All Schedules</TabsTrigger>
+   343→        </TabsList>
+   344→
+   345→        <TabsContent value="board" className="mt-4">
+   346→          {boardLoading ? (
+   347→            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   348→              {Array.from({ length: 3 }).map((_, i) => (
+   349→                <Card key={i} className="animate-pulse">
+   350→                  <CardContent className="p-5 space-y-3">
+   351→                    <div className="h-5 w-32 rounded bg-muted" />
+   352→                    <div className="h-4 w-20 rounded bg-muted" />
+   353→                    <div className="h-20 rounded bg-muted" />
+   354→                  </CardContent>
+   355→                </Card>
+   356→              ))}
+   357→            </div>
+   358→          ) : board.length === 0 ? (
+   359→            <Card>
+   360→              <CardContent className="flex flex-col items-center justify-center py-12">
+   361→                <Cross className="mb-3 h-12 w-12 text-muted-foreground/50" />
+   362→                <p className="text-sm text-muted-foreground">No operation theaters configured yet</p>
+   363→                <Button className="mt-3" onClick={() => setShowAddOt(true)}>
+   364→                  <Plus className="mr-2 h-4 w-4" /> Add OT
+   365→                </Button>
+   366→              </CardContent>
+   367→            </Card>
+   368→          ) : (
+   369→            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   370→              {board.map((ot, i) => (
+   371→                <motion.div
+   372→                  key={ot.id}
+   373→                  initial={{ opacity: 0, y: 20 }}
+   374→                  animate={{ opacity: 1, y: 0 }}
+   375→                  transition={{ delay: i * 0.05 }}
+   376→                >
+   377→                  <Card
+   378→                    className={cn(
+   379→                      'h-full transition-shadow hover:shadow-lg',
+   380→                      otTypeColors[ot.otType] || 'border-l-4 border-l-slate-400'
+   381→                    )}
+   382→                  >
+   383→                    <CardHeader className="pb-3">
+   384→                      <div className="flex items-center justify-between">
+   385→                        <CardTitle className="text-base">{ot.name}</CardTitle>
+   386→                        <Badge
+   387→                          className={cn(
+   388→                            'text-[10px]',
+   389→                            otStatusColors[ot.status] || 'bg-slate-100 text-slate-600'
+   390→                          )}
+   391→                        >
+   392→                          {ot.status}
+   393→                        </Badge>
+   394→                      </div>
+   395→                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+   396→                        <span>{ot.otType}</span>
+   397→                        {ot.floorNo && <span>{ot.floorNo.startsWith("Floor") ? ot.floorNo : `Floor ${ot.floorNo}`}</span>}
+   398→                        <span>{ot.surgeries.length} surgery</span>
+   399→                      </div>
+   400→                    </CardHeader>
+   401→                    <CardContent>
+   402→                      {ot.surgeries.length === 0 ? (
+   403→                        <div className="flex flex-col items-center py-4 text-muted-foreground">
+   404→                          <Clock className="mb-1 h-8 w-8 opacity-50" />
+   405→                          <p className="text-xs">No surgeries today</p>
+   406→                        </div>
+   407→                      ) : (
+   408→                        <div className="space-y-3 max-h-64 overflow-y-auto">
+   409→                          {ot.surgeries.map((s) => (
+   410→                            <div
+   411→                              key={s.id}
+   412→                              className={cn(
+   413→                                'rounded-lg border p-3 text-sm',
+   414→                                s.status === 'InProgress'
+   415→                                  ? 'border-rose-200 bg-rose-50 dark:border-rose-900/40 dark:bg-rose-950/30'
+   416→                                  : 'border-border'
+   417→                              )}
+   418→                            >
+   419→                              <div className="flex items-center justify-between gap-2">
+   420→                                <p className="font-medium truncate">{s.surgeryName}</p>
+   421→                                <Badge
+   422→                                  className={cn(
+   423→                                    'shrink-0 text-[9px]',
+   424→                                    surgeryStatusColors[s.status] || ''
+   425→                                  )}
+   426→                                >
+   427→                                  {s.status}
+   428→                                </Badge>
+   429→                              </div>
+   430→                              <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+   431→                                <p>
+   432→                                  <User className="mr-1 inline h-3 w-3" />
+   433→                                  {s.patientName} ({s.patientGender}, {s.patientAge}y)
+   434→                                </p>
+   435→                                <p>
+   436→                                  <Clock className="mr-1 inline h-3 w-3" />
+   437→                                  {s.scheduledStartTime} · {s.estimatedDuration}min
+   438→                                  {s.actualStartTime && ` · Started: ${s.actualStartTime}`}
+   439→                                </p>
+   440→                                <p>Surgeon: {s.surgeonName}</p>
+   441→                              </div>
+   442→                            </div>
+   443→                          ))}
+   444→                        </div>
+   445→                      )}
+   446→                    </CardContent>
+   447→                  </Card>
+   448→                </motion.div>
+   449→              ))}
+   450→            </div>
+   451→          )}
+   452→        </TabsContent>
+   453→
+   454→        <TabsContent value="schedule" className="mt-4">
+   455→          <Card>
+   456→            <CardContent className="p-0">
+   457→              <div className="overflow-x-auto">
+   458→                <Table>
+   459→                  <TableHeader>
+   460→                    <TableRow>
+   461→                      <TableHead>Schedule #</TableHead>
+   462→                      <TableHead>OT</TableHead>
+   463→                      <TableHead>Patient</TableHead>
+   464→                      <TableHead>Surgery</TableHead>
+   465→                      <TableHead>Date</TableHead>
+   466→                      <TableHead>Time</TableHead>
+   467→                      <TableHead>Duration</TableHead>
+   468→                      <TableHead>Surgeon</TableHead>
+   469→                      <TableHead>Status</TableHead>
+   470→                    </TableRow>
+   471→                  </TableHeader>
+   472→                  <TableBody>
+   473→                    {schedLoading ? (
+   474→                      Array.from({ length: 5 }).map((_, i) => (
+   475→                        <TableRow key={i}>
+   476→                          {Array.from({ length: 9 }).map((_, j) => (
+   477→                            <TableCell key={j}>
+   478→                              <div className="h-4 w-16 animate-pulse rounded bg-muted" />
+   479→                            </TableCell>
+   480→                          ))}
+   481→                        </TableRow>
+   482→                      ))
+   483→                    ) : schedules.length === 0 ? (
+   484→                      <TableRow>
+   485→                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+   486→                          No surgeries scheduled
+   487→                        </TableCell>
+   488→                      </TableRow>
+   489→                    ) : (
+   490→                      schedules.map((s) => (
+   491→                        <TableRow key={s.id}>
+   492→                          <TableCell className="font-mono text-xs">{s.scheduleNo}</TableCell>
+   493→                          <TableCell>{s.otName}</TableCell>
+   494→                          <TableCell>
+   495→                            <div>
+   496→                              <p className="font-medium text-sm">{s.patientName}</p>
+   497→                              <p className="text-xs text-muted-foreground">{s.admissionNo}</p>
+   498→                            </div>
+   499→                          </TableCell>
+   500→                          <TableCell className="text-sm">{s.surgeryName}</TableCell>
+   501→                          <TableCell className="text-sm">
+   502→                            {new Date(s.scheduledDate).toLocaleDateString('en-IN')}
+   503→                          </TableCell>
+   504→                          <TableCell className="text-sm">{s.scheduledStartTime}</TableCell>
+   505→                          <TableCell className="text-sm">{s.estimatedDuration}min</TableCell>
+   506→                          <TableCell className="text-sm">{s.surgeonName}</TableCell>
+   507→                          <TableCell>
+   508→                            <Badge className={cn('text-[10px]', surgeryStatusColors[s.status] || '')}>
+   509→                              {s.status}
+   510→                            </Badge>
+   511→                          </TableCell>
+   512→                        </TableRow>
+   513→                      ))
+   514→                    )}
+   515→                  </TableBody>
+   516→                </Table>
+   517→              </div>
+   518→            </CardContent>
+   519→          </Card>
+   520→        </TabsContent>
+   521→      </Tabs>
+   522→
+   523→      {/* Add OT Dialog */}
+   524→      <Dialog open={showAddOt} onOpenChange={setShowAddOt}>
+   525→        <DialogContent className="max-w-md">
+   526→          <DialogHeader>
+   527→            <DialogTitle>Add Operation Theater</DialogTitle>
+   528→          </DialogHeader>
+   529→          <div className="space-y-4">
+   530→            <div>
+   531→              <Label>OT Name</Label>
+   532→              <Input
+   533→                placeholder="e.g., OT-1 Main"
+   534→                value={otName}
+   535→                onChange={(e) => setOtName(e.target.value)}
+   536→              />
+   537→            </div>
+   538→            <div>
+   539→              <Label>Type</Label>
+   540→              <Select value={otType} onValueChange={setOtType}>
+   541→                <SelectTrigger>
+   542→                  <SelectValue />
+   543→                </SelectTrigger>
+   544→                <SelectContent>
+   545→                  <SelectItem value="Major">Major</SelectItem>
+   546→                  <SelectItem value="Minor">Minor</SelectItem>
+   547→                  <SelectItem value="Emergency">Emergency</SelectItem>
+   548→                  <SelectItem value="DayCare">Day Care</SelectItem>
+   549→                </SelectContent>
+   550→              </Select>
+   551→            </div>
+   552→            <div>
+   553→              <Label>Floor No.</Label>
+   554→              <Input placeholder="e.g., 2nd Floor" value={otFloor} onChange={(e) => setOtFloor(e.target.value)} />
+   555→            </div>
+   556→          </div>
+   557→          <DialogFooter>
+   558→            <Button variant="outline" onClick={() => setShowAddOt(false)}>Cancel</Button>
+   559→            <Button
+   560→              onClick={() => addOtMutation.mutate({ name: otName, otType, floorNo: otFloor })}
+   561→              disabled={!otName || addOtMutation.isPending}
+   562→            >
+   563→              {addOtMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+   564→              Add OT
+   565→            </Button>
+   566→          </DialogFooter>
+   567→        </DialogContent>
+   568→      </Dialog>
+   569→
+   570→      {/* Schedule Surgery Dialog */}
+   571→      <Dialog open={showSchedule} onOpenChange={setShowSchedule}>
+   572→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+   573→          <DialogHeader>
+   574→            <DialogTitle>Schedule Surgery</DialogTitle>
+   575→          </DialogHeader>
+   576→          <div className="space-y-4">
+   577→            <div className="grid grid-cols-2 gap-4">
+   578→              <div>
+   579→                <Label>Operation Theater</Label>
+   580→                <Select value={schedOtId} onValueChange={setSchedOtId}>
+   581→                  <SelectTrigger><SelectValue placeholder="Select OT" /></SelectTrigger>
+   582→                  <SelectContent>
+   583→                    {ots.map((ot) => (
+   584→                      <SelectItem key={ot.id} value={ot.id}>
+   585→                        {ot.name} ({ot.otType})
+   586→                      </SelectItem>
+   587→                    ))}
+   588→                  </SelectContent>
+   589→                </Select>
+   590→              </div>
+   591→              <div>
+   592→                <Label>Surgery Type</Label>
+   593→                <Select value={surgeryType} onValueChange={setSurgeryType}>
+   594→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   595→                  <SelectContent>
+   596→                    <SelectItem value="Elective">Elective</SelectItem>
+   597→                    <SelectItem value="Emergency">Emergency</SelectItem>
+   598→                    <SelectItem value="Urgent">Urgent</SelectItem>
+   599→                  </SelectContent>
+   600→                </Select>
+   601→              </div>
+   602→            </div>
+   603→            <div>
+   604→              <Label>Admitted Patient</Label>
+   605→              <Select value={schedAdmissionId} onValueChange={setSchedAdmissionId}>
+   606→                <SelectTrigger><SelectValue placeholder="Select admitted patient…" /></SelectTrigger>
+   607→                <SelectContent>
+   608→                  {(admittedData?.admissions ?? []).map((a) => (
+   609→                    <SelectItem key={a.id} value={a.id}>
+   610→                      {a.admissionNo} — {a.patientName} ({a.patientAge}y {a.patientGender})
+   611→                    </SelectItem>
+   612→                  ))}
+   613→                </SelectContent>
+   614→              </Select>
+   615→              {(() => {
+   616→                const adm = (admittedData?.admissions ?? []).find((a) => a.id === schedAdmissionId)
+   617→                if (!adm) return null
+   618→                return (
+   619→                  <p className="mt-1.5 text-xs text-muted-foreground">
+   620→                    {adm.wardName} · Bed {adm.bedNumber}{adm.doctorName ? ` · Attending: ${adm.doctorName}` : ''}
+   621→                  </p>
+   622→                )
+   623→              })()}
+   624→            </div>
+   625→            <div className="grid gap-4 sm:grid-cols-2">
+   626→              <div>
+   627→                <Label>Surgery Name</Label>
+   628→                <Input
+   629→                  placeholder="e.g., Appendectomy"
+   630→                  value={surgeryName}
+   631→                  onChange={(e) => setSurgeryName(e.target.value)}
+   632→                />
+   633→              </div>
+   634→              <div>
+   635→                <Label>Surgeon</Label>
+   636→                <Select value={schedSurgeonId} onValueChange={setSchedSurgeonId}>
+   637→                  <SelectTrigger><SelectValue placeholder="Select surgeon…" /></SelectTrigger>
+   638→                  <SelectContent>
+   639→                    {(doctorsData?.doctors ?? []).map((d) => (
+   640→                      <SelectItem key={d.id} value={d.id}>
+   641→                        {d.name}{d.specialization ? ` — ${d.specialization}` : ''}
+   642→                      </SelectItem>
+   643→                    ))}
+   644→                  </SelectContent>
+   645→                </Select>
+   646→              </div>
+   647→            </div>
+   648→            <div className="grid grid-cols-3 gap-4">
+   649→              <div>
+   650→                <Label>Date</Label>
+   651→                <Input type="date" value={schedDate} onChange={(e) => setSchedDate(e.target.value)} />
+   652→              </div>
+   653→              <div>
+   654→                <Label>Start Time</Label>
+   655→                <Input type="time" value={schedTime} onChange={(e) => setSchedTime(e.target.value)} />
+   656→              </div>
+   657→              <div>
+   658→                <Label>Duration (min)</Label>
+   659→                <Input
+   660→                  type="number"
+   661→                  value={estDuration}
+   662→                  onChange={(e) => setEstDuration(e.target.value)}
+   663→                />
+   664→              </div>
+   665→            </div>
+   666→            <div>
+   667→              <Label>Notes</Label>
+   668→              <Textarea
+   669→                placeholder="Additional notes..."
+   670→                value={schedNotes}
+   671→                onChange={(e) => setSchedNotes(e.target.value)}
+   672→              />
+   673→            </div>
+   674→          </div>
+   675→          <DialogFooter>
+   676→            <Button variant="outline" onClick={() => setShowSchedule(false)}>Cancel</Button>
+   677→            <Button
+   678→              onClick={() =>
+   679→                scheduleMutation.mutate({
+   680→                  otId: schedOtId,
+   681→                  admissionId: schedAdmissionId,
+   682→                  surgeonId: schedSurgeonId || undefined,
+   683→                  surgeryName,
+   684→                  surgeryType,
+   685→                  scheduledDate: schedDate,
+   686→                  scheduledStartTime: schedTime,
+   687→                  estimatedDuration: parseInt(estDuration) || 60,
+   688→                  notes: schedNotes,
+   689→                })
+   690→              }
+   691→              disabled={!schedOtId || !schedAdmissionId || !surgeryName || scheduleMutation.isPending}
+   692→            >
+   693→              {scheduleMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+   694→              Schedule
+   695→            </Button>
+   696→          </DialogFooter>
+   697→        </DialogContent>
+   698→      </Dialog>
+   699→
+   700→      {/* Delete Confirmation */}
+   701→      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+   702→        <AlertDialogContent>
+   703→          <AlertDialogHeader>
+   704→            <AlertDialogTitle>Delete Operation Theater?</AlertDialogTitle>
+   705→            <AlertDialogDescription>
+   706→              This action cannot be undone. OTs with existing schedules cannot be deleted.
+   707→            </AlertDialogDescription>
+   708→          </AlertDialogHeader>
+   709→          <AlertDialogFooter>
+   710→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+   711→            <AlertDialogAction
+   712→              onClick={() => deleteId && deleteOtMutation.mutate(deleteId)}
+   713→              className="bg-red-600 hover:bg-red-700"
+   714→            >
+   715→              {deleteOtMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+   716→              Delete
+   717→            </AlertDialogAction>
+   718→          </AlertDialogFooter>
+   719→        </AlertDialogContent>
+   720→      </AlertDialog>
+   721→    </div>
+   722→  )
+   723→}
+   724→
