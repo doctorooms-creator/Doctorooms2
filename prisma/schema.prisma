@@ -2238,3 +2238,77 @@ model CopilotAction {
 
   @@index([doctorId, status])
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REFERRAL & POINTS SYSTEM (docs/REFERRAL-SYSTEM-PLAN.md)
+// Additive-only: no changes to existing tables. Plain string keys (no FK
+// relations) so existing models stay untouched.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model ReferralCode {
+  id        String   @id @default(cuid())
+  userId    String   @unique // referrer (doctor) — User.id
+  code      String   @unique // DR-{NAME}-{4 digits}
+  clicks    Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Referral {
+  id             String    @id @default(cuid())
+  referrerUserId String // referrer User.id
+  refereeUserId  String    @unique // referee User.id — one claim per user, immutable
+  code           String
+  status         String    @default("pending") // pending|activated|habit|converted|expired
+  activatedAt    DateTime?
+  habitAt        DateTime?
+  convertedAt    DateTime?
+  expiredAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([referrerUserId])
+}
+
+model PointsLedger {
+  id           String    @id @default(cuid())
+  userId       String // owner User.id
+  type         String // earn_activated|earn_habit|earn_converted|earn_milestone|redeem_pro_month|redeem_ai_500pack|clawback|expire|adjust
+  points       Int // signed: +earn / -spend
+  balanceAfter Int // snapshot after this entry (approximate under concurrency)
+  refId        String? // Referral.id or Redemption.id
+  note         String    @default("")
+  pendingUntil DateTime? // anti-fraud: earn entries spendable after 15 days
+  expiresAt    DateTime? // FIFO expiry: 18 months from earn
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Redemption {
+  id          String   @id @default(cuid())
+  userId      String
+  itemType    String // pro_month|ai_500pack|pro_year|seat_year|whatsapp_1000pack|hospital_month
+  pointsSpent Int
+  status      String   @default("applied") // applied|reverted
+  appliedAt   DateTime @default(now())
+  revertedAt  DateTime?
+
+  @@index([userId])
+}
+
+// Foundation for the pricing/plan system (docs/PRICING-STRATEGY.md).
+// One active subscription per hospital. Inert in Phase 1 (no feature gating
+// yet) — pro_month point redemptions write here.
+model Subscription {
+  id                 String    @id @default(cuid())
+  hospitalId         String    @unique
+  planKey            String    @default("free") // free|pro|hospital
+  status             String    @default("active") // active|trialing|expired
+  source             String    @default("default") // default|razorpay|points|founder
+  currentPeriodStart DateTime  @default(now())
+  currentPeriodEnd   DateTime? // null = free forever
+  trialEndsAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([planKey, status])
+}

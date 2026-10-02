@@ -41,6 +41,8 @@ type EventType =
   | 'ot-cancelled'
   // Queue resilience events (Phase 4) — doctor paused/resumed their queue.
   | 'queue-paused'
+  // Referral & points system (docs/REFERRAL-SYSTEM-PLAN.md)
+  | 'referral-reward'
 
 const VALID_EVENTS: EventType[] = [
   'new-admission',
@@ -69,6 +71,7 @@ const VALID_EVENTS: EventType[] = [
   'ot-completed',
   'ot-cancelled',
   'queue-paused',
+  'referral-reward',
 ]
 
 const EMIT_URL = 'http://localhost:3005/emit'

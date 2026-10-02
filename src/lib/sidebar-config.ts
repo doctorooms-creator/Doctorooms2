@@ -1,6 +1,6 @@
 import {
   type LucideIcon,
-  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History,
+  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History, Gift,
 } from 'lucide-react'
 
 export interface SidebarItem {
@@ -55,6 +55,7 @@ export const sidebarConfig: RoleSidebarMap = {
     { label: 'Prescriptions', href: '/dashboard/doctor/prescriptions', icon: FileText },
     { label: 'Rx Templates', href: '/dashboard/doctor/rx-templates', icon: Zap },
     { label: 'Earnings', href: '/dashboard/doctor/earnings', icon: IndianRupee },
+    { label: 'Referral', href: '/dashboard/doctor/referral', icon: Gift },
     { label: 'Schedule', href: '/dashboard/doctor/schedule', icon: Clock },
     { label: 'Patients', href: '/dashboard/doctor/patients', icon: Users },
     { label: 'Medicine Master', href: '/dashboard/doctor/medicines', icon: FlaskConical },

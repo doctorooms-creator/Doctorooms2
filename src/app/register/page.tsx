@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -21,6 +21,8 @@ import {
   ArrowRight,
   ArrowLeft,
   Check,
+  Gift,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,7 +68,12 @@ function getPasswordStrength(password: string): {
     { label: 'Weak', color: 'bg-red-500', segments: [true, false, false, false] },
     { label: 'Fair', color: 'bg-amber-500', segments: [true, true, false, false] },
     { label: 'Good', color: 'bg-teal-500', segments: [true, true, true, false] },
-    { label: 'Strong', color: 'bg-emerald-500', segments: [true, true, true, true] },
+    { label: 'Strong', color: 'bg-teal-500', segments: [true, true, true, true] },
+    // BUG FIX (E2E-caught): score reaches 4 when ALL criteria are met
+    // (length + uppercase + digit + special). levels previously had only
+    // 4 entries → levels[4] was undefined → page crashed on strong
+    // passwords ("Cannot read properties of undefined (reading 'map')").
+    { label: 'Very Strong', color: 'bg-emerald-500', segments: [true, true, true, true] },
   ];
 
   return { score, ...levels[score] };
@@ -98,6 +105,14 @@ export default function RegisterPage() {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  // ── Referral code (docs/REFERRAL-SYSTEM-PLAN.md) ──
+  // Picked up from sessionStorage when arriving via /r/{code} links.
+  const [referralCode, setReferralCode] = useState('');
+  const [referralState, setReferralState] = useState<{
+    checking: boolean;
+    valid: boolean | null;
+    referrerName: string | null;
+  }>({ checking: false, valid: null, referrerName: null });
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -151,6 +166,41 @@ export default function RegisterPage() {
     setStep((s) => s - 1);
   };
 
+  // Pickup referral code from sessionStorage (set by /r/[code] landing)
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('dr_referral_code');
+      if (stored) setReferralCode(stored.toUpperCase());
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  // Live validation (debounced) whenever the code changes
+  useEffect(() => {
+    const code = referralCode.trim().toUpperCase();
+    if (!code || code.length < 4) {
+      setReferralState({ checking: false, valid: null, referrerName: null });
+      return;
+    }
+    setReferralState((s) => ({ ...s, checking: true }));
+    const t = setTimeout(() => {
+      fetch(`/api/referral/validate?code=${encodeURIComponent(code)}`)
+        .then((r) => r.json())
+        .then((d) =>
+          setReferralState({
+            checking: false,
+            valid: !!d.valid,
+            referrerName: d.referrerName ?? null,
+          })
+        )
+        .catch(() =>
+          setReferralState({ checking: false, valid: false, referrerName: null })
+        );
+    }, 500);
+    return () => clearTimeout(t);
+  }, [referralCode]);
+
   const handleSubmit = async () => {
     if (!termsAccepted) {
       toast.error('Please accept the terms and conditions');
@@ -161,7 +211,11 @@ export default function RegisterPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, role: selectedRole }),
+        body: JSON.stringify({
+          ...form,
+          role: selectedRole,
+          referralCode: referralCode.trim().toUpperCase() || undefined,
+        }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -169,6 +223,11 @@ export default function RegisterPage() {
         return;
       }
       toast.success('Registration successful! Redirecting to login...');
+      try {
+        sessionStorage.removeItem('dr_referral_code');
+      } catch {
+        /* ignore */
+      }
       setTimeout(() => {
         window.location.href = '/login';
       }, 1500);
@@ -399,6 +458,46 @@ export default function RegisterPage() {
                           <SelectItem value="Other">Other</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+
+                    {/* Referral code (optional) — prefilled via /r/{code} links */}
+                    <div className="space-y-2">
+                      <Label htmlFor="referral-code" className="flex items-center gap-1.5">
+                        <Gift className="h-3.5 w-3.5 text-teal-600" />
+                        Referral Code{' '}
+                        <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <div className="relative">
+                        <Gift className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-600" />
+                        <Input
+                          id="referral-code"
+                          placeholder="DR-XXXX-0000"
+                          className="pl-10 font-mono uppercase tracking-wider"
+                          value={referralCode}
+                          onChange={(e) =>
+                            setReferralCode(e.target.value.toUpperCase())
+                          }
+                          maxLength={24}
+                        />
+                      </div>
+                      {referralState.checking && (
+                        <p className="text-xs text-muted-foreground">Checking code…</p>
+                      )}
+                      {!referralState.checking && referralState.valid === true && (
+                        <p className="flex items-center gap-1 text-xs font-medium text-emerald-600">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {referralState.referrerName} ka referral — 30 din ka full
+                          access milega 🎁
+                        </p>
+                      )}
+                      {!referralState.checking &&
+                        referralState.valid === false &&
+                        referralCode.trim().length >= 4 && (
+                          <p className="text-xs text-red-500">
+                            Ye code valid nahi hai — koi baat nahi, signup continue
+                            karein.
+                          </p>
+                        )}
                     </div>
                   </div>
                 </motion.div>

@@ -49,6 +49,8 @@ const VALID_EVENTS = [
   'ot-cancelled',
   // Queue resilience events (Phase 4) — doctor paused/resumed their queue.
   'queue-paused',
+  // Referral & points system (docs/REFERRAL-SYSTEM-PLAN.md)
+  'referral-reward',
 ] as const
 
 type ValidEvent = (typeof VALID_EVENTS)[number]

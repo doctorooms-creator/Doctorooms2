@@ -5,6 +5,7 @@ import { istDateRange } from '@/lib/date-utils'
 import { withSerializableTx } from '@/lib/token-utils'
 import { logCreate } from '@/lib/audit-log'
 import { getAuditContext } from '@/lib/audit-context'
+import { checkReferralStages } from '@/lib/referral'
 
 export async function POST(req: NextRequest) {
   try {
@@ -209,6 +210,13 @@ export async function POST(req: NextRequest) {
     }
 
     const { booking } = claim
+
+    // ── Referral stage hook (docs/REFERRAL-SYSTEM-PLAN.md) ───────────────
+    // Fire-and-forget: advance the booked doctor's referral stages
+    // (activation = first booking, habit = 20 bookings). Idempotent.
+    if (doctor?.userId) {
+      checkReferralStages(doctor.userId).catch(() => {})
+    }
 
     // Create notification for patient (AFTER commit, outside the tx)
     await db.notification.create({

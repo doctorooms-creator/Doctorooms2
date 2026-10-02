@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { signEmailVerificationToken } from '@/lib/session';
 import { sendVerificationEmail } from '@/lib/email';
 import { logAction } from '@/lib/audit-log';
+import { emitNotification } from '@/lib/emit-notification';
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
       )
     }
     const body = await req.json();
-    const { name, email, mobileNo, gender, password, role } = body;
+    const { name, email, mobileNo, gender, password, role, referralCode } = body;
 
     // Security: Only allow self-registration for patient and hospital roles.
     // Privileged roles (admin, doctor, receptionist, assistant, pharmacist) must be
@@ -93,6 +94,42 @@ export async function POST(req: NextRequest) {
       })
     } catch (emailErr) {
       console.error('[email] failed to sign verification token:', emailErr)
+    }
+
+    // ── Referral claim (docs/REFERRAL-SYSTEM-PLAN.md) ─────────────────────
+    // Claimable ONLY at signup (this route). Fire-and-forget semantics:
+    // a failed claim must never block registration. Anti-fraud: self-referral
+    // impossible (new user), referee unique per user, referrer must be an
+    // active doctor.
+    try {
+      const code = typeof referralCode === 'string' ? referralCode.trim().toUpperCase() : '';
+      if (code) {
+        const rc = await db.referralCode.findUnique({ where: { code } });
+        if (rc && rc.userId !== user.id) {
+          const referrer = await db.user.findUnique({
+            where: { id: rc.userId },
+            select: { role: true, status: true, name: true },
+          });
+          if (referrer && referrer.role === 'doctor' && referrer.status === 'Active') {
+            // One claim per new user (refereeUserId is unique in schema)
+            await db.referral.create({
+              data: {
+                referrerUserId: rc.userId,
+                refereeUserId: user.id,
+                code,
+                status: 'pending',
+              },
+            });
+            // Toast to the referrer — new referral signed up
+            emitNotification('referral-reward', [`user:${rc.userId}`], {
+              message: `🔔 ${user.name} ne aapke referral code se signup kiya!`,
+            });
+            console.log(`[referral] claimed: ${user.id} → ${rc.userId} (${code})`);
+          }
+        }
+      }
+    } catch (refErr) {
+      console.error('[referral] claim failed (non-blocking):', refErr);
     }
 
     // Audit log the registration

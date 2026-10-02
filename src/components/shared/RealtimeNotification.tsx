@@ -23,6 +23,7 @@ import {
   ListOrdered,
   Stethoscope,
   Play,
+  Gift,
 } from 'lucide-react'
 
 // Event → toast configuration per role
@@ -179,6 +180,15 @@ export const EVENT_CONFIG: Record<string, EventConfig> = {
     color: 'text-muted-foreground',
     roles: ['patient'],
   },
+
+  // ── Referral & points system ───────────────────────────────────────────
+  'referral-reward': {
+    title: 'Referral Reward',
+    icon: Gift,
+    color: 'text-emerald-600',
+    roles: ['doctor'],
+    critical: true,
+  },
 }
 
 // Event → list of TanStack Query keys to invalidate when the event fires
@@ -199,6 +209,7 @@ const QUERY_INVALIDATION: Record<string, string[][]> = {
   'queue-updated': [['receptionist-queue'], ['doctor-appointments']],
   'bed-status-changed': [['ipd-admissions'], ['wards'], ['beds']],
   'prescription-shared': [['patient-rx-access']],
+  'referral-reward': [['referral-me']],
 }
 
 // Dedup: avoid showing duplicate toasts for same event within 5 seconds
