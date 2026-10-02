@@ -5676,3 +5676,23 @@ Stage Summary:
 - One real bug found & fixed: notification-service socket.io handshake corruption (double request-listener). Real-time notifications + doctor-online presence now work end-to-end through the gateway.
 - Secrets policy maintained (nothing new written anywhere).
 - Remaining recommendations: (1) dev-server OOM watchdog idea still open; (2) NEXTAUTH_SECRET placeholder before production; (3) chat-service (3004) has no frontend socket client yet (only notif 3005 is used by useSocket) — future feature opportunity.
+
+---
+Task ID: business-plan-research
+Agent: main (Z.ai Code)
+Task: User asked for in-depth market research + complete plan structure for the 3-plan SaaS model (maximize doctor registrations → scale → profit). NO development.
+
+Work Log:
+- Web research (8 queries via web-search skill): HealthPlix pricing (Pro ₹11,999/yr, Elite ₹17,999/yr, 14k+ doctors, AI-led marketing), DocOn (~₹7,000/yr), CuraVerto (₹9,999/yr), MocDoc/Clinicea/KiviCare (₹16,999-₹1L+/yr), generic clinic CMS ₹499-1,500/mo.
+- Market: India digital health $14.5B→$107B (2033, 25% CAGR); healthcare software $1.4B→$5.5B (2030); drivers = ABDM mandates + DPDP Act; ~13L doctors, ~2.5-3L clinics, ~70k small hospitals.
+- Freemium benchmarks: consumer 2-5%, B2B SaaS 5-15%, healthcare vertical ~5-8% expected.
+- Confirmed unified architecture audit from earlier round (clinic = 1-doctor Hospital record; Receptionist.doctorId nullable handles clinic/hospital modes; no isClinic branching) → plans = pure limits layer, zero architectural work.
+- Wrote complete plan doc: /home/z/my-project/docs/BUSINESS-PLAN.md (pricing matrix, trial mechanics, 4 revenue layers incl. lab-commission sleeper, unit economics, GTM, compliance risks, implementation notes, open decisions).
+
+Stage Summary:
+- PLAN STRUCTURE READY (doc only, zero code changes): Starter FREE (1 doc + 1 receptionist + 1 nurse, unlimited patients/bookings/FULL Rx wizard, 50 AI credits/mo, 14-day full trial, data never deleted) / Clinic Pro ₹9,999/yr (undercuts HealthPlix ₹11,999; optional +2 seats) / Hospital ₹59,999/yr (10 docs, IPD/OT/billing/insurance).
+- Revenue layers: subscriptions + AI credit packs (₹499/500) + lab-test commission (monetizes free users) + WhatsApp usage packs.
+- Y1 model: 10k registrations → ~₹92-96L ARR potential, 70-80% gross margin, break-even ~250-300 paid clinics.
+- CRITICAL compliance finding flagged: DPDP Act 2023 requires health data in India — current Supabase is Seoul region; MUST migrate to Supabase Mumbai (ap-south-1) before commercial launch (pg_dump/restore, pipeline proven).
+- GTM: Ahmedabad beachhead (home turf), pharma-MR distribution channel, doctor referrals, ABDM cert Phase 2.
+- 5 open decisions listed in doc §9 for user (seat model A/B, lab-orders-in-free, monthly billing, launch city, Mumbai migration timing).
