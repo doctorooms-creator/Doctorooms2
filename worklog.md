@@ -5696,3 +5696,25 @@ Stage Summary:
 - CRITICAL compliance finding flagged: DPDP Act 2023 requires health data in India — current Supabase is Seoul region; MUST migrate to Supabase Mumbai (ap-south-1) before commercial launch (pg_dump/restore, pipeline proven).
 - GTM: Ahmedabad beachhead (home turf), pharma-MR distribution channel, doctor referrals, ABDM cert Phase 2.
 - 5 open decisions listed in doc §9 for user (seat model A/B, lab-orders-in-free, monthly billing, launch city, Mumbai migration timing).
+
+---
+Task ID: pricing-strategy-v2
+Agent: main (Z.ai Code)
+Task: User said current pricing/plan structure doesn't CONVINCE purchase decisions — "act as world's best planner and marketer" and rebuild it. NO development.
+
+Work Log:
+- Diagnosed v1's 7 conversion flaws: feature-table thinking (no outcomes), no ROI math, no risk reversal, no urgency/scarcity, no emotional hook, free-vs-paid axis on features instead of "runs vs grows", no in-product conversion moments.
+- Master reframe written: "Doctorooms Free aapka OPD chalata hai. Pro aapka practice badhata hai." Free = full clinic ops (registration engine), Paid = money+growth features (conversion engine).
+- ICP psychology deep-dive: solo doctor's decision triggers (visible money loss from no-shows 15-30%, time agony, status anxiety, growth ambition, peer trust) + 5 objections pre-handled (data safety, staff usability, competitor switch, waste fear, internet).
+- Rebuilt plan matrix v2 (persuasion-optimized): paid hero features = WhatsApp auto-reminders (no-show recovery), patient recall campaigns, "Lost Revenue" report (shows ₹ lost, full breakdown behind Pro), money dashboard, public clinic page/QR (new-patient magnet). Free tier: 20 WhatsApp reminders/mo + 50 AI credits (habit → wall). Value stack: ₹10,700/mo value vs ₹833/mo price; killer anchor line "Ek patient ki fees = poore mahine ka software."
+- Pricing page blueprint: ROI calculator FIRST, middle-card dominance + "87% doctors" social proof, decoy anchoring (₹59,999 makes ₹9,999 feel safe), HealthPlix/Practo honest comparison, trust strip, FAQ handlers.
+- Urgency/scarcity system: Founder's Pricing (first 1,000 doctors ₹4,999/yr FOREVER grandfathered + founder badge), live seat counter, exit-intent, double-sided referral (1 month Pro both sides).
+- Risk reversal: 60-day ROI guarantee (refund if recovered revenue < price, data export CSV).
+- In-product conversion engine designed (the real revenue machine): 6 emotional-peak upgrade moments (no-show report Friday, Rx #50 celebration, patient #100, staff seat wall, earnings page lost-₹ banner, day-12 trial nudge w/ personalized usage receipt).
+- Measurement: 8 KPIs w/ targets (free→habit 40%, habit→Pro 6-10% vs 2-5% industry, founder sell-through 1,000 in 90 days, refund <3%, churn <2%/mo) + event instrumentation note.
+- Wrote /home/z/my-project/docs/PRICING-STRATEGY.md (supersedes BUSINESS-PLAN.md §3 — pointer added, v1 kept as reference). Search API was rate-limited (429) mid-research; proceeded with established industry benchmarks (no-show 15-30%, reminder recovery, Hormozi value equation) — no fabricated stats.
+
+Stage Summary:
+- PRICING v2 READY (doc-only, zero code): persuasion-optimized 3 plans — FREE (clinic ops engine, unlimited patients/Rx, habit-forming tastes of paid features) / PRO ₹833/mo eff. (growth+money features lead, 60-day guarantee, founder ₹4,999 forever for first 1,000) / HOSPITAL PRO ₹4,999/mo eff. (leakage-recovery 24x ROI story, decoy anchor).
+- Core strategic shift: conversion happens INSIDE the product at emotional peaks (engineered walls/celebrations), not on the pricing page.
+- 6 open decisions for user in doc §9 (founder pricing, guarantee, WhatsApp cap 20 vs 50, dual billing, seat overage, clinic-page scope).

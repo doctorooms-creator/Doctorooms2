@@ -51,7 +51,9 @@
 
 ## 3. THE 3 PLANS (Final Structure)
 
-### 3.1 Plan Matrix
+> ⚠️ **SUPERSEDED:** The persuasion-optimized plan matrix now lives in **`docs/PRICING-STRATEGY.md`** (v2) — plan names, hero features (money/growth features lead), WhatsApp caps, founder pricing, guarantees, and in-product conversion engine are defined there. The matrix below is kept for reference (v1) and its pricing/limits remain the base.
+
+### 3.1 Plan Matrix (v1 — reference)
 
 | | 🆓 **STARTER** (Free forever) | 🏥 **CLINIC PRO** | 🏨 **HOSPITAL** |
 |---|---|---|---|
