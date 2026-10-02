@@ -5610,3 +5610,21 @@ Stage Summary:
 - All 5 prior fixes STABLE. Round delivered: Global Search ⌘K palette (dead UI → fully functional feature), Step-3 skeletons + prefetch (documented priority #1 cleared), styling polish (stat cards, chevron affordances, custom scrollbars, search affordance).
 - Myra's draft now has real content (complaint+vitals+growth table+2 meds+disease) — usable for draft-resume demos.
 - Next-phase recommendations: (1) ⌠MEDIUM⌋ Global Search for other roles (patient/receptionist/admin — currently doctor-only patient search; nav works for all); (2) ⌠MEDIUM⌋ palette "recent patients" section (no query needed — most-recent bookings); (3) ⌠LOW⌋ wizard Step-5/6 skeletons already exist — verify visually; (4) ⌠MEDIUM⌋ DB backup strategy still unresolved (data only in sandbox SQLite, user wants Supabase-only but migration on hold per explicit order); (5) dev server OOM instability — consider 2-min watchdog cron restore.
+
+---
+Task ID: supabase-cloudinary-feasibility (pre-GO, read-only)
+Agent: Main Agent (Z.ai Code)
+Task: User ordered: full app live on Supabase (sole DB) + connect Cloudinary for photo storage, but DO NOT start development yet — first confirm understanding. Executed read-only feasibility verification only (no code, no config, no data changes).
+
+Work Log:
+- Re-verified current state: .env still SQLite + placeholder Supabase keys (old project fmsccgnfdjiophuyjwcv); SYSTEM-LEVEL env DATABASE_URL=file:/home/z/my-project/db/custom.db confirmed via printenv (OVERRIDES .env — must be fixed during migration); restart-server.sh line 18 rewrites .env with SQLite/placeholder values if DEV_MODE check fails (must be updated).
+- Cloudinary: credentials ping via HTTPS basic auth → {"status":"ok"} → VALID. cloudinary npm pkg installed (^2.10.0); 8 upload API routes already import '@/lib/cloudinary' (patient avatar, medical documents [+download/delete], external-test-orders upload-report, lab-reports [file/download], receptionist avatar) with local-disk fallback — activation needs only 3 CLOUDINARY_* env vars. src/lib/supabase.ts imported by NO route (dead code). Local uploads footprint only 68K.
+- Supabase Postgres reachability: direct db.dauhputqahqutczyrfme.supabase.co:5432 resolves IPv6-ONLY (2406:da12:…) and sandbox has no IPv6 egress → ECONNREFUSED — user's literal connection string is unusable FROM THIS SANDBOX (normal machines with IPv6 can use it). Swept 32 pooler endpoints (aws-0/aws-1 × all regions, session :5432) with username postgres.dauhputqahqutczyrfme via bun+pg: ONLY aws-0-ap-northeast-2.pooler.supabase.com:5432 (Seoul, session mode) authenticates → AUTH_OK, SELECT 1 executed. DNS verified honest (google/poolers resolve to genuine distinct AWS/Google IPs; REST host via Cloudflare 104.18.38.10). REST API health HTTP 200 (project running, not paused).
+- Working sandbox DATABASE_URL format: postgresql://postgres.dauhputqahqutczyrfme:<USER-PROVIDED-PASSWORD>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres (password intentionally NOT recorded here). Session pooler supports prepared statements → Prisma-compatible.
+- Mini-services alive: 3004 (HTTP 400 on bare GET = socket.io service up), 3005 (HTTP 404 = up). Main app HTTP 200. Cron list = 0 jobs; webDevReview cron deliberately NOT created (user's explicit no-development order).
+- Migration assets confirmed present: src/scripts/migrate-to-postgres.ts + scripts/migrate-to-postgres.sh + scripts/switch-to-supabase.sh (latter contains STALE old password — cleanup pending).
+
+Stage Summary:
+- FEASIBILITY LOCKED: full "Supabase-only DB + Cloudinary files" migration is executable from this sandbox. Prior audit's pooler "tenant not found" mystery SOLVED — project lives in ap-northeast-2 (Seoul), not ap-south-1.
+- Awaiting user GO. Plan: Phase 0 SQLite backup → .env (Seoul pooler URL + 3 CLOUDINARY_* vars) + restart-server.sh + system env override fixes → prisma provider sqlite→postgresql → reset stale Supabase tables + db:push (101 tables) → migrate-to-postgres.ts (copy live data) → restart app + chat-service → agent-browser full QA → Cloudinary E2E upload verify (+ optionally push existing 68K local uploads to Cloudinary and update DB URLs) → worklog + git push.
+- Stale Supabase tables (32, Aug-11 demo seed, cmsp-era) will be wiped as part of reset/db:push — current data comes from SQLite.
