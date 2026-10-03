@@ -5838,3 +5838,26 @@ Stage Summary:
 - Attribution proven: banner-driven points-redeem correctly tagged wall_upgraded(source=dashboard_banner) — the "which trigger earns" learning loop is now real.
 - Remaining (pricing Phase 3 / launch): Razorpay order+webhook activation (needs real keys; webhook skeleton exists), recall campaigns + public clinic page feature builds (gating flags ready), referral Phase 3 (leaderboard, /r/ SEO, K-factor), Rx #50 / patient #100 celebration moments, trial day-12 personalized nudge, admin analytics UI page.
 - Known risks: dev-server OOM (restart-server.sh watchdog + crons cover it), DPDP Mumbai migration pre-launch, NEXTAUTH_SECRET production.
+
+---
+Task ID: sandbox-reset-5-recovery
+Agent: main (Z.ai Code)
+Task: Session continuation after context reset — found sandbox hard-reset #5 had struck: reconcile diverged git state, push to GitHub, and bring the whole stack back up.
+
+Work Log:
+- GIT RECONCILIATION: local main (c2ca532) vs origin/main (038be76) had diverged with IDENTICAL tree content (0 insertions/deletions across 29 files — an amend-after-push artifact). Reset local to origin/main — zero content loss. All prior work (Referral Ph1+Ph2, Pricing Ph1+Ph2, 3 strategy docs) confirmed already on GitHub.
+- RESET DAMAGE AUDIT: node_modules wiped (main + both mini-services); root .env rewritten to the TEMPLATE (SQLite DATABASE_URL + YOUR_SUPABASE_* placeholders — ALL real secrets gone: Supabase pooler URL+password, real service keys, Cloudinary keys, CRON_SECRET); db/ wiped; mini-service .env files gone; dev.log gone; all 3 services dead; cron jobs wiped. Git repo + full source code INTACT and synced. Verified .env was never committed with real values (git history check — only the template, good hygiene).
+- NETWORK FINDING: *.supabase.co project subdomains FAIL DNS from this sandbox (affects REST API + auth URLs); pooler hostnames (aws-0/aws-1 ap-northeast-2 .pooler.supabase.com) DO resolve. GitHub + Maven Central reachable. GitHub PAT still working (in .git/config).
+- RECOVERY — LOCAL POSTGRES (no sudo/docker on sandbox, SQLite impossible: schema is provider=postgresql with 6 Json fields, 108 models): downloaded zonky embedded-postgres binaries 17.5.0 from Maven Central (userspace, no root), extracted to /home/z/pg17, initdb cluster at db/pgdata (trust auth), running on 127.0.0.1:5433. bunx prisma db push → full 108-model schema live. DATABASE_URL in .env pointed to postgresql://postgres@127.0.0.1:5433/doctorooms (no secret — trust auth).
+- DEPS: bun install completed (932 pkgs main; 59 + 22 mini-services); prisma generate.
+- SEEDS: prisma/seed-multispecialty.ts OK (26 departments, 53 doctors, 165 schedules, 19 nurses, etc.) + scripts/seed-demo-users.ts OK (5 users) — 94 users total. Legacy prisma/seed.ts is SQLite-era (PRAGMA syntax) and FAILS on PG — obsolete, do not run.
+- SERVICES: restart-server.sh (env-trap workaround: unset+export DATABASE_URL inline for every prisma/seed command). main 3000 ✓ 200, chat 3004 ✓ (socket.io), notif 3005 ✓ (26 valid events incl. referral-reward).
+- HARDENING (committed): scripts/recover-local-db.sh — one-command full recovery (downloads zonky PG if missing, initdb, .env DATABASE_URL fix, bun installs, prisma push+generate, seeds-if-empty, all services restart + health check). restart-server.sh now ALSO watchdogs local Postgres :5433 (so the 2-min cron covers DB liveness too).
+- CRON: 15-min webDevReview recreated (job 432469, Asia/Calcutta).
+- E2E VERIFIED (agent-browser via gateway :81): landing page renders; dev-login as Dr. Aarti Shah (cmurz4rdo007um7r4d4e9khvz) OK; doctor dashboard full sidebar (incl. Referral / Plan & Billing / Lost Revenue); REFERRAL page live — code DR-AARTI-1987 auto-generated, wallet + milestones + tracker render, empty states correct; BILLING page live — ROI calculator math renders (₹78,000 loss → net ₹61,567/mo), usage meters, Founder's Pricing section; /r/DR-AARTI-1987 landing renders referrer + code + auto-redirect; console CLEAN, [useSocket] Connected (gateway socket path works). Mobile 375px not re-tested (no code changes vs previously-verified builds; device emulation unavailable on Linux agent-browser).
+
+Stage Summary:
+- FULLY RECOVERED on local userspace PostgreSQL 17.5: app + all features (referral, plans, billing, lost revenue, sockets) verified working E2E on seeded demo data. Recovery is now ONE COMMAND: bash scripts/recover-local-db.sh.
+- PRODUCTION DATA IS SAFE on Supabase (project fmsccgnfdjiophuyjwcv, Seoul) — only the local credential copies were lost.
+- TO RECONNECT SUPABASE (user action required — secrets must be re-pasted into .env, never committed): DATABASE_URL (Seoul pooler URL + DB password), SUPABASE_SERVICE_ROLE_KEY + SUPABASE_SECRET_KEY (real values), CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET, optionally CRON_SECRET + root .env + mini-services/notification-service/.env copy. Then restart-server.sh. NOTE: *.supabase.co DNS currently fails from this sandbox (pooler .com hostnames fine) — if that persists, Supabase REST/auth calls from the server may fail even with valid keys.
+- Known risks: dev-server OOM (watchdog covers); local PG has no password (sandbox-internal only, trust auth on 127.0.0.1); sandbox resets may recur — recovery script is the answer.

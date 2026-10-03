@@ -4,6 +4,17 @@
 
 cd /home/z/my-project
 
+# --- Local Postgres watchdog (userspace zonky PG 17 on :5433, no root needed) ---
+# The DB lives at db/pgdata; binaries at /home/z/pg17 (see scripts/recover-local-db.sh).
+if [ -x /home/z/pg17/bin/pg_ctl ] && [ -d /home/z/my-project/db/pgdata ]; then
+  if ! (ss -tlnp 2>/dev/null | grep -q ':5433 '); then
+    LD_LIBRARY_PATH=/home/z/pg17/lib /home/z/pg17/bin/pg_ctl \
+      -D /home/z/my-project/db/pgdata -l /tmp/pg.log \
+      -o "-p 5433 -k /tmp -c listen_addresses=127.0.0.1" start >/dev/null 2>&1
+    sleep 1
+  fi
+fi
+
 # Check if server is alive
 if ss -tlnp 2>/dev/null | grep -q ':3000 '; then
   exit 0  # Server is alive, nothing to do
