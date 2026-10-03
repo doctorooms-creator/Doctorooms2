@@ -499,6 +499,25 @@ setInterval(() => {
   if (Date.now() - lastCronRun > 20 * 60 * 60 * 1000) void runReferralDailyCron()
 }, 6 * 60 * 60 * 1000)
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Self keep-alive ping (Render free-tier spin-down protection)
+// Render free services sleep after ~15 min without INBOUND traffic. Fetching
+// our own public /health URL goes through Render's ingress router and counts
+// as inbound traffic, keeping the instance warm without external services.
+// ═══════════════════════════════════════════════════════════════════════════
+const SELF_PING_URL = process.env.SELF_PING_URL || ''
+if (SELF_PING_URL) {
+  const pingTarget = `${SELF_PING_URL.replace(/\/$/, '')}/health`
+  const selfPing = () => {
+    fetch(pingTarget)
+      .then(() => console.log(`[KeepAlive] self-ping ok → ${pingTarget}`))
+      .catch(() => console.log('[KeepAlive] self-ping failed (non-fatal)'))
+  }
+  setTimeout(selfPing, 60_000) // first ping 1 min after boot
+  setInterval(selfPing, 5 * 60 * 1000) // then every 5 minutes
+  console.log(`[KeepAlive] enabled — pinging ${pingTarget} every 5m`)
+}
+
 // ── Boot ───────────────────────────────────────────────────────────────────
 httpServer.listen(PORT, () => {
   console.log(`[Realtime] Merged service on port ${PORT}`)
