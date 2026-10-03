@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/api-auth'
 import { getWalletSummary, REDEEM_CATALOG, awardPoints } from '@/lib/referral'
+import { emitNotification } from '@/lib/emit-notification'
 
 /** Catalog items that map to a Subscription period (plan §1.4). */
 const SUBSCRIPTION_ITEMS: Record<string, { planKey: 'pro' | 'hospital'; days: number }> = {
@@ -149,6 +150,25 @@ export async function POST(req: NextRequest) {
     }
 
     const walletAfter = await getWalletSummary(userId)
+
+    // Celebration moment — redemption success (roadmap): full-screen confetti
+    // on the redeemer's screen + DB notification for offline visibility.
+    emitNotification('celebration', [`user:${userId}`], {
+      title: '🎁 Redemption Successful!',
+      message: `${item.title} unlock ho gaya! ${item.points} points kharch hue — enjoy your reward 🎉`,
+      kind: 'redeem',
+      points: item.points,
+    })
+    db.notification
+      .create({
+        data: {
+          userId,
+          title: '🎁 Redemption Successful',
+          message: `${item.title} unlock ho gaya — ${item.points} points kharch hue.`,
+        },
+      })
+      .catch(() => {})
+
     return NextResponse.json({
       success: true,
       item: item.title,

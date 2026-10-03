@@ -6,6 +6,7 @@ import { withSerializableTx } from '@/lib/token-utils'
 import { logCreate } from '@/lib/audit-log'
 import { getAuditContext } from '@/lib/audit-context'
 import { checkReferralStages } from '@/lib/referral'
+import { emitNotification } from '@/lib/emit-notification'
 
 export async function POST(req: NextRequest) {
   try {
@@ -216,6 +217,32 @@ export async function POST(req: NextRequest) {
     // (activation = first booking, habit = 20 bookings). Idempotent.
     if (doctor?.userId) {
       checkReferralStages(doctor.userId).catch(() => {})
+
+      // ── Celebration moment: Patient #100 (roadmap) ─────────────────────
+      // Exactly-once: fires only when this booking makes the doctor's total
+      // booking count hit 100. Fire-and-forget — never blocks the response.
+      db.booking
+        .count({ where: { doctorId } })
+        .then((patientCount) => {
+          if (patientCount !== 100) return
+          emitNotification('celebration', [`user:${doctor.userId}`], {
+            title: '🏆 100th Patient!',
+            message:
+              'Aapka 100th patient Doctorooms par book hua — practice ka bada milestone! 🎉',
+            kind: 'patient100',
+          })
+          db.notification
+            .create({
+              data: {
+                userId: doctor.userId,
+                title: '🏆 100th Patient Booked',
+                message:
+                  'Congrats! Aapka 100th patient Doctorooms par appointment book kiya. Practice growing strong!',
+              },
+            })
+            .catch(() => {})
+        })
+        .catch(() => {})
     }
 
     // Create notification for patient (AFTER commit, outside the tx)

@@ -300,6 +300,60 @@ export async function getFounderSeats(): Promise<{ taken: number; total: number;
   return { taken, total: FOUNDER_SEATS_TOTAL, left: FOUNDER_SEATS_TOTAL - taken }
 }
 
+/** Default trial length (days) — matches the day-12 nudge window in referral.ts. */
+export const TRIAL_DAYS = 14
+
+/**
+ * Provision (or restart) a Pro trial for a hospital — the referee welcome gift
+ * (plan §1.5) and the admin "Grant Trial" ops tool both funnel through here.
+ * Idempotent: an existing ACTIVE paid subscription is never downgraded to a
+ * trial; an expired/old trial is replaced by the fresh one.
+ */
+export async function provisionTrial(
+  hospitalId: string,
+  opts: { days?: number; source?: string } = {}
+): Promise<{ ok: boolean; trialEndsAt: Date | null; reason?: string }> {
+  const days = opts.days ?? TRIAL_DAYS
+  const source = opts.source ?? 'referral'
+  const now = new Date()
+  const trialEndsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000)
+
+  const existing = await db.subscription.findUnique({ where: { hospitalId } })
+
+  // Never downgrade a live paid subscription (points/razorpay/founder)
+  if (
+    existing &&
+    existing.status === 'active' &&
+    existing.planKey !== 'free' &&
+    (!existing.currentPeriodEnd || existing.currentPeriodEnd > now)
+  ) {
+    return { ok: false, trialEndsAt: null, reason: 'active-paid-subscription' }
+  }
+
+  await db.subscription.upsert({
+    where: { hospitalId },
+    create: {
+      hospitalId,
+      planKey: 'pro',
+      status: 'trialing',
+      source,
+      currentPeriodStart: now,
+      currentPeriodEnd: trialEndsAt,
+      trialEndsAt,
+    },
+    update: {
+      planKey: 'pro',
+      status: 'trialing',
+      source,
+      currentPeriodStart: now,
+      currentPeriodEnd: trialEndsAt,
+      trialEndsAt,
+    },
+  })
+
+  return { ok: true, trialEndsAt }
+}
+
 /** Full billing-page payload: plan + usage + wallet + founder seats. */
 export async function getPlanOverview(user: { id: string; role: string }) {
   const hospitalId = await getHospitalIdForUser(user)

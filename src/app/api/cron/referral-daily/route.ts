@@ -22,9 +22,16 @@ async function handle(req: NextRequest) {
       { status: 503 }
     )
   }
+  // Two accepted auth styles:
+  //   1. x-cron-secret header          (realtime-service + manual curl)
+  //   2. Authorization: Bearer <secret> (Vercel Cron — it sends the CRON_SECRET
+  //      env value as a Bearer token automatically)
   const provided = req.headers.get('x-cron-secret')
   if (provided !== secret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const auth = req.headers.get('authorization') || ''
+    if (auth !== `Bearer ${secret}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
   }
 
   try {

@@ -47,6 +47,9 @@ type EventType =
   | 'queue-paused'
   // Referral & points system (docs/REFERRAL-SYSTEM-PLAN.md)
   | 'referral-reward'
+  // Celebration moments (roadmap) — full-screen confetti overlay for BIG wins:
+  // milestone unlocks, champion badge, redeem success, Rx #50, patient #100.
+  | 'celebration'
 
 const VALID_EVENTS: EventType[] = [
   'new-admission',
@@ -76,6 +79,7 @@ const VALID_EVENTS: EventType[] = [
   'ot-cancelled',
   'queue-paused',
   'referral-reward',
+  'celebration',
 ]
 
 const EMIT_URL = `${process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006'}/emit`
@@ -277,6 +281,14 @@ const EVENT_TITLES: Record<EventType, { title: string; messageFn: (p: Record<str
       p.paused === false
         ? `Dr. ${p.doctorName || ''} has resumed the queue.`
         : `Dr. ${p.doctorName || ''} has paused the queue.`,
+  },
+  'referral-reward': {
+    title: 'Referral Reward',
+    messageFn: (p) => `${p.message || 'Referral reward credited'}`,
+  },
+  'celebration': {
+    title: 'Celebration',
+    messageFn: (p) => `${p.message || p.title || 'A big milestone unlocked!'}`,
   },
 }
 

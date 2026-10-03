@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "next-themes";
 import { Providers } from "@/components/providers";
 import { RealtimeNotification } from "@/components/shared/RealtimeNotification";
+import { CelebrationOverlay } from "@/components/shared/celebration-overlay";
 import { ServiceWorkerRegistrar } from "@/components/shared/ServiceWorkerRegistrar";
 
 const geistSans = Geist({
@@ -73,6 +74,7 @@ export default function RootLayout({
           >
             {children}
             <RealtimeNotification />
+            <CelebrationOverlay />
             <ServiceWorkerRegistrar />
             <Toaster />
           </ThemeProvider>

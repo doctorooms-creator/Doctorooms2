@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { db } from '@/lib/db'
 import { sendQueueNotification, notifyApproachingPatient } from '@/lib/queue-notifications'
+import { emitNotification } from '@/lib/emit-notification'
 
 export async function POST(
   req: NextRequest,
@@ -147,6 +148,32 @@ export async function POST(
         bookingBeforeUpdate.bookingDate
       )
     }
+
+    // ── Celebration moment: Rx #50 (roadmap) ─────────────────────────────
+    // Exactly-once: fires only when this finalize makes the doctor's ACTIVE
+    // prescription count hit 50. Fire-and-forget — never blocks the response.
+    db.prescription
+      .count({ where: { doctorId: prescription.doctorId, status: 'Active' } })
+      .then((rxCount) => {
+        if (rxCount !== 50) return
+        emitNotification('celebration', [`user:${user.id}`], {
+          title: '🏆 50th Prescription!',
+          message:
+            'Aapne 50 prescriptions Doctorooms par likhi — practice fully digital ho gayi! Ye achievement celebrate karein 🎉',
+          kind: 'rx50',
+        })
+        db.notification
+          .create({
+            data: {
+              userId: user.id,
+              title: '🏆 50th Prescription Completed',
+              message:
+                'Congrats! Aapne apni 50th prescription Doctorooms par finalize ki. Practice fully digital ho gayi!',
+            },
+          })
+          .catch(() => {})
+      })
+      .catch(() => {})
 
     return NextResponse.json({ prescription: mappedUpdated })
   } catch (error) {

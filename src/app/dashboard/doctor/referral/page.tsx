@@ -26,6 +26,7 @@ import {
   Image as ImageIcon,
   Flame,
   Download,
+  Globe,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -808,6 +809,14 @@ export default function ReferralPage() {
                       Pehla referral bhejo — rank turant ban jayegi 🚀
                     </p>
                   )}
+                </div>
+                <div className="sm:ml-auto">
+                  <Button asChild variant="outline" size="sm" className="gap-1.5 rounded-full">
+                    <a href="/leaderboard" target="_blank" rel="noopener noreferrer">
+                      <Globe className="h-3.5 w-3.5" aria-hidden="true" />
+                      Public Leaderboard
+                    </a>
+                  </Button>
                 </div>
               </div>
             </div>

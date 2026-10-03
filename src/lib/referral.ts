@@ -17,7 +17,7 @@
  */
 
 import { db } from '@/lib/db'
-import { emitNotification } from '@/lib/emit-notification'
+import { emitNotification, createNotification } from '@/lib/emit-notification'
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
@@ -512,6 +512,20 @@ export async function markReferralConverted(
     if (awarded) milestoneAwarded = m.label
   }
 
+  // Celebration moment — full-screen overlay for milestone unlocks (5th/10th
+  // conversion). Confetti fires on the referrer's next connected screen.
+  if (milestoneAwarded) {
+    const isChampion = milestoneAwarded.includes('Champion')
+    emitNotification('celebration', [`user:${fresh.referrerUserId}`], {
+      title: isChampion ? '🏆 REFERRAL CHAMPION!' : '🏆 Milestone Unlocked!',
+      message: isChampion
+        ? 'Aap ban gaye Referral Champion — 10 paid referrals! 5,000 bonus points + permanent badge.'
+        : `${milestoneAwarded} — bonus points credited!`,
+      kind: 'milestone',
+      points: MILESTONE_BONUSES.find((m) => m.label === milestoneAwarded)?.points ?? 0,
+    })
+  }
+
   console.log(
     `[referral] converted (${source}) referee=${refereeUserId} referrer=${fresh.referrerUserId} (12-mo conversions: ${conversions}${milestoneAwarded ? `, milestone: ${milestoneAwarded}` : ''})`
   )
@@ -566,6 +580,8 @@ export interface DailyJobsResult {
   expiredPoints: number
   /** referrals re-checked for stage progression */
   stageSweeps: number
+  /** trial day-12 nudges sent (subscription expiry reminders) */
+  trialNudgesSent: number
 }
 
 interface FifoLot {
@@ -676,6 +692,57 @@ export async function runDailyReferralJobs(): Promise<DailyJobsResult> {
     await checkReferralStages(r.refereeUserId)
   }
 
+  // (d) trial day-12 nudge — subscriptions on a 14-day trial get ONE reminder
+  // when ≤3 days are left (day 11–13 of 14). Persisted as a DB notification so
+  // offline doctors see it on next login + socket toast if online. Idempotent:
+  // skips users who already have the nudge within the last 7 days.
+  let trialNudgesSent = 0
+  try {
+    const soon = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
+    const trialing = await db.subscription.findMany({
+      where: {
+        status: 'trialing',
+        trialEndsAt: { gt: now, lte: soon },
+      },
+      select: { hospitalId: true, trialEndsAt: true },
+      take: 100,
+    })
+    for (const sub of trialing) {
+      const hospital = await db.hospital.findUnique({
+        where: { id: sub.hospitalId },
+        select: { userId: true, hospitalName: true },
+      })
+      if (!hospital?.userId) continue
+      const daysLeft = Math.max(
+        0,
+        Math.ceil((sub.trialEndsAt!.getTime() - now.getTime()) / 86400000)
+      )
+      const recent = await db.notification.findFirst({
+        where: {
+          userId: hospital.userId,
+          title: 'Pro Trial Khatam Hone Wala Hai',
+          createdAt: { gte: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000) },
+        },
+        select: { id: true },
+      })
+      if (recent) continue
+      await createNotification(
+        hospital.userId,
+        'Pro Trial Khatam Hone Wala Hai',
+        `Aapka Pro trial ${daysLeft} din me khatam ho raha hai. Ab upgrade karein aur WhatsApp reminders, recall campaigns, AI Copilot — sab kuch continue rakhein. Referral points se bhi pay kar sakte hain!`,
+        {
+          event: 'referral-reward',
+          payload: {
+            message: `⏳ Pro trial ${daysLeft} din me khatam — ab upgrade karein!`,
+          },
+        }
+      )
+      trialNudgesSent++
+    }
+  } catch (nudgeErr) {
+    console.error('[referral] trial day-12 nudge failed (non-blocking):', nudgeErr)
+  }
+
   const result: DailyJobsResult = {
     ranAt: now.toISOString(),
     expiredReferrals: expired.count,
@@ -683,6 +750,7 @@ export async function runDailyReferralJobs(): Promise<DailyJobsResult> {
     expiredPointsEntries,
     expiredPoints,
     stageSweeps: active.length,
+    trialNudgesSent,
   }
   console.log(`[referral] daily jobs: ${JSON.stringify(result)}`)
   return result

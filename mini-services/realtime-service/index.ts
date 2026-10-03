@@ -144,6 +144,7 @@ const VALID_EVENTS = [
   'ot-cancelled',
   'queue-paused',
   'referral-reward',
+  'celebration',
 ] as const
 type ValidEvent = (typeof VALID_EVENTS)[number]
 

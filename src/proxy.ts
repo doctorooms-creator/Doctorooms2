@@ -78,6 +78,7 @@ const PUBLIC_ROUTES = [
   '/book',
   '/kiosk',
   '/bookings/print-token',
+  '/leaderboard',
 ]
 
 const PUBLIC_API_PATTERNS = [

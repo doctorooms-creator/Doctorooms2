@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
+import { toast } from 'sonner'
 import { StatCard } from '@/components/dashboard/stat-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,7 @@ import {
   Mail,
   Calendar,
   Users,
+  Gift,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -66,6 +68,32 @@ export default function AdminHospitalsPage() {
   const [search, setSearch] = useState('')
   const [cityFilter, setCityFilter] = useState('all')
   const [viewHospital, setViewHospital] = useState<HospitalItem | null>(null)
+  const [grantingId, setGrantingId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+
+  const grantTrial = async (hospitalId: string, hospitalName: string) => {
+    setGrantingId(hospitalId)
+    try {
+      const r = await fetch('/api/admin/trial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hospitalId, days: 14 }),
+      })
+      const json = await r.json()
+      if (!r.ok) {
+        toast.error(json.error || 'Trial grant failed')
+        return
+      }
+      toast.success(`🎁 ${hospitalName} ko 14-din Pro trial mil gaya!`, {
+        description: 'Hospital owner ko notification + celebration bhej diya gaya.',
+      })
+      queryClient.invalidateQueries({ queryKey: ['admin-hospitals'] })
+    } catch {
+      toast.error('Network error — trial grant failed')
+    } finally {
+      setGrantingId(null)
+    }
+  }
 
   const { data, isLoading } = useQuery<HospitalsResponse>({
     queryKey: ['admin-hospitals', search, cityFilter],
@@ -216,6 +244,17 @@ export default function AdminHospitalsPage() {
                           <div className="flex items-center gap-1">
                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewHospital(hosp)}>
                               <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-amber-600 hover:text-amber-700 dark:text-amber-400"
+                              onClick={() => grantTrial(hosp.id, hosp.hospitalName)}
+                              disabled={grantingId === hosp.id}
+                              title="Grant 14-day Pro trial"
+                              aria-label={`Grant Pro trial to ${hosp.hospitalName}`}
+                            >
+                              <Gift className={`h-4 w-4 ${grantingId === hosp.id ? 'animate-pulse' : ''}`} />
                             </Button>
                             <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" asChild>
                               <Link href={`/dashboard/admin/hospitals/${hosp.id}/staff`}>
