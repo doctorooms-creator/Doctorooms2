@@ -291,6 +291,170 @@ function LoginContent() {
     </div>
   );
 
+  // Production uses the real email/password form; the sandbox (NODE_ENV=development)
+  // keeps the one-click role cards for fast testing. NODE_ENV is inlined at build
+  // time by webpack, so this is a static branch on the deployed bundle.
+  const isProd = process.env.NODE_ENV === 'production';
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    setLoading('login');
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+      const data = await res.json().catch(() => ({} as { success?: boolean; message?: string; user?: unknown }));
+      if (!res.ok || !data.success) {
+        setLoginError(data.message || `Login failed (${res.status})`);
+        return;
+      }
+      if (data.user) {
+        setUser(data.user as never);
+        const redirectTo = searchParams.get('redirect');
+        if (redirectTo && redirectTo.startsWith('/')) {
+          router.push(redirectTo);
+        } else {
+          router.push('/dashboard');
+        }
+      }
+    } catch {
+      setLoginError('Network error — could not connect to server.');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  // ── PRODUCTION LOGIN (email + password) ────────────────────────────────
+  if (isProd) {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-teal-50 via-white to-emerald-50 dark:from-gray-950 dark:via-gray-900 dark:to-teal-950/20">
+        <div
+          className="absolute inset-0 opacity-[0.07] dark:opacity-[0.05]"
+          style={{
+            backgroundImage: 'radial-gradient(circle, #0d9488 1px, transparent 1px)',
+            backgroundSize: '16px 16px',
+          }}
+        />
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="relative z-10 w-full max-w-md mx-4"
+        >
+          <div className="text-center mb-8">
+            <motion.div
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              className="inline-flex mb-4"
+            >
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-500 to-teal-600 flex items-center justify-center shadow-2xl shadow-teal-500/30">
+                <Stethoscope className="w-8 h-8 text-white" />
+              </div>
+            </motion.div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-1">
+              Doctorooms
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">
+              Sign in to your dashboard
+            </p>
+          </div>
+
+          <form
+            onSubmit={handleEmailLogin}
+            className="bg-white/90 dark:bg-gray-900/90 backdrop-blur rounded-2xl shadow-xl border border-gray-100 dark:border-gray-800 p-6 sm:p-8 space-y-5"
+          >
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Email
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/60 focus:border-teal-500 transition"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-10 pr-12 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500/60 focus:border-teal-500 transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-teal-600 dark:text-gray-400 dark:hover:text-teal-400 font-medium"
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+
+            {loginError && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-start gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-xl p-3"
+              >
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>{loginError}</span>
+              </motion.div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading === 'login' || !email || !password}
+              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-semibold shadow-lg shadow-teal-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
+            >
+              {loading === 'login' ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Signing in…
+                </>
+              ) : (
+                <>
+                  Sign In
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            <p className="text-center text-xs text-gray-400 dark:text-gray-500">
+              Doctorooms — digital OPD, prescriptions &amp; practice growth
+            </p>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // ── DEV LOGIN (one-click role cards — sandbox only) ────────────────────
   return (
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Background */}
