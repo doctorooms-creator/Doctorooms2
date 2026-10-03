@@ -5997,3 +5997,29 @@ Stage Summary:
 - Production cron: 21:30 UTC (3 AM IST) daily — referral daily jobs + trial day-12 nudges now run in prod WITHOUT Render
 - Deployment method recorded: CLI (`bunx vercel deploy --prod --token=...`), GitHub auto-deploy NOT active
 - NEXT: recall campaigns (only big roadmap item left), UptimeRobot + Render card (user actions)
+
+---
+Task ID: PROD-REALTIME-1
+Agent: Main (Render realtime deploy + production E2E + UptimeRobot)
+Task: Complete the $0/month production trio — deploy realtime-service to Render, wire Vercel → Render realtime, UptimeRobot monitors. User supplied UptimeRobot main key (u3821683-...) + monitor key (m804161654-...) + Render API key (rnd_Tpi8...).
+
+Work Log:
+- 15-min webDevReview cron recreated (job 432933, wiped from registry again)
+- Discovered production already live (doctorooms-hms.vercel.app, commit 2c41bf8) + UptimeRobot monitor already added by user (id 804161654)
+- SECURITY FIX: /emit endpoint (public on Render) now requires x-emit-secret header matching REALTIME_EMIT_SECRET — both sides: emit-notification.ts (app) + index.ts (service); generated 40-char secret in .env, sandbox-tested 401/200/400
+- Dockerfile (oven/bun:1 + openssl + prisma generate, non-root, PORT=10000) at mini-services/realtime-service/
+- RENDER (API): key valid (owner tea-db0b09id0e5s73arggpg); created web service "doctorooms-realtime" (srv-db0dple0tbcc73fd472g, free plan, docker, autoDeploy yes) — create-call ignores envVars + dockerfilePath (API quirk) → fixed via PATCH rootDir=mini-services/realtime-service + PUT /env-vars (NOTE: PUT REPLACES the whole set — one bad PUT with only SELF_PING_URL wiped the others; restored all 8); URL https://doctorooms-realtime.onrender.com
+- RENDER env vars (8): DATABASE_URL (session pooler 5432 aws-0-ap-northeast-2), NEXTAUTH_SECRET (=sandbox .env), REALTIME_STRICT_AUTH=1, REALTIME_ALLOWED_ORIGINS (vercel domains), REALTIME_EMIT_SECRET, CRON_SECRET (=sandbox), CRON_URL (prod referral-daily), SELF_PING_URL (self keep-alive)
+- Keep-alive: Render free spins down after 15 min idle → SELF_PING_URL self-ping every 5 min through public /health (counts as inbound traffic); autoDeploy webhook did NOT fire on git push → manual deploys via POST /deploys (render API)
+- VERCEL: set 5 env vars via v10 API upsert (NEXT_PUBLIC_REALTIME_URL, NOTIFICATION_SERVICE_URL → Render URL; NEXTAUTH_SECRET, CRON_SECRET, REALTIME_EMIT_SECRET synced with sandbox) + redeployed prod via CLI (3m, green)
+- AUTH FLOW DISCOVERY: app uses CUSTOM login (/api/auth/login → doctorooms_session JWT cookie), NOT NextAuth credentials callback; /api/auth/csrf 401 from proxy.ts is EXPECTED (not a bug)
+- E2E (scripts/e2e-socket.ts): prod login → socket-token → Render /notif connect (strict auth) → POST /emit round-trip — ALL PASSED ×2 runs
+- BROWSER QA (agent-browser): admin login on prod → /dashboard/admin renders, console "[useSocket] Connected" (after ~10 reconnects from service cold start), Render /stats showed live admin connection (byRole admin:1), zero page errors, mobile 390px layout correct
+- UPTIMEROBOT: main key works for reads + editMonitor, but newMonitor via API blocked ("access_denied: not allowed with your current plan") for type 1/3/5 + any interval/keyword params (new-plan API quirk) → keep-alive does NOT depend on it; existing monitor 804161654 (vercel app) stays; user should add 1-2 monitors manually in dashboard OR provide read-write classic key
+
+Stage Summary:
+- PRODUCTION TRIO COMPLETE: Vercel (app) + Render (realtime, free, self-keep-alive) + Supabase (DB) + Cloudinary (already) — $0/month
+- Full realtime chain verified end-to-end in production browser: login → socket-token → strict-auth socket → event round-trip
+- Commits pushed: dfa4ada (Dockerfile + emit secret), 3759fab (self-ping + e2e script); Vercel prod deployed from dfa4ada via CLI
+- Admin credentials on prod: admin@doctorooms.com / admin123 (bcrypt-verified)
+- PENDING: UptimeRobot manual monitor for https://doctorooms-realtime.onrender.com/health (user action, 30 sec in dashboard); Render push-webhook not firing (manual deploys via API work fine); recall campaigns (last big roadmap item)
