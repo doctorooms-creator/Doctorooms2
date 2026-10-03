@@ -4,11 +4,29 @@ import crypto from 'crypto'
 /**
  * Singleton Razorpay client (server-side only).
  * Reads credentials from env vars set during deployment.
+ *
+ * LAZY-INIT: instantiating at module scope crashes the build when
+ * RAZORPAY_KEY_ID/SECRET are not configured (Vercel "Failed to collect
+ * page data"). The instance is created on first use instead.
  */
-export const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!,
-})
+let _razorpay: Razorpay | null = null
+
+export function isRazorpayConfigured(): boolean {
+  return !!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET)
+}
+
+function getRazorpay(): Razorpay {
+  if (!_razorpay) {
+    if (!isRazorpayConfigured()) {
+      throw new Error('Razorpay not configured: RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET missing')
+    }
+    _razorpay = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID!,
+      key_secret: process.env.RAZORPAY_KEY_SECRET!,
+    })
+  }
+  return _razorpay
+}
 
 /**
  * Create a Razorpay order for the given amount (in INR).
@@ -19,7 +37,7 @@ export async function createRazorpayOrder(
   receipt: string,
   notes: Record<string, string>
 ) {
-  return razorpay.orders.create({
+  return getRazorpay().orders.create({
     amount: Math.round(amount * 100), // paise
     currency: 'INR',
     receipt,
