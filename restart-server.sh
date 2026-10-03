@@ -17,7 +17,12 @@ fi
 
 # Check if server is alive
 if ss -tlnp 2>/dev/null | grep -q ':3000 '; then
-  exit 0  # Server is alive, nothing to do
+  # Server alive — still watchdog the realtime service (merged chat+notif, :3006)
+  if ! ss -tlnp 2>/dev/null | grep -q ':3006 '; then
+    ( cd /home/z/my-project/mini-services/realtime-service && setsid bash start.sh > /home/z/my-project/realtime.log 2>&1 < /dev/null & )
+    echo "[restart] realtime-service restarted at $(date)" >> /home/z/my-project/restart.log
+  fi
+  exit 0  # Server is alive, nothing else to do
 fi
 
 # Server is dead — restart it
@@ -52,5 +57,10 @@ done
 curl -s -o /dev/null http://localhost:3000/ 2>/dev/null
 curl -s -o /dev/null http://localhost:3000/login 2>/dev/null
 curl -s -X POST http://localhost:3000/api/dev-login -H "Content-Type: application/json" -d '{"role":"doctor","userId":"dev-doctor"}' -o /dev/null 2>/dev/null
+
+# Start realtime service (merged chat+notif) if not already up
+if ! ss -tlnp 2>/dev/null | grep -q ':3006 '; then
+  ( cd /home/z/my-project/mini-services/realtime-service && setsid bash start.sh > /home/z/my-project/realtime.log 2>&1 < /dev/null & )
+fi
 
 echo "[restart] Server started at $(date)" >> /home/z/my-project/restart.log

@@ -12,6 +12,41 @@ interface UseSocketOptions {
   enabled?: boolean
 }
 
+// ─── Connection target ─────────────────────────────────────────────────────
+//
+// Production: NEXT_PUBLIC_REALTIME_URL is set (e.g. https://doctorooms-realtime.onrender.com)
+//             → connect directly to that host, namespace /notif.
+// Sandbox dev: unset → use the gateway pattern with XTransformPort=3006
+//             (the merged realtime service), namespace /notif.
+const REALTIME_URL = process.env.NEXT_PUBLIC_REALTIME_URL || ''
+const NOTIF_URL = REALTIME_URL
+  ? `${REALTIME_URL.replace(/\/$/, '')}/notif`
+  : '/notif?XTransformPort=3006'
+
+// ─── Socket token (signed identity) ────────────────────────────────────────
+//
+// The Next.js app mints a short-lived JWT at /api/auth/socket-token (signed
+// with NEXTAUTH_SECRET). The realtime service verifies it, so clients can't
+// self-declare arbitrary userId/role on production. The async `auth` callback
+// runs on EVERY (re)connect attempt, which keeps long-lived sessions valid
+// even after the 5-minute token expiry.
+let tokenPromise: Promise<string | null> | null = null
+function fetchSocketToken(): Promise<string | null> {
+  if (!tokenPromise) {
+    tokenPromise = fetch('/api/auth/socket-token', { credentials: 'same-origin' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { socketToken?: string } | null) => j?.socketToken ?? null)
+      .catch(() => null)
+      .finally(() => {
+        // Allow a fresh fetch next time (tokens expire after 5m)
+        setTimeout(() => {
+          tokenPromise = null
+        }, 60_000)
+      })
+  }
+  return tokenPromise
+}
+
 // ─── Module-level singleton ────────────────────────────────────────────────
 //
 // Multiple components on the same page (RealtimeNotification + many
@@ -71,8 +106,21 @@ function ensureGlobalSocket(opts: {
     teardownGlobalSocket()
   }
   if (!globalSocket) {
-    const socket = io('/?XTransformPort=3005', {
-      auth: { userId: opts.userId, role: opts.role, name: opts.name, hospitalId: opts.hospitalId },
+    const socket = io(NOTIF_URL, {
+      // Async auth: fetch a fresh signed token on every (re)connect attempt.
+      // Falls back to declared identity if the token fetch fails (dev only —
+      // the production realtime service requires the token in strict mode).
+      auth: (cb) => {
+        fetchSocketToken().then((socketToken) => {
+          const base = {
+            userId: opts.userId,
+            role: opts.role,
+            name: opts.name,
+            hospitalId: opts.hospitalId,
+          }
+          cb(socketToken ? { ...base, socketToken } : base)
+        })
+      },
       // Must match the server's path config (`/socket.io/`). This is also
       // the socket.io-client default, but explicit here for clarity.
       path: '/socket.io/',

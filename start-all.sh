@@ -8,8 +8,11 @@
 #
 # Services:
 #   1. Next.js app          → port 3000 (main user-facing app)
-#   2. Chat service         → port 3004 (socket.io booking chat)
-#   3. Notification service → port 3005 (socket.io + HTTP notifications)
+#   2. Realtime service     → port 3006 (merged: /notif + /chat socket.io)
+#
+# NOTE: The old chat-service (:3004) and notification-service (:3005) were
+# merged into realtime-service (:3006) for the free-tier hosting setup
+# (single Render web service). The old folders remain in git history.
 # ─────────────────────────────────────────────────────────────────────────────
 
 is_port_up() {
@@ -40,30 +43,22 @@ start_service \
   'exec env NODE_OPTIONS=--max-old-space-size=1792 node node_modules/next/dist/bin/next dev -p 3000 --webpack' \
   3000 "Next.js app"
 
-# 2. Chat service (port 3004)
+# 2. Realtime service (port 3006) — merged chat + notifications
 start_service \
-  /home/z/my-project/mini-services/chat-service \
-  /home/z/my-project/mini-services/chat-service/service.log \
-  'exec bun --hot index.ts' \
-  3004 "Chat service"
-
-# 3. Notification service (port 3005)
-start_service \
-  /home/z/my-project/mini-services/notification-service \
-  /home/z/my-project/mini-services/notification-service/service.log \
-  'exec bun --hot index.ts' \
-  3005 "Notification service"
+  /home/z/my-project/mini-services/realtime-service \
+  /home/z/my-project/realtime.log \
+  'exec bash start.sh' \
+  3006 "Realtime service (chat+notif)"
 
 echo ""
 echo "Waiting for services to boot..."
 for i in $(seq 1 30); do
   sleep 1
   MAIN=$(is_port_up 3000 && echo up || echo down)
-  CHAT=$(is_port_up 3004 && echo up || echo down)
-  NOTIF=$(is_port_up 3005 && echo up || echo down)
-  if [ "$MAIN" = "up" ] && [ "$CHAT" = "up" ] && [ "$NOTIF" = "up" ]; then
+  REALTIME=$(is_port_up 3006 && echo up || echo down)
+  if [ "$MAIN" = "up" ] && [ "$REALTIME" = "up" ]; then
     break
   fi
 done
 
-echo "Next.js (3000): $MAIN | Chat (3004): $CHAT | Notifications (3005): $NOTIF"
+echo "Next.js (3000): $MAIN | Realtime (3006): $REALTIME"

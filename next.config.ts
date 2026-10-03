@@ -4,7 +4,9 @@ import type { NextConfig } from "next";
 // change nudges `next dev` to self-restart so the regenerated Prisma client
 // (with the new field) is re-required by the running server.
 const nextConfig: NextConfig = {
-  output: "standalone",
+  // `standalone` output is for self-hosting (Docker/VPS). On Vercel it is
+  // unsupported and must be omitted — VERCEL is always set on their platform.
+  ...(process.env.VERCEL ? {} : { output: "standalone" as const }),
   typescript: {
     ignoreBuildErrors: true,
   },

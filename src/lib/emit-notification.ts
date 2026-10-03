@@ -1,7 +1,11 @@
 /**
  * Fire-and-forget WebSocket notification emitter.
- * Sends events to the notification mini-service (port 3005).
+ * Sends events to the realtime service (merged chat+notif, sandbox port 3006).
  * Never throws — failures are silently swallowed.
+ *
+ * Target URL is env-driven:
+ *   - Dev sandbox: NOTIFICATION_SERVICE_URL=http://localhost:3006 (or unset → default)
+ *   - Production (Vercel): NOTIFICATION_SERVICE_URL=https://<render-service>.onrender.com
  */
 
 import { db } from '@/lib/db'
@@ -74,7 +78,7 @@ const VALID_EVENTS: EventType[] = [
   'referral-reward',
 ]
 
-const EMIT_URL = 'http://localhost:3005/emit'
+const EMIT_URL = `${process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006'}/emit`
 
 interface EmitPayload {
   id?: string

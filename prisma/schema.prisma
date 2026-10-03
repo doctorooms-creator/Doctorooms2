@@ -1,5 +1,9 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // rhel-openssl-3.0.x covers Vercel's Amazon Linux 2023 runtime; native covers
+  // the sandbox/Render. Harmless extra engine download, avoids runtime
+  // "Query engine binary not found" errors on Vercel.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {

@@ -1,5 +1,9 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // rhel-openssl-3.0.x covers Vercel's Amazon Linux 2023 runtime; native covers
+  // the sandbox/Render. Harmless extra engine download, avoids runtime
+  // "Query engine binary not found" errors on Vercel.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -2237,4 +2241,110 @@ model CopilotAction {
   createdAt   DateTime  @default(now())
 
   @@index([doctorId, status])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REFERRAL & POINTS SYSTEM (docs/REFERRAL-SYSTEM-PLAN.md)
+// Additive-only: no changes to existing tables. Plain string keys (no FK
+// relations) so existing models stay untouched.
+// ═══════════════════════════════════════════════════════════════════════════
+
+model ReferralCode {
+  id        String   @id @default(cuid())
+  userId    String   @unique // referrer (doctor) — User.id
+  code      String   @unique // DR-{NAME}-{4 digits}
+  clicks    Int      @default(0)
+  variant   String? // A/B reward-size experiment (plan §9 Phase 3): 'a' = 2,000 pts | 'b' = 2,500 pts
+  createdAt DateTime @default(now())
+}
+
+model Referral {
+  id             String    @id @default(cuid())
+  referrerUserId String // referrer User.id
+  refereeUserId  String    @unique // referee User.id — one claim per user, immutable
+  code           String
+  status         String    @default("pending") // pending|activated|habit|converted|expired
+  activatedAt    DateTime?
+  habitAt        DateTime?
+  convertedAt    DateTime?
+  expiredAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([referrerUserId])
+}
+
+model PointsLedger {
+  id           String    @id @default(cuid())
+  userId       String // owner User.id
+  type         String // earn_activated|earn_habit|earn_converted|earn_milestone|redeem_pro_month|redeem_ai_500pack|clawback|expire|adjust
+  points       Int // signed: +earn / -spend
+  balanceAfter Int // snapshot after this entry (approximate under concurrency)
+  refId        String? // Referral.id or Redemption.id
+  note         String    @default("")
+  pendingUntil DateTime? // anti-fraud: earn entries spendable after 15 days
+  expiresAt    DateTime? // FIFO expiry: 18 months from earn
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Redemption {
+  id          String   @id @default(cuid())
+  userId      String
+  itemType    String // pro_month|ai_500pack|pro_year|seat_year|whatsapp_1000pack|hospital_month
+  pointsSpent Int
+  status      String   @default("applied") // applied|reverted
+  appliedAt   DateTime @default(now())
+  revertedAt  DateTime?
+
+  @@index([userId])
+}
+
+// Foundation for the pricing/plan system (docs/PRICING-STRATEGY.md).
+// One active subscription per hospital. pro_month/pro_year/hospital_month point
+// redemptions + (future) Razorpay payments write here; plans.ts resolves the
+// effective plan for gating.
+model Subscription {
+  id                 String    @id @default(cuid())
+  hospitalId         String    @unique
+  planKey            String    @default("free") // free|pro|hospital
+  status             String    @default("active") // active|trialing|expired
+  source             String    @default("default") // default|razorpay|points|founder
+  currentPeriodStart DateTime  @default(now())
+  currentPeriodEnd   DateTime? // null = free forever
+  trialEndsAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([planKey, status])
+}
+
+// Monthly metering for plan limits (docs/PRICING-STRATEGY.md §3.3 walls).
+// One row per hospital+metric+month; counters increment atomically.
+model PlanUsage {
+  id         String   @id @default(cuid())
+  hospitalId String
+  metric     String   // whatsapp | ai
+  monthKey   String   // "2026-02" UTC bucket
+  count      Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([hospitalId, metric, monthKey])
+  @@index([hospitalId, monthKey])
+}
+
+// Conversion-funnel instrumentation (docs/PRICING-STRATEGY.md §7).
+// Every upgrade moment records wall_viewed / wall_upgraded with a source tag
+// so we learn which trigger earns, then double down there.
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  hospitalId String?
+  type       String   // wall_viewed | wall_upgraded | founder_interest | report_viewed
+  source     String   // ai | whatsapp | receptionist_seats | nurse_seats | doctor_seats | lost_revenue | earnings_banner | dashboard_banner | billing_page
+  meta       Json?
+  createdAt  DateTime @default(now())
+
+  @@index([type, source, createdAt])
+  @@index([hospitalId, createdAt])
 }
