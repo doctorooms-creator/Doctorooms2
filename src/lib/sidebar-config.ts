@@ -1,7 +1,9 @@
 import {
   type LucideIcon,
-  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History, Gift,
+  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History, Gift, Megaphone,
 } from 'lucide-react'
+
+// NOTE: Megaphone = recall campaigns (dormant-patient WhatsApp growth engine).
 
 export interface SidebarItem {
   label: string
@@ -59,6 +61,7 @@ export const sidebarConfig: RoleSidebarMap = {
     { label: 'Earnings', href: '/dashboard/doctor/earnings', icon: IndianRupee },
     { label: 'Lost Revenue', href: '/dashboard/doctor/lost-revenue', icon: TrendingDown },
     { label: 'Referral', href: '/dashboard/doctor/referral', icon: Gift },
+    { label: 'Recall Campaigns', href: '/dashboard/doctor/recall-campaigns', icon: Megaphone },
     { label: 'Plan & Billing', href: '/dashboard/doctor/billing', icon: CreditCard },
     { label: 'Schedule', href: '/dashboard/doctor/schedule', icon: Clock },
     { label: 'Patients', href: '/dashboard/doctor/patients', icon: Users },

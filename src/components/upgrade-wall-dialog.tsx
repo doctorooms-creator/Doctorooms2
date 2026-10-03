@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
 export interface UpgradeWallPayload {
-  reason: 'ai' | 'whatsapp' | 'receptionist_seats' | 'nurse_seats' | 'doctor_seats' | 'lost_revenue'
+  reason: 'ai' | 'whatsapp' | 'receptionist_seats' | 'nurse_seats' | 'doctor_seats' | 'lost_revenue' | 'recall_campaigns'
   used: number
   limit: number
   planKey: 'free' | 'pro' | 'hospital'
@@ -64,6 +64,7 @@ const REASON_META: Record<UpgradeWallPayload['reason'], { title: string; highlig
   nurse_seats: { title: 'Clinic badh rahi hai! 🎉', highlight: 'Pro mein 3+3 staff accounts' },
   doctor_seats: { title: 'Practice badh rahi hai! 🎉', highlight: 'Pro mein 3 doctor seats' },
   lost_revenue: { title: 'No-shows aapka paisa le rahe hain 💸', highlight: 'Pro mein full Lost Revenue report + auto-reminders' },
+  recall_campaigns: { title: 'Pehla recall campaign bhej diya 🎉', highlight: 'Pro mein unlimited recall campaigns' },
 }
 
 const VALUE_STACK = [

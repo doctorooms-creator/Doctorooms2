@@ -55,6 +55,7 @@ model User {
   insurancePolicies          PatientInsurancePolicy[]
   auditLogs                  AuditLog[]
   notificationPreference     NotificationPreference?
+  recallCampaignRecipients   RecallCampaignRecipient[]
 }
 
 model Doctor {
@@ -116,6 +117,7 @@ model Doctor {
   questionMaster           QuestionsMaster[]
   receptionistLinks        Receptionist[]
   sampleCollections        SampleCollection[]
+  recallCampaigns          RecallCampaign[]
   tableTemplates           TableTemplateMaster[]
 
   // SECURITY (P4.7): Add indexes for doctor search/filter queries.
@@ -2347,4 +2349,41 @@ model AnalyticsEvent {
 
   @@index([type, source, createdAt])
   @@index([hospitalId, createdAt])
+}
+
+// ─── Recall campaigns (roadmap: dormant-patient WhatsApp recall, $0 wa.me) ──
+// Doctor-side growth engine: bring back patients who haven't visited in N
+// days. Messages go out as FREE wa.me deep links (no paid WhatsApp Business
+// API) — the doctor/staff clicks each link and sends via WhatsApp Web.
+// Style follows ReferralCode/Notification (cuid id, String status with
+// documented values — no Prisma enums anywhere in this schema).
+model RecallCampaign {
+  id             String   @id @default(cuid())
+  doctorId       String   // owning Doctor.id (same convention as Prescription.doctorId)
+  name           String
+  template       String   // message with {{patient_name}} / {{doctor_name}} / {{clinic_name}} placeholders
+  dormantDays    Int      @default(90) // audience window: no visit in this many days
+  status         String   @default("DRAFT") // DRAFT | SENT
+  recipientCount Int      @default(0) // frozen at send time
+  createdAt      DateTime @default(now())
+  sentAt         DateTime?
+  doctor         Doctor                     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  recipients     RecallCampaignRecipient[]
+
+  @@index([doctorId, status])
+}
+
+model RecallCampaignRecipient {
+  id          String         @id @default(cuid())
+  campaignId  String
+  patientId   String         // patient User.id (notification recipient)
+  patientName String         @default("") // frozen at send time
+  phone       String         @default("") // frozen at send time (as-dialled digits, e.g. 919876543210)
+  whatsappUrl String         @default("") // wa.me/<digits>?text=<urlencoded message>
+  sentAt      DateTime       @default(now())
+  campaign    RecallCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  patient     User           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@index([patientId])
 }

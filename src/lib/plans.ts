@@ -187,7 +187,14 @@ export async function getPlanUsage(hospitalId: string, eff: EffectivePlan): Prom
   }
 }
 
-export type WallReason = 'ai' | 'whatsapp' | 'receptionist_seats' | 'nurse_seats' | 'doctor_seats' | 'lost_revenue'
+export type WallReason =
+  | 'ai'
+  | 'whatsapp'
+  | 'receptionist_seats'
+  | 'nurse_seats'
+  | 'doctor_seats'
+  | 'lost_revenue'
+  | 'recall_campaigns'
 
 export interface UpgradeWall {
   reason: WallReason
@@ -205,6 +212,7 @@ const WALL_MESSAGES: Record<WallReason, string> = {
   nurse_seats: 'Clinic badh rahi hai! 🎉 Free mein 1 nurse seat hai — Pro mein 3+3 staff accounts milte hain.',
   doctor_seats: 'Practice badh rahi hai! 🎉 Free plan 1 doctor ke liye hai — Pro mein 3 doctor seats milte hain.',
   lost_revenue: 'No-shows aapka paisa le ja rahe hain. Pro ka full Lost Revenue report dates, slots aur recoverable ₹ dikhata hai — auto-reminders se 80% wapas mil sakte hain.',
+  recall_campaigns: 'Aapna pehla recall campaign bhej diya 🎉 — ab dormant patients ko baar-baar wapas lana hai. Pro mein unlimited recall campaigns milte hain (₹0 WhatsApp waale bhi).',
 }
 
 export function buildUpgradeWall(reason: WallReason, used: number, limit: number, planKey: PlanKey): UpgradeWall {
