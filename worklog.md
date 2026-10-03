@@ -5885,3 +5885,22 @@ Stage Summary:
 - Referral system is now FEATURE-COMPLETE vs plan §9 (all 3 phases shipped). Remaining from plan §12 open decisions: leaderboard opt-out, expiry policy tweaks — product calls, not code.
 - Next big pending (pricing Phase 3 / launch): Razorpay order+webhook activation (needs real keys), recall campaigns + public clinic page builds (gating flags ready), Rx #50 / patient #100 celebration moments, trial day-12 nudge.
 - Known risks: dev-server OOM (watchdog covers); local PG trust-auth (sandbox-internal); Supabase secrets still missing post-reset-5 (user must re-paste to reconnect production cloud DB).
+
+---
+Task ID: HOSTING-ARCH-1
+Agent: Main (architect mode — no development, user request)
+Task: Hosting strategy decision for Doctorooms (Vercel vs alternatives) — consultation only
+
+Work Log:
+- Read-only audit of repo to ground the decision: confirmed monorepo (root Next.js + mini-services/chat-service:3004 + notification-service:3005)
+- Verified NextAuth uses JWT strategy (src/lib/auth.ts:90) and /api/auth/socket-token route exists — good cross-service auth foundation
+- Found production blockers (sandbox-era shortcuts): hardcoded io('/?XTransformPort=3005') in src/hooks/useSocket.ts:74; chat-service PrismaClient pinned to SQLite file URL (mini-services/chat-service/index.ts) with stale SQLite schema; cors:{origin:'*'} on both socket services; socket handshake auth trusts client-sent userId/role without signature verification (impersonation risk); no postinstall prisma generate
+- Presented architecture brief to user: recommended HYBRID = Vercel Pro (web+API+crons) + Railway Hobby (both socket services, monorepo root-directory deploys) + Supabase Pro (DB) + Cloudinary (media); alternatives compared (single VPS ~$35-45, all-Railway); rejected Render (cold starts), Cloudflare/OpenNext (risk), full AWS (overkill)
+- Flagged decide-NOW item: Supabase region Seoul vs Mumbai (ap-south-1) — latency + DPDP Act posture; migrate now if pre-launch, else first maintenance window
+- Rollout plan documented: Phase 0 decide -> Phase 1 staging -> Phase 2 hardening (fix the 7 blockers) -> Phase 3 DNS cutover -> Phase 4 post-launch
+- Bonus rationale: hosting moves secrets out of sandbox .env into platform dashboards, immunizing against future sandbox resets
+
+Stage Summary:
+- NO CODE CHANGED (user explicitly said do not start development)
+- Recommendation on the table: Vercel + Railway + Supabase hybrid (~$55-60/mo), pending user's 3 decisions: (1) Option A/B/C, (2) Supabase region migration Y/N, (3) domain confirmed
+- 7 concrete pre-launch code fixes identified and documented (items 1-7 above) — these are the first tasks of the hosting implementation phase
