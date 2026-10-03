@@ -5904,3 +5904,27 @@ Stage Summary:
 - NO CODE CHANGED (user explicitly said do not start development)
 - Recommendation on the table: Vercel + Railway + Supabase hybrid (~$55-60/mo), pending user's 3 decisions: (1) Option A/B/C, (2) Supabase region migration Y/N, (3) domain confirmed
 - 7 concrete pre-launch code fixes identified and documented (items 1-7 above) — these are the first tasks of the hosting implementation phase
+
+---
+Task ID: HOSTING-ARCH-2
+Agent: Main (architect mode — decision revision, no development)
+Task: User constraints changed: NON-TECHNICAL owner, ZERO budget (Supabase free tier confirmed OK), performance still matters, Cloudflare mentioned as candidate, user will hand over all credentials so agent executes deployment itself. Final free-tier architecture decision.
+
+Work Log:
+- Re-evaluated all options under $0/mo constraint: Vercel Hobby, Railway (no free tier anymore - rejected), Render free (512MB, 15-min spin-down, 750 instance-hrs/mo), Fly.io (no free for new users - rejected), Cloudflare Workers/Pages via OpenNext (requires socket.io rewrite to Durable Objects + Prisma driver changes - TOO RISKY for 108-model healthcare app - rejected as app host), Oracle Cloud Always Free ARM (excellent specs but India card-verification friction for non-technical owner = high stall risk at step 1 - parked as future upgrade), running production on this sandbox (5 hard resets already - suicidal, rejected).
+- DECIDED: "Free Trio" stack (total $0/mo):
+    * Cloudflare FREE = DNS + SSL shield + CDN proxy in front (NOT the app host)
+    * Vercel Hobby = Next.js app host (GitHub auto-deploy already wired, preview URLs). ToS caveat flagged: Hobby says non-commercial; acceptable pre-revenue, escape hatch documented (move app later = env var swap only)
+    * Render FREE (Singapore) = ONE merged realtime service: chat-service + notification-service consolidated into single process, single socket.io server with namespaces (/chat + /notif). Merge needed because Render free hours + one-port-per-service; also simplifies client env (single NEXT_PUBLIC_REALTIME_URL)
+    * Supabase free (existing Seoul project) = DB stays. NO Mumbai region migration now (saves one of only 2 free project slots, zero downtime risk; Seoul ~150ms RTT acceptable pre-revenue)
+    * Cloudinary free = media stays
+    * UptimeRobot FREE = keep-alive pings every 5-10 min: (a) prevents Render 15-min spin-down, (b) hits /api/health with SELECT 1 to prevent Supabase 7-day auto-pause
+- Launch WITHOUT buying domain first: doctorooms.vercel.app + realtime on *.onrender.com = truly $0 day one; custom domain (~Rs 900/yr) optional later via Cloudflare DNS
+- Upgrade path (when revenue): Oracle ARM VM or Railway + Supabase Pro; free trio requires ZERO re-architecture to upgrade (URL swaps only)
+- Recreated the wiped 15-min webDevReview cron (new job_id 432572, Asia/Calcutta)
+- Credential checklist prepared for user: (1) Supabase service key + DB password re-paste [needed regardless], (2) Vercel account + token, (3) Render account + API key, (4) UptimeRobot API key, (5) Cloudflare account if/when custom domain
+
+Stage Summary:
+- NO CODE CHANGED (still decision-only phase per user instruction)
+- Final answer on the table: Cloudflare (shield) + Vercel Hobby (app) + Render free (merged realtime) + Supabase free (DB) + UptimeRobot (keep-alive) = $0/mo
+- Implementation will need: merge chat+notif into mini-services/realtime-service, env-driven socket URL client fix (replaces XTransformPort hardcode), chat-service PrismaClient DATABASE_URL fix (currently pinned to SQLite), CORS whitelist, prisma generate postinstall, NEXTAUTH_URL/Supabase pooler URLs in platform dashboards
