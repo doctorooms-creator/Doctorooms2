@@ -2250,6 +2250,7 @@ model ReferralCode {
   userId    String   @unique // referrer (doctor) — User.id
   code      String   @unique // DR-{NAME}-{4 digits}
   clicks    Int      @default(0)
+  variant   String? // A/B reward-size experiment (plan §9 Phase 3): 'a' = 2,000 pts | 'b' = 2,500 pts
   createdAt DateTime @default(now())
 }
 

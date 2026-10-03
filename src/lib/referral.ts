@@ -27,6 +27,45 @@ export const STAGE_AWARDS = {
   converted: 1000,
 } as const
 
+// ─── A/B reward-size experiment (Phase 3, plan §9) ──────────────────────────
+
+export interface VariantAwards {
+  activated: number
+  habit: number
+  converted: number
+  total: number
+  label: 'a' | 'b'
+}
+
+/** Variant A = 2,000 pts (control) · Variant B = 2,500 pts (+25% reward). */
+export const REWARD_VARIANTS: Record<'a' | 'b', VariantAwards> = {
+  a: { activated: 300, habit: 700, converted: 1000, total: 2000, label: 'a' },
+  b: { activated: 375, habit: 875, converted: 1250, total: 2500, label: 'b' },
+}
+
+/** Deterministic 50/50 split — stable across restarts, no migration needed. */
+export function hashVariant(userId: string): 'a' | 'b' {
+  let h = 0
+  for (let i = 0; i < userId.length; i++) h = (h * 31 + userId.charCodeAt(i)) >>> 0
+  return h % 2 === 0 ? 'a' : 'b'
+}
+
+/**
+ * The referrer's experiment variant. Stored on ReferralCode (new codes get it
+ * at creation); legacy rows are lazily backfilled from the stable hash.
+ */
+export async function resolveVariant(userId: string): Promise<'a' | 'b'> {
+  const row = await db.referralCode.findUnique({ where: { userId }, select: { variant: true } })
+  if (row?.variant === 'a' || row?.variant === 'b') return row.variant
+  const v = hashVariant(userId)
+  if (row) {
+    await db.referralCode
+      .update({ where: { userId }, data: { variant: v } })
+      .catch(() => {}) // backfill is best-effort
+  }
+  return v
+}
+
 /** Bookings the referee's practice needs for the HABIT stage. */
 export const REFERRAL_HABIT_BOOKINGS = 20
 
@@ -142,7 +181,7 @@ export async function getOrCreateReferralCode(userId: string): Promise<string> {
     const code = generateReferralCode(user?.name || 'Doctor')
     try {
       const created = await db.referralCode.create({
-        data: { userId, code },
+        data: { userId, code, variant: hashVariant(userId) },
       })
       return created.code
     } catch {
@@ -356,21 +395,24 @@ export async function checkReferralStages(refereeUserId: string): Promise<void> 
 
     const bookings = await countRefereeBookings(refereeUserId)
 
+    // A/B reward-size experiment — awards scale with the referrer's variant
+    const awards = REWARD_VARIANTS[await resolveVariant(referral.referrerUserId)]
+
     // Stage 1: ACTIVATED — first booking in the referee's practice
     if (referral.status === 'pending' && bookings >= 1) {
       const awarded = await awardPoints({
         userId: referral.referrerUserId,
         type: 'earn_activated',
-        points: STAGE_AWARDS.activated,
+        points: awards.activated,
         refId: referral.id,
         note: 'Referral activated (first booking)',
-        emitMessage: `🎉 Aapke referral ne pehla patient book kiya — ${STAGE_AWARDS.activated} points mile!`,
+        emitMessage: `🎉 Aapke referral ne pehla patient book kiya — ${awards.activated} points mile!`,
       })
       await db.referral.update({
         where: { id: referral.id },
         data: { status: 'activated', activatedAt: new Date() },
       })
-      if (awarded) console.log(`[referral] stage1 awarded (${STAGE_AWARDS.activated}) → ${referral.referrerUserId}`)
+      if (awarded) console.log(`[referral] stage1 awarded (${awards.activated}) → ${referral.referrerUserId}`)
     }
 
     // Stage 2: HABIT — 20+ bookings (sustained practice)
@@ -381,10 +423,10 @@ export async function checkReferralStages(refereeUserId: string): Promise<void> 
       const awarded = await awardPoints({
         userId: referral.referrerUserId,
         type: 'earn_habit',
-        points: STAGE_AWARDS.habit,
+        points: awards.habit,
         refId: referral.id,
         note: 'Referral habit milestone (20 bookings)',
-        emitMessage: `⚡ Aapka referral ab regular practice ban gaya — ${STAGE_AWARDS.habit} points mile!`,
+        emitMessage: `⚡ Aapka referral ab regular practice ban gaya — ${awards.habit} points mile!`,
       })
       if (referral.status !== 'habit') {
         await db.referral.update({
@@ -392,7 +434,7 @@ export async function checkReferralStages(refereeUserId: string): Promise<void> 
           data: { status: 'habit', habitAt: new Date() },
         })
       }
-      if (awarded) console.log(`[referral] stage2 awarded (${STAGE_AWARDS.habit}) → ${referral.referrerUserId}`)
+      if (awarded) console.log(`[referral] stage2 awarded (${awards.habit}) → ${referral.referrerUserId}`)
     }
   } catch (err) {
     // Stage checks must NEVER break the calling route (booking creation etc.)
@@ -423,13 +465,15 @@ export async function markReferralConverted(
   const fresh = await db.referral.findUnique({ where: { refereeUserId } })
   if (!fresh) return { converted: false }
 
+  const awards = REWARD_VARIANTS[await resolveVariant(fresh.referrerUserId)]
+
   await awardPoints({
     userId: fresh.referrerUserId,
     type: 'earn_converted',
-    points: STAGE_AWARDS.converted,
+    points: awards.converted,
     refId: fresh.id,
     note: `Referral converted to paid customer (${source})`,
-    emitMessage: `💳 Aapka referral paying customer ban gaya — ${STAGE_AWARDS.converted} points mile!`,
+    emitMessage: `💳 Aapka referral paying customer ban gaya — ${awards.converted} points mile!`,
   })
   await db.referral.update({
     where: { id: fresh.id },
@@ -488,13 +532,14 @@ export async function applyClawback(
   const referral = await db.referral.findUnique({ where: { refereeUserId } })
   if (!referral || referral.status !== 'converted') return { clawedBack: false }
 
+  const awards = REWARD_VARIANTS[await resolveVariant(referral.referrerUserId)]
   const done = await awardPoints({
     userId: referral.referrerUserId,
     type: 'clawback',
-    points: -STAGE_AWARDS.converted,
+    points: -awards.converted,
     refId: referral.id,
     note: `Clawback: conversion award reversed (${reason})`,
-    emitMessage: `⚠️ Referee refund process hua — ${STAGE_AWARDS.converted} points reverse kiye gaye.`,
+    emitMessage: `⚠️ Referee refund process hua — ${awards.converted} points reverse kiye gaye.`,
   })
   // Downgrade status back to the highest stage actually earned.
   await db.referral.update({
@@ -502,7 +547,7 @@ export async function applyClawback(
     data: { status: referral.habitAt ? 'habit' : 'activated', convertedAt: null },
   })
   if (done) {
-    console.log(`[referral] clawback (-${STAGE_AWARDS.converted}) referee=${refereeUserId} (${reason})`)
+    console.log(`[referral] clawback (-${awards.converted}) referee=${refereeUserId} (${reason})`)
   }
   return { clawedBack: done }
 }
@@ -671,4 +716,85 @@ export const STAGE_META: Record<
     earned: STAGE_AWARDS.activated + STAGE_AWARDS.habit + STAGE_AWARDS.converted,
   },
   expired: { label: 'Expired', badge: '⌛', earned: 0 },
+}
+
+/** Variant-aware stage meta (A/B experiment) — B's totals are 25% higher. */
+export function stageMetaFor(variant: 'a' | 'b'): Record<
+  string,
+  { label: string; badge: string; earned: number }
+> {
+  const v = REWARD_VARIANTS[variant]
+  return {
+    pending: { label: 'Signed Up', badge: '🔔', earned: 0 },
+    activated: { label: 'Activated', badge: '✅', earned: v.activated },
+    habit: { label: 'Regular Practice', badge: '⚡', earned: v.activated + v.habit },
+    converted: { label: 'Paid Customer', badge: '💳', earned: v.total },
+    expired: { label: 'Expired', badge: '⌛', earned: 0 },
+  }
+}
+
+/**
+ * Top referrers leaderboard (public — masked names only).
+ * Ranked by earned referral points; every entry must have ≥1 referral.
+ */
+export async function getLeaderboard(limit = 20) {
+  const EARNS = ['earn_activated', 'earn_habit', 'earn_converted', 'earn_milestone_5', 'earn_milestone_10']
+  const [earnRows, refRows, convertedRows, championRows] = await Promise.all([
+    db.pointsLedger.groupBy({
+      by: ['userId'],
+      where: { points: { gt: 0 }, type: { in: EARNS } },
+      _sum: { points: true },
+    }),
+    db.referral.groupBy({ by: ['referrerUserId'], _count: { _all: true } }),
+    db.referral.groupBy({
+      by: ['referrerUserId'],
+      where: { status: 'converted' },
+      _count: { _all: true },
+    }),
+    db.pointsLedger.groupBy({
+      by: ['userId'],
+      where: { type: 'earn_milestone_10' },
+    }),
+  ])
+
+  const earnedMap = new Map(earnRows.map((r) => [r.userId, r._sum.points ?? 0]))
+  const referralCountMap = new Map(refRows.map((r) => [r.referrerUserId, r._count._all]))
+  const convertedMap = new Map(convertedRows.map((r) => [r.referrerUserId, r._count._all]))
+  const championSet = new Set(championRows.map((r) => r.userId))
+
+  // Must have actually referred someone to be on the board
+  const candidates = [...referralCountMap.keys()]
+    .map((userId) => ({
+      userId,
+      points: earnedMap.get(userId) ?? 0,
+      referrals: referralCountMap.get(userId) ?? 0,
+      conversions: convertedMap.get(userId) ?? 0,
+    }))
+    .sort((a, b) => b.points - a.points || b.referrals - a.referrals)
+    .slice(0, limit)
+
+  if (candidates.length === 0) return []
+
+  // Display info: masked name + specialty + city (best-effort, public-safe)
+  const users = await db.user.findMany({
+    where: { id: { in: candidates.map((c) => c.userId) } },
+    select: { id: true, name: true },
+  })
+  const doctors = await db.doctor.findMany({
+    where: { userId: { in: candidates.map((c) => c.userId) } },
+    select: { userId: true, specialization: true, city: true },
+  })
+  const nameMap = new Map(users.map((u) => [u.id, u.name]))
+  const docMap = new Map(doctors.map((d) => [d.userId, d]))
+
+  return candidates.map((c, i) => ({
+    rank: i + 1,
+    name: maskName(nameMap.get(c.userId) ?? 'Doctor'),
+    specialty: docMap.get(c.userId)?.specialization || null,
+    city: docMap.get(c.userId)?.city || null,
+    points: c.points,
+    referrals: c.referrals,
+    conversions: c.conversions,
+    champion: championSet.has(c.userId),
+  }))
 }

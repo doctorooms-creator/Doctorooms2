@@ -22,6 +22,10 @@ import {
   CalendarClock,
   RefreshCw,
   Crown,
+  Medal,
+  Image as ImageIcon,
+  Flame,
+  Download,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -40,6 +44,14 @@ import {
 interface ReferralMe {
   code: string
   shareUrl: string
+  variant: 'a' | 'b'
+  variantAwards: {
+    activated: number
+    habit: number
+    converted: number
+    total: number
+    label: string
+  }
   wallet: {
     total: number
     spendable: number
@@ -84,14 +96,24 @@ interface ReferralMe {
     champion: boolean
     targets: { conversions: number; points: number }[]
   }
+  leaderboard: {
+    myRank: number | null
+    myEarnedPoints: number
+    hasReferrals: boolean
+    totalReferrers?: number
+  }
 }
 
-const STAGE_STEPS = [
-  { label: 'Signup ho jaye', points: 0, desc: 'Referral link se naya doctor register kare' },
-  { label: 'Pehla patient book ho', points: 300, desc: 'Unki practice ka pehla booking' },
-  { label: '20 bookings ho jaye', points: 700, desc: 'Regular practice ban jaye' },
-  { label: 'Paid plan le le', points: 1000, desc: 'Koi bhi plan subscribe kare' },
-]
+interface LeaderboardRow {
+  rank: number
+  name: string
+  specialty: string | null
+  city: string | null
+  points: number
+  referrals: number
+  conversions: number
+  champion: boolean
+}
 
 const STAGE_COLORS: Record<string, string> = {
   pending: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
@@ -100,6 +122,28 @@ const STAGE_COLORS: Record<string, string> = {
   converted: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
   expired: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
 }
+
+/** Premade WhatsApp message variants (plan §9 Phase 3 campaign kit). */
+const MESSAGE_ANGLES = [
+  {
+    key: 'practical',
+    label: 'Practical (default)',
+    build: (link: string, total: number) =>
+      `Main apna clinic Doctorooms par digital chalata hoon — digital Rx 30 sec mein, OPD queue aur WhatsApp reminders. Is link se signup karo, aapko 30 din ka full access milega: ${link}`,
+  },
+  {
+    key: 'reward',
+    label: 'Reward-forward',
+    build: (link: string, total: number) =>
+      `Bhai, ek cheez try karo — Doctorooms. Main isse apni practice digital chalata hoon. Aap is link se signup karoge to 30 din ka full access milega, aur mujhe ${total.toLocaleString('en-IN')} points milte hain jo main Pro plan ke liye use kar sakta hoon 🙏 ${link}`,
+  },
+  {
+    key: 'helpful',
+    label: 'Colleague-help',
+    build: (link: string, total: number) =>
+      `Dekh, agar OPD ka chaos kam karna hai to Doctorooms kaam aata hai — queue, digital Rx, WhatsApp reminders sab automatic. Pehle 30 din free hai (mere link se): ${link} — baad mein jab chahe Pro le lena.`,
+  },
+]
 
 export default function ReferralPage() {
   const [copied, setCopied] = useState<string | null>(null)
@@ -113,6 +157,16 @@ export default function ReferralPage() {
       if (!r.ok) throw new Error('Failed to load referral data')
       return r.json()
     },
+  })
+
+  const { data: leaderboardData } = useQuery<{ leaderboard: LeaderboardRow[] }>({
+    queryKey: ['referral-leaderboard'],
+    queryFn: async () => {
+      const r = await fetch('/api/referral/leaderboard?limit=20')
+      if (!r.ok) throw new Error('Failed to load leaderboard')
+      return r.json()
+    },
+    staleTime: 5 * 60 * 1000,
   })
 
   const redeemMutation = useMutation({
@@ -145,13 +199,15 @@ export default function ReferralPage() {
     }
   }
 
-  const shareWhatsApp = () => {
+  const shareWhatsApp = (text?: string) => {
     if (!data) return
     const link = `${window.location.origin}/r/${data.code}`
-    const text = `Main apna clinic Doctorooms par digital chalata hoon — digital Rx 30 sec mein, OPD queue aur WhatsApp reminders. Is link se signup karo, aapko 30 din ka full access milega: ${link}`
+    const msg =
+      text ??
+      MESSAGE_ANGLES[0].build(link, data.variantAwards.total)
     // Analytics (fire-and-forget)
     fetch('/api/referral/share-track', { method: 'POST' }).catch(() => {})
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank')
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
   if (isLoading || !data) {
@@ -170,7 +226,14 @@ export default function ReferralPage() {
 
   const shareLink =
     typeof window !== 'undefined' ? `${window.location.origin}/r/${data.code}` : data.shareUrl
-  const progressToFreeMonth = Math.min(100, Math.round((data.stats.totalEarned / 2000) * 100))
+  const rewardTotal = data.variantAwards.total
+  const progressToFreeMonth = Math.min(100, Math.round((data.stats.totalEarned / rewardTotal) * 100))
+  const stageSteps = [
+    { label: 'Signup ho jaye', points: 0, desc: 'Referral link se naya doctor register kare' },
+    { label: 'Pehla patient book ho', points: data.variantAwards.activated, desc: 'Unki practice ka pehla booking' },
+    { label: '20 bookings ho jaye', points: data.variantAwards.habit, desc: 'Regular practice ban jaye' },
+    { label: 'Paid plan le le', points: data.variantAwards.converted, desc: 'Koi bhi plan subscribe kare' },
+  ]
 
   return (
     <div className="space-y-6">
@@ -191,7 +254,10 @@ export default function ReferralPage() {
             )}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Har genuine referral = <span className="font-semibold text-emerald-600">1 mahina Pro FREE</span> (2,000 points)
+            Har genuine referral ={' '}
+            <span className="font-semibold text-emerald-600">
+              1 mahina Pro FREE ({rewardTotal.toLocaleString('en-IN')} points)
+            </span>
           </p>
         </div>
         {data.wallet.total > 0 && (
@@ -237,12 +303,15 @@ export default function ReferralPage() {
       </div>
 
       <Tabs defaultValue="invite" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md">
+        <TabsList className="grid w-full grid-cols-3 max-w-lg">
           <TabsTrigger value="invite" className="gap-1.5">
             <Send className="h-4 w-4" /> Invite & Track
           </TabsTrigger>
           <TabsTrigger value="wallet" className="gap-1.5">
             <Wallet className="h-4 w-4" /> Points Wallet
+          </TabsTrigger>
+          <TabsTrigger value="leaderboard" className="gap-1.5">
+            <Trophy className="h-4 w-4" /> Leaderboard
           </TabsTrigger>
         </TabsList>
 
@@ -294,13 +363,90 @@ export default function ReferralPage() {
               <div className="flex items-center justify-between mb-1.5">
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                  1 Month Pro FREE tak aapki progress (2,000 pts)
+                  1 Month Pro FREE tak aapki progress ({rewardTotal.toLocaleString('en-IN')} pts)
                 </p>
                 <p className="text-xs font-bold text-emerald-600">
-                  {data.stats.totalEarned.toLocaleString('en-IN')} / 2,000
+                  {data.stats.totalEarned.toLocaleString('en-IN')} / {rewardTotal.toLocaleString('en-IN')}
                 </p>
               </div>
               <Progress value={progressToFreeMonth} className="h-2" />
+            </CardContent>
+          </Card>
+
+          {/* WhatsApp campaign creatives (Phase 3) */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Flame className="h-4 w-4 text-orange-500" />
+                WhatsApp Creatives — Ready-Made Messages
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 pt-0 space-y-3">
+              {MESSAGE_ANGLES.map((angle) => {
+                const msg = angle.build(shareLink, rewardTotal)
+                return (
+                  <div
+                    key={angle.key}
+                    className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-3"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-xs font-semibold text-foreground">{angle.label}</p>
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2.5 gap-1 text-[11px]"
+                          onClick={() => copy(msg, `msg-${angle.key}`)}
+                        >
+                          {copied === `msg-${angle.key}` ? (
+                            <Check className="h-3 w-3 text-emerald-600" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                          Copy
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-7 px-2.5 gap-1 text-[11px] bg-[#25D366] hover:bg-[#20bd5a] text-white"
+                          onClick={() => shareWhatsApp(msg)}
+                        >
+                          <Send className="h-3 w-3" /> Send
+                        </Button>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-3">
+                      {msg}
+                    </p>
+                  </div>
+                )
+              })}
+
+              {/* Shareable image creative */}
+              <div className="rounded-xl border border-teal-200 dark:border-teal-800/60 bg-gradient-to-r from-teal-50/70 to-emerald-50/70 dark:from-teal-950/30 dark:to-emerald-950/20 p-3 flex items-center gap-3">
+                <img
+                  src="/referral/whatsapp-creative.png"
+                  alt="Doctorooms referral creative — refer a doctor and earn rewards"
+                  className="w-16 h-16 rounded-lg object-cover border border-teal-100 dark:border-teal-900"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <ImageIcon className="h-3.5 w-3.5 text-teal-600" />
+                    Image Creative
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    WhatsApp pe image + link dono bhejo — image se trust badhta hai
+                  </p>
+                </div>
+                <a
+                  href="/referral/whatsapp-creative.png"
+                  download="doctorooms-referral.png"
+                  className="shrink-0"
+                >
+                  <Button size="sm" variant="outline" className="h-7 px-2.5 gap-1 text-[11px]">
+                    <Download className="h-3 w-3" /> Save
+                  </Button>
+                </a>
+              </div>
             </CardContent>
           </Card>
 
@@ -311,7 +457,7 @@ export default function ReferralPage() {
             </CardHeader>
             <CardContent className="p-4 pt-0">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {STAGE_STEPS.map((step, i) => (
+                {stageSteps.map((step, i) => (
                   <div
                     key={step.label}
                     className="relative rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-3"
@@ -332,8 +478,8 @@ export default function ReferralPage() {
                 ))}
               </div>
               <p className="text-[11px] text-muted-foreground mt-3">
-                💡 Do active (free) referrals = 1,000+1,000 = 1 month Pro free. Points 18 mahine
-                tak valid rehte hain — wallet mein jama hote hain.
+                💡 Do active (free) referrals = poore {rewardTotal.toLocaleString('en-IN')} points — 1
+                month Pro free. Points 18 mahine tak valid rehte hain — wallet mein jama hote hain.
               </p>
             </CardContent>
           </Card>
@@ -628,6 +774,174 @@ export default function ReferralPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* ── LEADERBOARD TAB (Phase 3) ── */}
+        <TabsContent value="leaderboard" className="space-y-4 mt-4">
+          {/* My rank card */}
+          <Card className="border-0 shadow-md overflow-hidden">
+            <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 dark:from-amber-950/40 dark:via-orange-950/30 dark:to-amber-950/40 p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-8">
+                <div className="text-center sm:text-left">
+                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                    <Medal className="h-3.5 w-3.5 text-amber-500" />
+                    Aapki Rank
+                  </p>
+                  <p className="text-4xl font-bold text-gray-900 dark:text-white mt-1">
+                    {data.leaderboard.hasReferrals
+                      ? `#${data.leaderboard.myRank ?? '—'}`
+                      : '—'}
+                    <span className="text-base font-medium text-muted-foreground">
+                      {data.leaderboard.totalReferrers
+                        ? ` / ${data.leaderboard.totalReferrers} doctors`
+                        : ''}
+                    </span>
+                  </p>
+                </div>
+                <div className="sm:border-l sm:border-amber-200/50 dark:sm:border-amber-800/40 sm:pl-8">
+                  <p className="text-xs text-muted-foreground">Aapke referral points</p>
+                  <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                    {data.leaderboard.myEarnedPoints.toLocaleString('en-IN')}
+                  </p>
+                  {!data.leaderboard.hasReferrals && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Pehla referral bhejo — rank turant ban jayegi 🚀
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          {/* Podium — top 3 */}
+          {leaderboardData && leaderboardData.leaderboard.length > 0 && (
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              {[leaderboardData.leaderboard[1], leaderboardData.leaderboard[0], leaderboardData.leaderboard[2]]
+                .filter(Boolean)
+                .map((row, i) => {
+                  const isTop = row.rank === 1
+                  return (
+                    <motion.div
+                      key={row.rank}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.08 }}
+                      className={`rounded-2xl border p-3 sm:p-4 text-center ${
+                        isTop
+                          ? 'border-amber-300 dark:border-amber-700 bg-gradient-to-b from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/20 sm:-mt-3 shadow-md'
+                          : 'border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-900/40'
+                      }`}
+                    >
+                      <div
+                        className={`mx-auto w-9 h-9 sm:w-11 sm:h-11 rounded-full flex items-center justify-center font-bold text-sm ${
+                          row.rank === 1
+                            ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow'
+                            : row.rank === 2
+                              ? 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200'
+                              : 'bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-400'
+                        }`}
+                      >
+                        {row.rank}
+                      </div>
+                      {row.champion && (
+                        <Crown className="h-3.5 w-3.5 mx-auto mt-1.5 text-amber-500" />
+                      )}
+                      <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white mt-1.5 truncate">
+                        {row.name}
+                      </p>
+                      {row.specialty && (
+                        <p className="text-[10px] text-muted-foreground truncate">{row.specialty}</p>
+                      )}
+                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                        {row.points.toLocaleString('en-IN')} pts
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {row.referrals} referrals
+                      </p>
+                    </motion.div>
+                  )
+                })}
+            </div>
+          )}
+
+          {/* Full table */}
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-amber-500" />
+                Top Referring Doctors
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {!leaderboardData ? (
+                <div className="h-40 bg-muted animate-pulse rounded-b-xl" />
+              ) : leaderboardData.leaderboard.length === 0 ? (
+                <div className="text-center py-10 px-4">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center mx-auto mb-3">
+                    <Trophy className="h-7 w-7 text-amber-500" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">Leaderboard khali hai</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                    Pehla referral bhejne wala doctor #1 ban sakta hai — abhi golden opportunity hai!
+                  </p>
+                </div>
+              ) : (
+                <div className="max-h-96 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">#</TableHead>
+                        <TableHead>Doctor</TableHead>
+                        <TableHead className="hidden sm:table-cell">Specialty</TableHead>
+                        <TableHead className="text-right">Referrals</TableHead>
+                        <TableHead className="text-right">Points</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {leaderboardData.leaderboard.map((row) => {
+                        const isMe =
+                          data.leaderboard.hasReferrals && row.rank === data.leaderboard.myRank
+                        return (
+                          <TableRow
+                            key={row.rank}
+                            className={isMe ? 'bg-emerald-50/60 dark:bg-emerald-950/30' : ''}
+                          >
+                            <TableCell className="font-bold text-muted-foreground">
+                              {row.rank}
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <span className="flex items-center gap-1.5">
+                                {row.champion && <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                                {row.name}
+                                {isMe && (
+                                  <Badge className="text-[9px] h-4 px-1.5 bg-emerald-100 text-emerald-700 border-0 dark:bg-emerald-950 dark:text-emerald-400">
+                                    You
+                                  </Badge>
+                                )}
+                              </span>
+                            </TableCell>
+                            <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
+                              {row.specialty || '—'}
+                              {row.city ? ` · ${row.city}` : ''}
+                            </TableCell>
+                            <TableCell className="text-right">{row.referrals}</TableCell>
+                            <TableCell className="text-right font-bold text-emerald-600 dark:text-emerald-400">
+                              {row.points.toLocaleString('en-IN')}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <p className="text-[11px] text-muted-foreground text-center">
+            🔒 Names partially masked for privacy — sirf earned points aur referral counts public hain.
+            Leaderboard 5-minute cache ke saath update hoti hai.
+          </p>
         </TabsContent>
       </Tabs>
     </div>

@@ -33,6 +33,7 @@ export const sidebarConfig: RoleSidebarMap = {
     },
     { label: 'Charge Categories', href: '/dashboard/admin/charge-categories', icon: Tags },
     { label: 'Lab Partners', href: '/dashboard/admin/lab-partners', icon: Handshake },
+    { label: 'Referral Analytics', href: '/dashboard/admin/referrals', icon: Gift },
     {
       label: 'Reports',
       href: '/dashboard/admin/reports',

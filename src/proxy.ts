@@ -99,6 +99,10 @@ const PUBLIC_API_PATTERNS = [
   //   /api/webhooks/*   → HMAC-SHA256 signature verification
   '/api/cron/referral-daily',
   '/api/webhooks/razorpay',
+  // Public referral endpoints (masked/limited data — landing + register badge
+  // + leaderboard social proof; anonymous visitors need these)
+  '/api/referral/validate',
+  '/api/referral/leaderboard',
 ]
 
 function isPublicRoute(pathname: string): boolean {
