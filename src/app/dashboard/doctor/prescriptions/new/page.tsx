@@ -1,13 +1,22 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { useCallback, useState } from 'react'
+import { Suspense, useCallback, useState } from 'react'
 import { PrescriptionStepper } from '@/components/prescription/stepper/prescription-stepper'
 import { FinishPrintOverlay } from '@/components/prescription/finish-print-overlay'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
+// Suspense boundary required for useSearchParams() during prerendering
 export default function NewPrescriptionPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <NewPrescriptionContent />
+    </Suspense>
+  )
+}
+
+function NewPrescriptionContent() {
   const searchParams = useSearchParams()
   const bookingId = searchParams.get('bookingId') || ''
 

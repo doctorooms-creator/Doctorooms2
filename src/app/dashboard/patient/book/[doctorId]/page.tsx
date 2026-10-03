@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { Suspense, useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -86,7 +86,16 @@ const fadeIn = {
 }
 
 // ── Component ─────────────────────────────────────────
+// Suspense boundary required for useSearchParams() during prerendering
 export default function PatientBookDoctorPage() {
+  return (
+    <Suspense fallback={<BookingPageSkeleton />}>
+      <PatientBookDoctorContent />
+    </Suspense>
+  )
+}
+
+function PatientBookDoctorContent() {
   const params = useParams()
   const router = useRouter()
   const searchParams = useSearchParams()

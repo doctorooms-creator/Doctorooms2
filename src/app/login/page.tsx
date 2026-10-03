@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/lib/auth-store';
@@ -173,7 +173,17 @@ const USER_ID_OVERRIDES: Record<string, string> = {
   'Sunita Rao': 'dev-receptionist-hospital',
 };
 
+// Wrapped in Suspense: useSearchParams() requires a Suspense boundary during
+// static prerendering (Next.js build requirement).
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <LoginContent />
+    </Suspense>
+  )
+}
+
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setUser } = useAuthStore();

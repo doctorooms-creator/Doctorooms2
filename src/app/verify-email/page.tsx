@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,16 @@ import { Loader2, CheckCircle2, XCircle, Mail } from 'lucide-react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 
+// Suspense boundary required for useSearchParams() during prerendering
 export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <VerifyEmailContent />
+    </Suspense>
+  )
+}
+
+function VerifyEmailContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const token = searchParams.get('token')

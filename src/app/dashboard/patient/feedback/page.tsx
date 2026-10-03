@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { Suspense, useState, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -80,7 +80,16 @@ function StarRating({ value, onChange, size = 'md' }: { value: number; onChange?
 
 const ratingLabels = ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent']
 
+// Suspense boundary required for useSearchParams() during prerendering
 export default function FeedbackPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <FeedbackContent />
+    </Suspense>
+  )
+}
+
+function FeedbackContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const queryClient = useQueryClient()
