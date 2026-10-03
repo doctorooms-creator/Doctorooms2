@@ -39,6 +39,10 @@ const PORT = Number(process.env.PORT || 3006)
 const NEXTAUTH_SECRET =
   process.env.NEXTAUTH_SECRET || 'doctorooms-dev-secret-change-in-production'
 const STRICT_AUTH = process.env.REALTIME_STRICT_AUTH === '1'
+// Shared secret with the Next.js app (Vercel). When set, POST /emit requires
+// a matching x-emit-secret header — prevents random internet callers from
+// broadcasting fake events to connected clients.
+const EMIT_SECRET = process.env.REALTIME_EMIT_SECRET || ''
 const ALLOWED_ORIGINS = (process.env.REALTIME_ALLOWED_ORIGINS || '')
   .split(',')
   .map((s) => s.trim())
@@ -378,6 +382,14 @@ httpServer.on('request', async (req, res) => {
 
   // ── POST /emit — emit an event to one or more rooms (notif namespace) ──
   if (method === 'POST' && url === '/emit') {
+    if (EMIT_SECRET) {
+      const provided = (req.headers['x-emit-secret'] || '').toString()
+      if (provided !== EMIT_SECRET) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: 'unauthorized' }))
+        return
+      }
+    }
     let body = ''
     for await (const chunk of req) body += chunk
     try {

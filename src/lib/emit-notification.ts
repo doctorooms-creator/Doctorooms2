@@ -83,6 +83,9 @@ const VALID_EVENTS: EventType[] = [
 ]
 
 const EMIT_URL = `${process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006'}/emit`
+// Shared secret with the realtime service (Render). When set on both sides,
+// POST /emit rejects requests without a matching x-emit-secret header.
+const EMIT_SECRET = process.env.REALTIME_EMIT_SECRET || ''
 
 interface EmitPayload {
   id?: string
@@ -110,7 +113,10 @@ export function emitNotification(
   try {
     fetch(EMIT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(EMIT_SECRET ? { 'x-emit-secret': EMIT_SECRET } : {}),
+      },
       body: JSON.stringify({
         event,
         rooms,
