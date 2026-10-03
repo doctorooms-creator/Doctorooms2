@@ -5928,3 +5928,29 @@ Stage Summary:
 - NO CODE CHANGED (still decision-only phase per user instruction)
 - Final answer on the table: Cloudflare (shield) + Vercel Hobby (app) + Render free (merged realtime) + Supabase free (DB) + UptimeRobot (keep-alive) = $0/mo
 - Implementation will need: merge chat+notif into mini-services/realtime-service, env-driven socket URL client fix (replaces XTransformPort hardcode), chat-service PrismaClient DATABASE_URL fix (currently pinned to SQLite), CORS whitelist, prisma generate postinstall, NEXTAUTH_URL/Supabase pooler URLs in platform dashboards
+
+---
+Task ID: HOSTING-DEPLOY-1
+Agent: Main (full-stack deployment execution)
+Task: Execute the free-tier hosting plan end-to-end: Supabase reconnect + data migration + merged realtime service + Vercel production deploy. User provided all credentials (Supabase, Vercel token, Render key).
+
+Work Log:
+- SUPABASE RECONNECT: user's credentials pointed to project dauhputqahqutczyrfme (Seoul, aws-0-ap-northeast-2 pooler — direct db.* host fails from sandbox, pooler works). Found it contained an OLD-ERD snapshot (108 old tables, 101 old Zydus-era demo users, zero referral tables)
+- BACKUP + CUTOVER: backed up all 108 old tables to db/backup-old-supabase/*.json → DROP SCHEMA public CASCADE → prisma db push (current 108 models) → scripts/supabase-copy.ts migrated ALL local data (topological FK sort, 486 rows, sequences setval) → VERIFIED ALL TABLES MATCH (94 users, 53 doctors, referral codes, schedules, wards)
+- .env rewritten: session-pooler DATABASE_URL, NEW generated NEXTAUTH_SECRET (EPcaN7...), all Supabase keys, CRON_SECRET, NOTIFICATION_SERVICE_URL=3006
+- E2E sandbox verified on Supabase: landing stats (54 doctors), dev-login Aarti, referral page DR-AARTI-1987, zero console errors
+- REALTIME MERGE: new mini-services/realtime-service (port 3006): /notif + /chat socket.io namespaces, HTTP /emit /online-doctors /stats /health (with DB ping), JWT socket auth (verifies /api/auth/socket-token with NEXTAUTH_SECRET; REALTIME_STRICT_AUTH=1 required in prod), env CORS allowlist, PORT env for Render, env CRON_URL. Legacy chat-service + notification-service DELETED (git history preserves). restart-server.sh + start-all.sh updated with realtime watchdog
+- CLIENT: useSocket.ts → env-driven NEXT_PUBLIC_REALTIME_URL, /notif namespace, async auth callback (fetches fresh socketToken on every reconnect — solves 5-min expiry); emit-notification.ts + /api/online-doctors → NOTIFICATION_SERVICE_URL env
+- SANDBOX E2E SOCKET: connected via gateway /notif?XTransformPort=3006, doctor-online broadcast fired, emit→toast delivery verified ("Test: aapka referral active ho gaya!")
+- BUILD FIXES for Vercel: (1) razorpay + next-auth@4 were phantom deps (locally present, not in package.json — Vercel fresh install failed) → bun add; (2) razorpay module-scope instantiation crashed build without API keys → lazy-init; (3) 5 pages using useSearchParams without Suspense broke prerender → wrapped (login, verify-email, prescriptions/new, patient book, feedback); (4) next.config output:standalone skipped when VERCEL; (5) postinstall prisma generate; (6) binaryTargets rhel-openssl-3.0.x
+- SECURITY FIX: login page had ONLY dev role cards (no real auth UI!) → built production email/password form (NODE_ENV branch: prod = real form → /api/auth/login with rate-limit/bcrypt/JWT cookie; dev sandbox keeps one-click cards). Verified dev cards still work in sandbox
+- VERCEL: project doctorooms-hms created via API + 10 env vars (transaction pooler 6543 + pgbouncer for serverless) + buildCommand "prisma generate && next build --webpack" + CLI deploys (4 iterations to green)
+- RENDER: service creation via API blocked — "Payment information is required" (Render now requires a card even for free plan). Pending user action
+- PRODUCTION E2E VERIFIED on https://doctorooms-hms.vercel.app: landing 200 + stats from Supabase; REAL login rajesh@doctorooms.com/doctor123 → dashboard; referral page DR-RAJESH-5997 with vercel.app link; /r/DR-RAJESH-5997 → signup flow; ZERO console errors (only expected socket warning while Render is pending)
+- Pushed 5 commits to GitHub (91d3e6e → 8f9dd35)
+
+Stage Summary:
+- PRODUCTION IS LIVE: https://doctorooms-hms.vercel.app (Vercel Hobby, $0) + Supabase free (Seoul) + demo logins: rajesh@doctorooms.com/doctor123, admin@doctorooms.com/admin123
+- Sandbox: all 3 healthy (main 3000 → Supabase, realtime 3006, PG17 local retained as dev fallback)
+- PENDING: (1) Render card required for realtime service hosting (chat/live-notifications offline on prod until then — app works fine otherwise); (2) UptimeRobot user signup — user can now use https://doctorooms-hms.vercel.app as the URL it asks for; (3) Cloudinary keys still not provided (uploads fall back to local fs); (4) NEXT_PUBLIC_REALTIME_URL on Vercel points to future https://doctorooms-realtime.onrender.com — create Render service there then no env change needed
+- Render service create payload saved at /home/z/render-svc.json (ready to POST once card added)
