@@ -21,7 +21,24 @@ export async function GET(req: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const doctor = await db.doctor.findUnique({ where: { userId: user.id } })
-    if (!doctor) return NextResponse.json({ error: 'Doctor profile not found' }, { status: 404 })
+    // Pre-onboarding doctors (no Doctor row yet) get a graceful empty summary
+    // instead of a 404 — the sidebar badge polls this endpoint on every page
+    // load, so a 404 here floods dev.log and surfaces as a console error.
+    if (!doctor) {
+      return NextResponse.json({
+        summary: {
+          totalCommission: 0,
+          totalRevenue: 0,
+          totalTests: 0,
+          paidCommission: 0,
+          pendingCommission: 0,
+        },
+        perLab: [],
+        perMonth: [],
+        recentBillings: [],
+        profilePending: true,
+      })
+    }
 
     // All billings for this doctor
     const allBillings = await db.labBilling.findMany({
