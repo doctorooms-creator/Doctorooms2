@@ -9,9 +9,6 @@ import {
   UserCog,
   Heart,
   Building2,
-  HeadphonesIcon,
-  UserCheck,
-  Pill,
   User,
   Mail,
   Phone,
@@ -43,13 +40,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+// ONBOARDING-1: exactly 3 self-serve roles. Staff roles (receptionist,
+// assistant, pharmacist…) are invited by a clinic/hospital from the dashboard,
+// never self-registered.
 const ROLES = [
-  { value: 'doctor', label: 'Doctor', icon: UserCog, gradient: 'from-teal-500 to-teal-600', desc: 'Medical practitioner' },
-  { value: 'patient', label: 'Patient', icon: Heart, gradient: 'from-emerald-500 to-emerald-600', desc: 'Health seeker' },
-  { value: 'hospital', label: 'Hospital', icon: Building2, gradient: 'from-amber-500 to-amber-600', desc: 'Healthcare facility' },
-  { value: 'receptionist', label: 'Receptionist', icon: HeadphonesIcon, gradient: 'from-pink-500 to-pink-600', desc: 'Front desk staff' },
-  { value: 'assistant', label: 'Assistant', icon: UserCheck, gradient: 'from-violet-500 to-violet-600', desc: 'Doctor assistant' },
-  { value: 'pharmacist', label: 'Pharmacist', icon: Pill, gradient: 'from-orange-500 to-orange-600', desc: 'Pharmacy professional' },
+  { value: 'patient', label: 'Patient', icon: Heart, gradient: 'from-emerald-500 to-emerald-600', desc: 'Book appointments' },
+  { value: 'doctor', label: 'Doctor', icon: UserCog, gradient: 'from-teal-500 to-teal-600', desc: 'Solo practice — Free plan' },
+  { value: 'hospital', label: 'Hospital', icon: Building2, gradient: 'from-amber-500 to-amber-600', desc: 'Clinic or hospital' },
 ];
 
 function getPasswordStrength(password: string): {
@@ -222,7 +219,7 @@ export default function RegisterPage() {
         toast.error(data.message);
         return;
       }
-      toast.success('Registration successful! Redirecting to login...');
+      toast.success(data.message || 'Registration successful! Redirecting to login...');
       try {
         sessionStorage.removeItem('dr_referral_code');
       } catch {
@@ -330,7 +327,7 @@ export default function RegisterPage() {
                       Select how you&apos;ll use Doctorooms
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {ROLES.map((role, i) => {
                       const Icon = role.icon;
                       const isSelected = selectedRole === role.value;
@@ -341,8 +338,10 @@ export default function RegisterPage() {
                           animate={{ opacity: 1, scale: 1 }}
                           transition={{ delay: i * 0.05 }}
                           type="button"
+                          aria-pressed={isSelected}
+                          aria-label={`Select ${role.label} role`}
                           onClick={() => setSelectedRole(role.value)}
-                          className={`relative flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer group ${
+                          className={`relative flex flex-col items-center gap-2 p-5 min-h-[110px] justify-center rounded-xl border-2 transition-all duration-200 cursor-pointer group ${
                             isSelected
                               ? 'border-teal-500 bg-teal-50 dark:bg-teal-950/30 shadow-md'
                               : 'border-gray-200 dark:border-gray-700 hover:border-teal-300 dark:hover:border-teal-700'
@@ -357,14 +356,14 @@ export default function RegisterPage() {
                             </motion.div>
                           )}
                           <div
-                            className={`w-10 h-10 rounded-lg bg-gradient-to-br ${role.gradient} flex items-center justify-center shadow-sm`}
+                            className={`w-11 h-11 rounded-lg bg-gradient-to-br ${role.gradient} flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform duration-200`}
                           >
                             <Icon className="w-5 h-5 text-white" />
                           </div>
-                          <span className="text-sm font-medium text-foreground">
+                          <span className="text-sm font-semibold text-foreground">
                             {role.label}
                           </span>
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground text-center">
                             {role.desc}
                           </span>
                         </motion.button>

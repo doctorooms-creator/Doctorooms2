@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/lib/auth-store';
@@ -332,6 +333,20 @@ function LoginContent() {
     }
   };
 
+  // ONBOARDING-1: self-serve signup link — rendered in BOTH the prod
+  // email-form view and the dev role-cards view (outside the NODE_ENV branch).
+  const signupLink = (
+    <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4">
+      New to Doctorooms?{' '}
+      <Link
+        href="/register"
+        className="text-teal-600 dark:text-teal-400 font-semibold hover:underline"
+      >
+        Create an account →
+      </Link>
+    </p>
+  );
+
   // ── PRODUCTION LOGIN (email + password) ────────────────────────────────
   if (isProd) {
     return (
@@ -449,6 +464,8 @@ function LoginContent() {
               Doctorooms — digital OPD, prescriptions &amp; practice growth
             </p>
           </form>
+
+          {signupLink}
         </motion.div>
       </div>
     );
@@ -570,6 +587,7 @@ function LoginContent() {
         >
           Dev Mode — Authentication disabled. Click any role card to enter its dashboard.
         </motion.p>
+        {signupLink}
       </div>
     </div>
   );

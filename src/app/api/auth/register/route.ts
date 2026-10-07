@@ -24,10 +24,14 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { name, email, mobileNo, gender, password, role, referralCode } = body;
 
-    // Security: Only allow self-registration for patient and hospital roles.
-    // Privileged roles (admin, doctor, receptionist, assistant, pharmacist) must be
-    // assigned by an admin through the dashboard, not through public registration.
-    const ALLOWED_SELF_REGISTER_ROLES = ['patient', 'hospital'];
+    // Security: Only allow self-registration for the 3 self-serve roles
+    // (ONBOARDING-1): patient, hospital/clinic owner, and solo-practice doctor
+    // (FREE plan). Privileged roles (admin, receptionist, assistant,
+    // pharmacist, nurse, lab_technician) must be assigned by an admin through
+    // the dashboard, not through public registration.
+    // NOTE: doctor/hospital users get NO profile rows here — the guided
+    // onboarding wizard creates them after login (keeps public listings clean).
+    const ALLOWED_SELF_REGISTER_ROLES = ['patient', 'hospital', 'doctor'];
     const safeRole = ALLOWED_SELF_REGISTER_ROLES.includes(role) ? role : 'patient';
 
     if (!name || !email || !password) {
@@ -73,7 +77,20 @@ export async function POST(req: NextRequest) {
     }
 
     const hashed = await bcrypt.hash(password, 10);
-    // SECURITY (P2.7): Set status to 'Pending' — user can't login until they verify email.
+
+    // ── EMAIL VERIFICATION vs FALLBACK (ONBOARDING-1) ──────────────────────
+    // With RESEND_API_KEY configured → status 'Pending' + verification email
+    // (login only after verifying). WITHOUT a key → create as 'Active' and
+    // skip the email block entirely — a verification email we cannot send
+    // would soft-lock every new account behind a login 403.
+    const emailConfigured = Boolean(process.env.RESEND_API_KEY);
+    const initialStatus = emailConfigured ? 'Pending' : 'Active';
+    if (!emailConfigured) {
+      console.warn(
+        '[register] RESEND_API_KEY not configured — creating account as Active without email verification (fallback mode)'
+      );
+    }
+
     const user = await db.user.create({
       data: {
         name,
@@ -82,18 +99,21 @@ export async function POST(req: NextRequest) {
         mobileNo: mobileNo || '',
         gender: gender || 'Male',
         role: safeRole,
-        status: 'Pending',
+        status: initialStatus,
       },
     });
 
-    // Send the verification email (fire-and-forget — never block registration)
-    try {
-      const verifyToken = signEmailVerificationToken(user.id)
-      sendVerificationEmail(user.email, verifyToken).catch((err) => {
-        console.error('[email] registration verification email failed:', err)
-      })
-    } catch (emailErr) {
-      console.error('[email] failed to sign verification token:', emailErr)
+    // Send the verification email ONLY when email delivery is configured
+    // (fire-and-forget — never blocks registration).
+    if (emailConfigured) {
+      try {
+        const verifyToken = signEmailVerificationToken(user.id)
+        sendVerificationEmail(user.email, verifyToken).catch((err) => {
+          console.error('[email] registration verification email failed:', err)
+        })
+      } catch (emailErr) {
+        console.error('[email] failed to sign verification token:', emailErr)
+      }
     }
 
     // ── Referral claim (docs/REFERRAL-SYSTEM-PLAN.md) ─────────────────────
@@ -141,7 +161,7 @@ export async function POST(req: NextRequest) {
         action: 'register',
         entityType: 'auth',
         entityId: user.id,
-        description: `New ${user.role} registered — status: Pending (email verification required)`,
+        description: `New ${user.role} registered — status: ${user.status}${emailConfigured ? ' (email verification required)' : ' (active — email fallback, no RESEND_API_KEY)'}`,
         severity: 'info',
         ipAddress: clientIp,
         userAgent: req.headers.get('user-agent') || '',
@@ -152,7 +172,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: 'Registration successful! Please check your email to verify your account.',
+      message: emailConfigured
+        ? 'Registration successful! Please check your email to verify your account.'
+        : 'Registration successful! You can log in now.',
       user: {
         id: user.id,
         name: user.name,

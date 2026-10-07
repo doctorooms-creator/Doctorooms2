@@ -73,10 +73,21 @@ export function PublicNavbar() {
             <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           </Button>
-          <Button variant="outline" asChild>
+          <Button variant="ghost" asChild>
             <Link href="/login">Login</Link>
           </Button>
-          <Button className="bg-teal-600 hover:bg-teal-700 text-white" asChild>
+          {/* ONBOARDING-1: self-serve signup CTA — primary teal gradient */}
+          <Button
+            className="bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white shadow-lg shadow-teal-600/25"
+            asChild
+          >
+            <Link href="/register">Sign Up</Link>
+          </Button>
+          <Button
+            variant="outline"
+            className="border-teal-600 text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/40"
+            asChild
+          >
             <Link href="/doctors">Book Appointment</Link>
           </Button>
         </div>
@@ -134,6 +145,13 @@ export function PublicNavbar() {
                 <div className="flex flex-col gap-3 pt-4 border-t">
                   <Button variant="outline" asChild>
                     <Link href="/login" onClick={() => setOpen(false)}>Login</Link>
+                  </Button>
+                  {/* ONBOARDING-1: self-serve signup CTA — primary teal gradient */}
+                  <Button
+                    className="bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 text-white shadow-lg shadow-teal-600/25"
+                    asChild
+                  >
+                    <Link href="/register" onClick={() => setOpen(false)}>Sign Up</Link>
                   </Button>
                   <Button className="bg-teal-600 hover:bg-teal-700 text-white" asChild>
                     <Link href="/doctors" onClick={() => setOpen(false)}>Book Appointment</Link>
