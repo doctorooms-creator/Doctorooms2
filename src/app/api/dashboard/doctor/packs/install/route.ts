@@ -4,6 +4,12 @@ import { requireRole } from '@/lib/api-auth'
 import { logAction } from '@/lib/audit-log'
 import { installPack } from '@/lib/specialty-packs/install'
 
+// Phase-wise pack install (500+ rows) can take ~40-60s on the serverless
+// transaction pooler — keep the function alive for the full install so it
+// never truncates mid-pack (idempotent design also recovers, but this
+// avoids the confusing partial-install window entirely).
+export const maxDuration = 60
+
 /**
  * Specialty Starter Packs — install for the logged-in doctor.
  *

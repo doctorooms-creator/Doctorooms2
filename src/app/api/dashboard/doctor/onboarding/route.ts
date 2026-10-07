@@ -19,6 +19,11 @@ import { installPack } from '@/lib/specialty-packs/install'
  * Audit: 'doctor_onboarded'. 409 if already onboarded, 400 on bad input.
  */
 
+// Onboarding creates clinic+dept+doctor+link+subscription AND installs the
+// specialty starter pack (500+ rows, ~40-60s on the serverless pooler).
+// maxDuration=60 guarantees the install never truncates on slow DB rounds.
+export const maxDuration = 60
+
 export async function GET(req: NextRequest) {
   const user = await requireRole(req, 'doctor')
   if (!user) {
