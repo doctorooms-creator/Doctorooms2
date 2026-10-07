@@ -1,6 +1,7 @@
 /**
- * GET /api/copilot/history?limit=40
+ * GET /api/copilot/history?limit=40[&threadId=<uuid>]
  * Doctor-scoped copilot chat history (RULE #1: where doctorId = session).
+ * With threadId → Studio thread-scoped rows only; without → legacy panel rows.
  */
 import { NextRequest } from 'next/server'
 import { getCtx } from '@/lib/copilot/guard'
@@ -18,8 +19,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const limitParam = Number(searchParams.get('limit'))
   const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 100) : 40
+  const threadId = (searchParams.get('threadId') || '').slice(0, 64)
 
-  const messages = await repo.chatHistory(ctx, limit)
+  const messages = threadId
+    ? await repo.chatHistoryForThread(ctx, threadId, limit)
+    : await repo.chatHistory(ctx, limit)
   return Response.json({
     messages: messages.map((m) => ({
       id: m.id,

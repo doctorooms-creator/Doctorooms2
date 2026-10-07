@@ -603,3 +603,77 @@ export async function chatHistory(ctx: CopilotCtx, limit = 40) {
   })
   return rows.reverse()
 }
+
+// ─── Studio threads (workspace left rail) ──────────────────────────────
+// Threads are keyed by metaJson.threadId, minted client-side
+// (crypto.randomUUID()) and persisted by the chat route. The legacy ''
+// thread (quick panel) never appears in threadList.
+
+/** Parse the threadId out of a CopilotChat metaJson blob ('' when absent). */
+function threadIdOf(metaJson: string): string {
+  try {
+    const meta = JSON.parse(metaJson || '{}') as { threadId?: unknown }
+    return typeof meta.threadId === 'string' ? meta.threadId : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * Thread-scoped history: rows whose metaJson.threadId matches. Called by
+ * GET /api/copilot/history?threadId=<uuid> (Studio). Without a threadId the
+ * legacy panel behavior (all rows) is preserved by the route.
+ */
+export async function chatHistoryForThread(ctx: CopilotCtx, threadId: string, limit = 80) {
+  const rows = await db.copilotChat.findMany({
+    where: { doctorId: ctx.doctorId },
+    orderBy: { createdAt: 'desc' },
+    take: 400,
+  })
+  const scoped = rows.filter((r) => threadIdOf(r.metaJson) === threadId).slice(0, limit)
+  return scoped.reverse()
+}
+
+export interface CopilotThreadSummary {
+  threadId: string
+  title: string
+  messageCount: number
+  lastAt: Date
+}
+
+/**
+ * Studio thread list for the workspace left rail, newest thread first.
+ * Title = the thread's opening user message (truncated to 60 chars).
+ */
+export async function threadList(ctx: CopilotCtx, limit = 15): Promise<CopilotThreadSummary[]> {
+  const rows = await db.copilotChat.findMany({
+    where: { doctorId: ctx.doctorId },
+    orderBy: { createdAt: 'desc' },
+    take: 800,
+    select: { role: true, content: true, metaJson: true, createdAt: true },
+  })
+
+  // rows are newest-first; group by threadId
+  const byThread = new Map<string, Array<{ role: string; content: string; createdAt: Date }>>()
+  for (const row of rows) {
+    const tid = threadIdOf(row.metaJson)
+    if (!tid) continue // legacy '' thread belongs to the quick panel
+    const list = byThread.get(tid) ?? []
+    list.push({ role: row.role, content: row.content, createdAt: row.createdAt })
+    byThread.set(tid, list)
+  }
+
+  const summaries: CopilotThreadSummary[] = []
+  for (const [threadId, list] of byThread) {
+    const userRows = list.filter((r) => r.role === 'user')
+    const opener = userRows.length > 0 ? userRows[userRows.length - 1] : list[list.length - 1]
+    summaries.push({
+      threadId,
+      title: (opener?.content || 'New conversation').slice(0, 60),
+      messageCount: list.length,
+      lastAt: list[0].createdAt, // newest row of the thread
+    })
+  }
+
+  return summaries.sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime()).slice(0, limit)
+}

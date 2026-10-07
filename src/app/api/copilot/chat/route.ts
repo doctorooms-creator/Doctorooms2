@@ -57,6 +57,10 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: 'Message is required' }, { status: 400 })
   }
 
+  // Studio thread key (client-minted UUID; '' = legacy quick-panel thread)
+  const rawThreadId = (body as { threadId?: unknown }).threadId
+  const threadId = typeof rawThreadId === 'string' ? rawThreadId.slice(0, 64) : ''
+
   // ── Plan wall: AI credits metering (Free 50/mo → Pro 500/mo) ──
   // Soft wall per PRICING-STRATEGY §3.3: growth-celebration framing, never
   // mid-stream — the 402 payload renders in the UpgradeWallDialog.
@@ -70,8 +74,8 @@ export async function POST(req: NextRequest) {
 
   const startedAt = Date.now()
 
-  // Persist the user's message (doctor-scoped)
-  const userRow = await repo.saveChatMessage(ctx, 'user', message, 'user', '{}')
+  // Persist the user's message (doctor-scoped; metaJson carries the threadId)
+  const userRow = await repo.saveChatMessage(ctx, 'user', message, 'user', JSON.stringify({ threadId }))
 
   // Recent conversation for context (doctor-scoped)
   const historyRows = await repo.chatHistory(ctx, 12)
@@ -198,6 +202,7 @@ export async function POST(req: NextRequest) {
           intent: intent.intent,
           agent: agentName,
           latencyMs: Date.now() - startedAt,
+          threadId,
         }
         if (actionCard) meta.actions = [actionCard]
         if (chartData) meta.chart = chartData
