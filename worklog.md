@@ -6072,3 +6072,65 @@ Stage Summary:
 - Deviations from spec (documented): doctorId FK→Doctor (not User — matches Prescription convention, the dominant pattern for doctor-scoped models); String status "DRAFT|SENT" instead of Prisma enum (schema has zero enums — Notification/Referral/Subscription style); DB-notifications only, no realtime event added (spec's stated preference); API under /api/doctor/* (spec path) not /api/dashboard/doctor/* — both proxy-protected identically.
 - Demo data left in prod Supabase (worklog-documented): qa-recall-* users + old bookings for Dr. Amit Shah & Dr. Srinivas Kulkarni + 2 SENT campaigns — feature demo-able immediately; AIIMS trial ends 2026-10-05 (renew via admin Grant Trial if needed for demos).
 - ORCHESTRATOR NOTES: (1) realtime service NOT restarted, no new event names; (2) Next dev server WAS restarted (new Prisma models) — if Vercel deploys, prisma generate runs in postinstall so prod is fine; (3) prod deploy pending (orchestrator handles); (4) prior in-progress marker line for RECALL-1 above is superseded by this entry.
+
+---
+Task ID: RECALL-1-PROD
+Agent: Main (production deploy + E2E verification + demo access enablement)
+Task: Deploy RECALL-1 to production Vercel, verify end-to-end with real logins, enable demo doctor access for the owner.
+
+Work Log:
+- Deployed commit b4ab0fa via `bunx vercel deploy --prod` (3m build, green, aliased to doctorooms-hms.vercel.app)
+- Prod route checks: landing 200 (1.2s); /api/doctor/recall-campaigns → 401 unauth (deployed + protected); /dashboard/doctor/recall-campaigns → 307 login redirect; /leaderboard 200 (no regression); /api/public/stats live (59 doctors, 4 hospitals, 19 patients, 24 bookings)
+- Real-login E2E on prod: rajesh@doctorooms.com → doctor dashboard + [useSocket] Connected (Render /stats byRole doctor:1 — strict auth OK after cold-start retries); recall page rendered but API 404 "Doctor profile not found" → diagnosed as DATA EDGE CASE: only 5 doctor-ROLE users lack a Doctor profile row (rajesh demo + 4 QA accounts — NOT real doctors; all 54 real doctors have profiles and get the feature normally)
+- Demo access enablement: reset legacy Zydus-seed doctors' passwords to doctor123 (bcrypt data-only change): amit.shah@zydus.com (FREE plan → recall gate demo: 10 dormant patients, 2 SENT campaigns from RECALL-1 seeding) + srinivas.k@aiims.com (AIIMS trialing → unlimited demo). Both logins verified 200 on prod via API
+- Full prod E2E as amit.shah@zydus.com: recall campaigns page renders the campaign table ("30-din follow-up recall", SENT badge, recipients column), API 200 with seeded campaigns, ZERO console errors, evidence screenshot qa-recall-prod.png
+- Render realtime NOT redeployed (no realtime code changes; service's Prisma client predates RecallCampaign models but never touches them — harmless). Sandbox: 3000 + 3006 both healthy (db up, strict auth on)
+
+Stage Summary:
+- RECALL CAMPAIGNS LIVE IN PRODUCTION — the last big roadmap item is shipped; full planned feature set now complete
+- PROD DEMO LOGINS: admin@doctorooms.com/admin123 · amit.shah@zydus.com/doctor123 (recall free-tier) · srinivas.k@aiims.com/doctor123 (recall pro-tier) · rajesh@doctorooms.com/doctor123 (general doctor demo, no clinical profile)
+- PENDING USER ACTIONS: (1) Cloudinary CLOUD_NAME — Cloudinary dashboard → Product Environment Credentials → "Cloud Name" (key+secret already wired in sandbox .env; once name arrives: add to .env + 3 Vercel env vars + redeploy + E2E upload test); (2) OPTIONAL UptimeRobot manual monitor for https://doctorooms-realtime.onrender.com/health (API creation plan-blocked; Render self-ping already prevents spin-down — monitor is alerting only)
+- Next phase: live-product testing + polish per user directive ("live product me testing bad me"); Cloudinary activation on cloud-name arrival
+
+---
+Task ID: SANDBOX-RECOVERY-3
+Agent: Main (orchestrator)
+Task: Recover sandbox after storage incident (node_modules wiped, .env reverted to template, db/ emptied, git history replaced by backup snapshots)
+
+Work Log:
+- Incident detected: dev server dead, node_modules/next missing, .env = original SQLite template (old Supabase ref fmsccgnfdjiophuyjwcv), db/ dir empty, git log = UUID-named backup commits
+- bun install (961 packages) + prisma generate restored deps
+- Supabase pooler tested: aws-1-ap-northeast-2 = tenant not found; aws-0-ap-northeast-2 = WORKS (117 users, 2 recall campaigns, 3 hospitals — all recent data intact)
+- .env rebuilt (26 lines): DATABASE_URL=aws-0 pooler 6543 QUOTED (pgbouncer=true&connection_limit=1 — unquoted & breaks restart-server.sh sourcing), fresh NEXTAUTH_SECRET/REALTIME_EMIT_SECRET/CRON_SECRET (sandbox-only; prod Vercel/Render keep their own), REALTIME_STRICT_AUTH=1, REALTIME_ALLOWED_ORIGINS localhost:81+3000, NOTIFICATION_SERVICE_URL=:3006, Cloudinary key/secret (cloud name still empty), NEXT_PUBLIC_REALTIME_URL empty (sandbox gateway XTransformPort pattern)
+- realtime-service: bun install (socket.io etc.), start.sh re-run — health OK (db:up, strictAuth:true, /notif + /chat)
+- Login E2E: admin@doctorooms.com/admin123 → 200 success (Supabase live)
+- Git: local history diverged → git reset --mixed origin/main (b4ab0fa recall commit); core.fileMode=false (all diffs were executable-bit noise only)
+- 15-min webDevReview cron recreated (job 441606)
+
+Stage Summary:
+- SANDBOX FULLY RECOVERED: app :3000 + realtime :3006 + Supabase (aws-0 pooler) + git synced to origin/main b4ab0fa
+- PRODUCTION UNAFFECTED (Vercel/Render/Supabase have their own env; incident was sandbox-only)
+- NEXT (user-approved "go ahead"): self-serve onboarding track — register 3-role cards (Patient/Doctor/Hospital), doctor self-signup (FREE solo clinic), hospital onboarding wizard + plan choice, staff management for hospital admin + doctor (seat-walled), navbar/login signup links. Two parallel agents: ONBOARDING-1 + STAFF-1.
+
+---
+Task ID: ONBOARDING-1 + STAFF-1 (combined ship)
+Agent: Main (orchestrator — agents ran but timed out on reporting; verified + completed by Main)
+Task: Self-serve onboarding track (user-approved): 3-role register, doctor self-signup (FREE solo clinic), hospital onboarding wizard + plan choice, staff management for hospital admin + doctor, navbar/login signup entry points. Then: incident-recovery fixes + production deploy.
+
+Work Log:
+- Launched 2 parallel full-stack agents (ONBOARDING-1, STAFF-1). Task tool errored (context deadline) but BOTH agents' code landed (verified via git status). Agents could not report/append worklog — Main verified everything personally.
+- ONBOARDING-1 (verified complete): register API allows patient/hospital/doctor + RESEND-less fallback auto-activates accounts ("You can log in now"); register page = 3 role cards (Patient / Doctor—Solo practice Free plan / Hospital); GET /api/dashboard/onboarding-status; hospital onboarding API+wizard (facility details → plan choice free vs 14-day pro trial → review → launch; creates Hospital + GEN dept + Subscription); doctor onboarding API+wizard (professional details w/ 12 specializations + Other → practice details w/ auto clinic name → review → launch; creates Doctor + Clinic Hospital + GEN dept + DoctorHospital link + FREE Subscription); layout guards (doctor layout edited + hospital layout created — profile-less users auto-redirect to /dashboard/{role}/onboarding); navbar Sign Up + login create-account links.
+- STAFF-1 (verified complete): GET/POST /api/dashboard/staff (hospital OR doctor auth; unified list receptionists/nurses/pharmacists/assistants/doctors + seat usage; POST with checkSeatWall 402+upgrade payload, bcrypt, role rows, rollback pattern, doctor linking with GEN dept ensure, audit logs) + PATCH /api/dashboard/staff/[userId] (block/unblock with scope check); StaffManager shared component (mode hospital/doctor — seat chips, role tabs, add-staff dialog with per-role fields + seat hints + generate password, UpgradeWallDialog on 402, block/unblock AlertDialog); /dashboard/hospital/staff + /dashboard/doctor/staff pages; sidebar Staff + My Staff entries.
+- SANDBOX E2E (curl + agent-browser via :81): hospital register→login→status(false)→onboarding(free)→stats 200 ✓; doctor register→login→onboarding(clinic auto-named)→stats ✓; FULL BROWSER golden path doctor (cookies set → guard redirect → wizard UI steps → Launch My Practice → dashboard live) ✓; staff API: receptionist+nurse+assistant created, 2nd receptionist → 402 seat wall w/ Hinglish message + upgrade payload ✓, block → login blocked ✓, unblock → login works ✓; staff UI: page renders chips/tabs/list, dialog created receptionist (DB verified), duplicate email → 400 ✓; existing-profile users NOT redirected ✓; mobile 390px no overflow (register/login/wizard/staff) ✓; lint clean ✓. 18 QA screenshots (qa-onb-01..18).
+- INCIDENT-RECOVERY DEPLOY FIXES (Turbopack build failures on Vercel — incident had wiped uncommitted working-tree code that only ever lived in deploys): (1) print-utils.ts: formatCurrency (formatINR alias), numberToWords (Indian crore/lakh/thousand → "Rupees X Only"), triggerPrint; (2) notify-channels.ts: isSmsConfigured, isWhatsAppConfigured, sendViaChannel (+NotificationLog audit row) — channel-status + test-send routes functional; (3) validations/index.ts: re-export ./insurance (updatePolicySchema); (4) copilot repo.threadList + chatHistoryForThread + threadId persistence in chat route metaJson + history ?threadId= filter (Studio threads restored; 20 other "missing" validation schemas were AUDIT FALSE POSITIVES — export * from re-exports weren't followed); (5) package.json build script: standalone cp now conditional (Vercel has no .next/standalone → cp was fatal); (6) .vercel/project.json was reverted to WRONG project ("my-project") by the incident → relinked to doctorooms-hms (prj_XbtNhvhY7rNGAGMrAX7z2aqdOTRA) — today's first 3 deploys silently went to my-project (harmless, separate URL).
+- Commits: 44a279d (onboarding+staff) → defc1df (print/notify/validation recovery) → 8492fe4 (copilot threads) → 92e9cc8 (build script) — all pushed to origin/main.
+- PRODUCTION DEPLOY: doctorooms-hms.vercel.app = 92e9cc8 (Ready). PROD E2E (real URLs): register → "You can log in now" (no RESEND_API_KEY on prod project → fallback active) → login 200 → onboarding status false → doctor onboarding 201 (clinic created) → staff API 200 → stats 200 ✓. ULTIMATE BROWSER JOURNEY on prod: /register 3 cards → form fill → submit → /login REAL email form → Sign In → /dashboard/doctor → auto-redirect to wizard → completed (Pediatrician, Jaipur, ₹350) → "Your practice is live! Welcome to Doctorooms 🎉" ✓. Screenshots qa-onb-16/17/18.
+
+Stage Summary:
+- SELF-SERVE ONBOARDING LIVE IN PRODUCTION: any Indian doctor/hospital can now sign up, onboard, and manage staff end-to-end WITHOUT the super admin — the registration play is unlocked.
+- 3 roles self-signup (Patient / Doctor FREE solo clinic / Hospital w/ plan choice incl. 14-day Pro trial); staff seat walls gate upgrades automatically (402 + UpgradeWallDialog).
+- Incident aftermath fully healed for builds: 3 deploys worth of lost working-tree code reconstructed from call-site usage (print-utils, notify-channels, validations re-export, copilot threads, build script, vercel project link).
+- Prod demo logins unchanged: admin@doctorooms.com/admin123 · amit.shah@zydus.com/doctor123 · srinivas.k@aiims.com/doctor123. New prod QA users left as demo data (qa-* emails, Dr. Browser Prod / Dr. Prod Final etc.).
+- Deviations: onboarding-status API at /api/dashboard/onboarding-status (single endpoint, role-aware); staff API unified at /api/dashboard/staff for both roles (hospital admin + doctor owner).
+- PENDING USER ACTIONS (unchanged): Cloudinary CLOUD_NAME; optional UptimeRobot manual monitor for Render health.
+- NEXT (per user directive "live product me testing bad me"): Phase-2 admin-on-separate-URL decision (user was advised Option A vs B), RESEND email setup for real verification emails (currently auto-activate fallback — acceptable for launch, add Resend free 100/day later + NEXT_PUBLIC_APP_URL + FROM_EMAIL on Vercel).
