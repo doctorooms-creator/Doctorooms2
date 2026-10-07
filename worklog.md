@@ -6179,3 +6179,133 @@ Stage Summary:
 - Unverified-dose mode active: GP-01 medicines carry standard Indian-formulary defaults but meta.reviewedBy is empty → UI shows amber "verify before prescribing" badges everywhere (banner/chip) per docs/specialty-packs/04 content workflow. MBBS reviewer still needed from owner.
 - NEXT (P1 per master plan): Tier-1 specialty packs — PED-01 (pediatric-seed.ts is 70% draft), DRM-01 (seed-dermatology.ts is 60% draft), OBG-01, ORT-01, ENT-01, DEN-01, DIA-01, MED-01, SUR-01 — then registry packCode flags + dropdown badges turn on per pack. Also pending from earlier tracks: Render realtime monitoring, admin password rotation (admin123 ⚠️), Cloudinary CLOUD_NAME from owner.
 - QA users left in prod DB (harmless @doctorooms.test emails): qa-pack-*, qa-fallback-*, qa-final-*, qa-wizard-*, qa-prod-pack*.
+
+---
+Task ID: P1-KICKOFF
+Agent: Main (orchestrator)
+Task: P1 — author the 9 Tier-1 specialty packs (PED/OBG/DIA/MED/DRM/ORT/ENT/SUR/DEN) via parallel pack-author agents. P0 machinery + GP-01 already shipped in prod (d4f79ca).
+
+Work Log:
+- Verified state: git clean at d4f79ca+cron-commit; packs dir has only gp-01.ts; registry has all 10 T1 entries with packCode:null (GP-01 fallback active); dev server :3000 healthy.
+- Old webDevReview cron 442057 was DISABLED ("exec limits exceeded") → deleted, recreated as job 442072 (fixed_rate 900s, priority 10, tz Asia/Calcutta).
+- Created scripts/validate-one-pack.ts — single-pack structural validator for authoring-time checks (full validate-packs.ts only sees registered packs). Tested green on GP-01 (310 rows).
+- Agent strategy: 3 batches of parallel general-purpose agents, each writes EXACTLY ONE pack file (no index.ts/registry.ts edits — orchestrator wires after review to avoid merge conflicts). Batch 1: P1-PED, P1-OBG, P1-DIA, P1-MED, P1-DRM. Batch 2: P1-ORT, P1-ENT, P1-SUR, P1-DEN.
+- Design deviation (documented): packs are SELF-CONTAINED (no packs/shared.ts imports) — matches GP-01 precedent, removes parallel-coordination risk. MED-01 may spread GP01_PACK arrays (GP + depth pattern per doc 02 §3).
+- All packs ship in unverified-dose mode (verified:false, reviewedBy:'') per docs/specialty-packs/04 — MBBS reviewer still an owner action.
+
+Stage Summary:
+- P1 pack authoring IN FLIGHT — 5 agents (PED/OBG/DIA/MED/DRM) launched in parallel; ORT/ENT/SUR/DEN next batch.
+- After agents land: orchestrator wires packs/index.ts + registry.ts packCode/showInOnboarding flags, runs validate-packs.ts gate, E2E (register specialty doctors via agent-browser), lint, commit, deploy.
+
+---
+Task ID: P1-MED
+Agent: pack-author
+Task: Author MED-01 internal medicine starter pack file (GP-01 spread + depth)
+Work Log:
+- Authored src/lib/specialty-packs/packs/med-01.ts (523 lines) — GP-01 spread VERBATIM + MED depth via GPQ(54) question-index offset recipe
+- New content: 4 categories (INF/CHR/BLD/LVR), 21 complaints (INF01-05, CHR01-08, BLD01-02, LVR01-06), 42 questions (2/complaint, local idx annotated), 84 suggestions (2/question, offset applied), 4 labels (Hb/Platelets/FBS/S.Creat), 20 findings, 22 medicines (all flags verified:false), 25 findingMeds links, 4 tables, 5 rxTemplates
+- Final combined: 541 rows — 9 cat · 48 C/O · 96 Q · 192 sugg · 12 labels · 32 findings · 75 meds · 63 links · 7 tables · 7 Rx
+- Validation: bun scripts/validate-one-pack.ts MED-01 → PACK MED-01 VALID ✓ (0 errors, 0 warnings); standalone tsc --strict clean; coverage script confirms 2 suggestions per new question + GP content untouched
+- Safety: TB = NTEP refer lines only (no regimens); doxycycline pregnancy avoid; AL (Lumartem) pregnancy caution; primaquine deliberately EXCLUDED (G6PD risk); Wysolone short-course only; dengue Rx = paracetamol-only warning; reviewedBy stays ''
+Stage Summary:
+- MED-01 (T1, unverified-dose mode) authored + validated; awaits orchestrator wiring into packs/index.ts + registry.ts, then MBBS dose review
+
+---
+Task ID: P1-PED
+Agent: pack-author
+Task: Author PED-01 pediatrics starter pack file
+Work Log:
+- Authored src/lib/specialty-packs/packs/ped-01.ts (1041 lines) exporting PED01_PACK — converted pediatric-seed.ts conventions (weight-band syrups, content-bearing tables, IAP schedule) into GP-01-style bilingual pack format
+- Final counts: 8 categories · 53 C/O (PGE/PRE/PGA/PSK/PEN/PNE/PIM/PDE prefixes) · 106 questions (idx 0-105, every one annotated) · 212 suggestions (exactly 2 per question, parent-printable Hindi: ORS/feeding/danger signs/return-triggers) · 10 labels (incl. Head Circ, RR, Milestone Check, Weight-for-age) · 30 findings (ICD-10) · 81 real Indian brands · 50 findingMeds · 8 tables (IAP immunization grid birth→teen, Growth Monitoring, Feeding Milestones, WHO Dehydration Assessment, Fever Day Chart, Milestones, Feeding History, Stool/ORS Diary) · 6 rxTemplates (viral fever, GE ORS+zinc+probiotic, AOM amoxyclav, wheeze course, tonsillitis, immunization visit pkg)
+- Safety: NO nimesulide/aspirin/codeine (scripted check = zero hits); dengue rx limited to paracetamol; THALASSEMIA-TRAIT & DEVELOPMENTAL-DELAY deliberately carry no med links (screen-and-refer); all 81 meds flags.verified=false (unverified-dose mode, reviewedBy empty)
+- Validation: bun scripts/validate-one-pack.ts PED-01 → PACK PED-01 VALID ✓ (564 rows, 0 errors, 0 warnings); tsc --strict clean; idx-comment drift check = 0
+Stage Summary:
+- PED-01 pack ready for registry wiring (packs/index.ts + registry.ts by orchestrator); needs MBBS reviewer stamp on weight-band doses before verified mode
+---
+Task ID: P1-DIA
+Agent: pack-author
+Task: Author DIA-01 diabetology starter pack file
+Work Log:
+- Authored src/lib/specialty-packs/packs/dia-01.ts (830 lines) exporting DIA01_PACK, GP-01 format precedent, bilingual Hi/En throughout
+- Final counts: 6 categories · 46 complaints · 92 questions (all idx-annotated, 0 drift) · 184 suggestions (2/q) · 12 labels (FBS/PPBS/HbA1c/urine sugar/urine ketones/waist) · 23 findings (E11.x ICD-10) · 74 medicines · 41 findingMeds · 7 tables · 6 rxTemplates · 491 rows total
+- Safety: insulins STARTER/TITRATION ranges only (0.1-0.2 IU/kg) + 7d titration follow-up; SU hypoglycemia + SGLT2i euglycemic-DKA/genital-infection cautions in salt; statins/SGLT2i/SU/TZD pregnancy avoid, metformin caution, insulin safe; DKA-SUSPECT finding has ZERO medicine links (refer-only); no cough-syrup/combo-steroid entries; GLP-1 RA deliberately excluded
+- Validation: `bun scripts/validate-one-pack.ts DIA-01` → PACK DIA-01 VALID ✓, 0 errors, 0 warnings; standalone strict tsc --noEmit clean
+- Did NOT touch packs/index.ts / registry.ts (orchestrator wires after parallel agents); no build, no git, no servers
+Stage Summary:
+- DIA-01 v1.0.0 (T1, unverified-dose mode, reviewedBy empty) complete and validated — India diabetology OPD core ready for registry wiring and MBBS review (insulin titration + ED/sildenafil entries need reviewer attention first)
+
+---
+Task ID: P1-OBG
+Agent: pack-author
+Task: Author OBG-01 obstetrics & gynecology starter pack file
+Work Log:
+- Created src/lib/specialty-packs/packs/obg-01.ts (929 lines), export OBG01_PACK, GP-01 format, bilingual Hindi-primary
+- Final counts (all within v1.0.0 targets): 8 categories · 49 complaints · 98 questions (idx-annotated, 2/complaint, zero drift verified by script) · 196 suggestions · 12 labels (incl. LMP/EDD/Gravida/Para/Fundal Height/FHS/Urine Albumin) · 30 findings (ICD-10) · 76 medicines · 48 findingMeds · 5 tables (ANC ledger, menstrual calendar, contraception options, danger signs, kick chart) · 6 rxTemplates (ANC 2nd trim, UTI-in-preg, PCOS starter, dysmenorrhea, preg-safe candidiasis, menopause)
+- Safety: every medicine carries flags (pregnancy safe/caution/avoid/na, verified=false); trimester nuance in salt notes; EXCLUDED misoprostol/mifepristone + injectable uterotonics entirely; PMB + GDM + FIBROADENOSIS deliberately carry no medicine links (investigate/refer first); HRT/ovulation-induction/OCP drugs flagged avoid with "non-pregnant use only" notes
+- Validation: bun scripts/validate-one-pack.ts OBG-01 → PACK OBG-01 VALID ✓ (0 errors, 0 warnings, 528 rows); no shared files touched
+Stage Summary:
+- OBG-01 (priority #1 pack) authored and validated in unverified-dose mode; awaiting MBBS review of pregnancy flags + doses, then orchestrator wiring into packs/index.ts + registry.ts
+
+---
+Task ID: P1-DRM
+Agent: pack-author
+Task: Author DRM-01 dermatology starter pack file
+Work Log:
+- Authored src/lib/specialty-packs/packs/drm-01.ts (925 lines, DRM01_PACK, T1 v1.0.0, reviewedBy='' unverified-dose mode)
+- Counts: 7 categories · 47 C/O · 94 questions (all with // idx N trailing comments, 0 drift) · 188 suggestions (2/q, printed patient Hindi advice) · 9 labels (vitals + Active Lesion Count) · 28 findings (ICD-10) · 74 medicines · 44 findingMeds · 6 tables · 6 Rx templates = 503 rows
+- Content from legacy Gujarati derma seed converted to Hindi+English, then expanded to brief: tinea (incl. steroid-abuse screening q + cloth-ironing advice), acne severity, hair/AGA, melasma/PIH/vitiligo, urticaria, eczema, psoriasis, scabies household, warts/keloids
+- Safety wired: Isotroin Sch H + teratogen note; Retino-A/Melalite/Lumacip preg-avoid night-only max 2-3 mo; Tenovate not-face/folds max 2 wk; Finpecia/Morr F men-only; Ivermectol weight-based Sch H; NO steroid+antifungal / steroid+antibiotic fixed combos (Quadriderm class excluded by policy, noted in header)
+- Validation: bun scripts/validate-one-pack.ts DRM-01 → PACK DRM-01 VALID ✓ (0 errors, 0 warnings); extra checks: suggestion coverage 100%, case-sensitive name refs clean, all 74 meds flagged verified:false
+Stage Summary:
+- DRM-01 authored + validated (503 rows, T1) — awaiting registry wiring by orchestrator; needs MBBS/MD review of doses before reviewedBy stamp.
+
+---
+Task ID: P1-SUR
+Agent: pack-author
+Task: Author SUR-01 general surgery starter pack file
+Work Log:
+- Authored src/lib/specialty-packs/packs/sur-01.ts (799 lines, standalone, exports SUR01_PACK)
+- Counts: 6 categories · 44 C/O · 92 questions (idx-annotated) · 184 suggestions · 9 labels · 26 findings (ICD-10) · 55 medicines · 36 finding↔med links · 5 tables · 6 Rx templates = 463 rows
+- Emergency discipline: strangulated hernia / appendicitis / acute cholecystitis / breast-cancer-suspect findings carry ZERO medicine links (refer-only by design); 32 'aaj hi hospital' suggestion lines; nil-by-mouth instructions
+- Pre-op feed for OT module: Pre-Op Checklist table + Peglec bowel-prep Rx package (labs: CBC/Blood group/RBS/Cr/HbsAg/HIV/PT-INR); wound assessment + hernia exam + post-op follow-up + abscess aftercare grids
+- Safety curation: Proctosedyl/Anovate (steroid topical combos), injectables, nimesulide, sclerotherapy EXCLUDED; Peglec schedule H + dehydration caution in salt; Dulcolax obstruction contraindication note; NSAID bleeding/renal cautions; cancer red-flag lines (breast triple assessment, dysphagia+weight loss endoscopy)
+- Validation: bun scripts/validate-one-pack.ts SUR-01 → PACK SUR-01 VALID ✓ (0 errors, 0 warnings); tsc single-file typecheck clean
+- Did NOT touch packs/index.ts, registry.ts, git, servers, or any other pack file (orchestrator wires SUR-01)
+Stage Summary:
+- SUR-01 T1 surgical pack landed in unverified-dose mode (reviewedBy='') — ready for registry wiring + MBBS review of doses/flags.
+---
+Task ID: P1-ORT
+Agent: pack-author
+Task: Author ORT-01 orthopedics starter pack file
+Work Log:
+- Authored src/lib/specialty-packs/packs/ort-01.ts (ORT01_PACK, 850 lines) — standalone pack per GP-01 format precedent (header safety notes, bilingual, flags)
+- Counts: 7 categories (Spine/Joints/Sports-Injury/Fractures-Plaster/Bone-Health/Nerve/Others) · 46 C/O · 98 questions (idx-comment annotated, verified 0 mismatches) · 196 suggestions (exactly 2 per q) · 10 labels (vitals + Knee-Flexion/Shoulder-Abduction ROM °) · 27 findings (ICD-10) · 60 medicines · 42 findingMeds · 6 tables (ROM grid, Ortho Exam look-feel-move, Physio plan, Fracture FU, Posture/Ergonomics, Gout diet) · 6 Rx templates (lumbago, knee OA 1-2, post-fracture, plantar fasciitis, cervical spondylosis, acute gout)
+- Safety: every oral NSAID salt carries PPI co-prescribe + elderly renal note (17/17); Ultracet/Tramazac H + dependence/drowsiness; Zycolchin NTI stop-on-diarrhoea; Febutaz CV caution; Zyloric never-in-flare; Ostofos/Bonesta empty-stomach admin in salt; red-flag lines in questions/suggestions (cauda equina EMERGENCY, night pain+weight loss+fever malignancy/infection screen, septic arthritis, cast compartment syndrome, head injury CT, hip # in elderly)
+- Deliberate exclusions: NO steroid/HA/DMARD entries (injections=procedures in advice lines only); refer-only findings carry no meds (CLAUDICATION-REFER, PULLED-ELBOW, RA-SCREEN-REFER minimal SOS analgesia, POST-OP-FU, FLAT-FOOT, TAILBONE, OSTEOMALACIA-SCREEN); Osgood-Schlatter skipped (niche); nimesulide/oral steroids/herbals excluded
+- Validation: bun scripts/validate-one-pack.ts ORT-01 → PACK ORT-01 VALID ✓, 0 errors 0 warnings, 498 rows; single-file tsc --strict clean; custom audit: 2 suggestions/question exact, all idx comments match, no orphan complaints
+Stage Summary:
+- ORT-01 v1.0.0 (T1, unverified-dose mode, reviewedBy='') content-complete and validated; registry/index wiring left to orchestrator as instructed.
+
+---
+Task ID: P1-DEN
+Agent: pack-author
+Task: Author DEN-01 dentistry starter pack file
+Work Log:
+- Authored src/lib/specialty-packs/packs/den-01.ts (843 lines) exporting DEN01_PACK — GP-01 format precedent, bilingual Hi/En, dental "own pharmacology world": short-course antibiotics + topical-heavy armamentarium
+- Final counts: 6 categories (TTH/GUM/MTH/JAW/DNT/OTH) · 44 complaints · 88 questions (idx 0-87, every one annotated, 0 drift) · 176 suggestions (exactly 2/q; printable Hindi advice: no-rinse-24h post-extraction, soft diet, no hard chewing post-RCT, 45° brushing technique, tobacco cessation + mandatory oral-cancer referral lines) · 8 labels (incl. Pain Score NRS, Mouth Opening mm) · 26 findings (ICD-10 K02/K04/K05/K12/K13/S02.5/M26.6/B37.0) · 55 medicines · 36 findingMeds · 6 tables (FDI Dental Chart 32-tooth grid, Treatment Plan tracker, Post-Extraction Instructions card, Gum Disease Staging grid, Pain Diary, Tobacco Cessation tracker) · 6 rxTemplates (RCT bridge, extraction post-op, gum disease scaling, pericoronitis, dental abscess w/ drainage referral 48h, aphthous) — 451 rows
+- Safety wired: dental abx courses 3-5d (7 max) in salt notes + tab counts (no abx tab >15); chlorhexidine max-2-weeks staining/taste note everywhere; Dologel CT aspirin-sensitivity + not-for-young-children; Mucopain not <2y; Ketorol-DT max 3-5 days GI note; Myoril short course + soft diet; tobacco lesions (OSMF/LEUKOPLAKIA-SCREEN/NON-HEALING-ULCER/ORTHO-EVAL/XEROSTOMIA/BRUXISM/CHEEK-BITING/CARIES-SUPERFICIAL) = ZERO med links, refer-only; NO nimesulide/ciprofloxacin/anxiolytics/local anaesthetics (chairside); all 55 meds flags.verified=false, reviewedBy '' (unverified-dose mode)
+- Validation: bun scripts/validate-one-pack.ts DEN-01 → PACK DEN-01 VALID ✓ (0 errors, 0 warnings); standalone tsc --strict clean; extra scripted checks: idx drift 0, 2-suggestions-per-question 88/88, forbidden-drug hits 0, refer-only findings 0 med links
+Stage Summary:
+- DEN-01 v1.0.0 (T1, unverified-dose) authored + validated — awaits orchestrator wiring (packs/index.ts + registry.ts) and MBBS review of short-course doses/topical compositions (Ibugesic Plus ratios, Metrogyl DG %, Lexanox/Kenacort availability, K13.2 leukoplakia code)
+
+---
+Task ID: P1-ENT
+Agent: pack-author
+Task: Author ENT-01 ENT starter pack file (small-city workhorse)
+Work Log:
+- Authored src/lib/specialty-packs/packs/ent-01.ts (941 lines) exporting ENT01_PACK — GP-01 format precedent, bilingual Hindi-primary, self-contained (no shared imports)
+- Final counts (within v1.0.0 targets): 5 categories (EAR/NOS/THR/HNV/OTH) · 44 C/O (EAR01-12, NOS01-13, THR01-11, VER01-05, OTH01-03) · 100 questions (all // idx annotated, 0 drift verified) · 200 suggestions (exactly 2/q, patient-printable: steam, dry-ear, no buds, saline douching, voice rest, Epley safety) · 8 labels · 26 findings (ICD-10) · 61 real Indian brands · 40 findingMeds · 6 tables (Ear Exam, Audiometry Referral, Vertigo/Dix-Hallpike, Sinus Symptom Score, Nasal Endoscopy, Ear-Drop Instillation patient-ed) · 6 rxTemplates (AOM, AR, Acute Sinusitis, BPPV+Epley, CSOM dry-ear, Wax)
+- Safety wiring: NO aminoglycoside ear drops (class excluded); Ciplox salt notes quinolone = perforated-TM-safe; Candibiotic carries avoid-if-perforation note; Nasivion/Otrivin all strengths carry max 5-7 day rhinitis-medicamentosa warning (0.05/0.025/0.01% variants); Stemetil/Vertin drowsiness+no-driving notes; refer-only zero-med findings: SNHL-SUSPECT (same-day emergency), MENIERE-SUSPECT, QUINSY-SUSPECT, OSA-SUSPECT, NASAL-POLYP-SUSPECT, CERVICAL-LYMPHA, DNS-TURB; oral steroids deliberately excluded (specialist territory); sudden SNHL/epistaxis-uncontrolled/foreign bodies = refer lines in questions+suggestions
+- Validation: bun scripts/validate-one-pack.ts ENT-01 → PACK ENT-01 VALID ✓ (496 rows, 0 errors, 0 warnings); standalone tsc --strict clean; no shared files touched (verified via git status)
+Stage Summary:
+- ENT-01 v1.0.0 (T1, unverified-dose mode, reviewedBy='') complete — awaits orchestrator wiring into packs/index.ts + registry.ts, then MBBS review of drop choices/doses
