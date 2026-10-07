@@ -6526,3 +6526,24 @@ Stage Summary:
 - Categories: CKD/AKI/DBK/STN/TRN/OTH; #1 complaint = creatinine high on report (Indian entry); India-specific: monsoon AKI, snake-bite AKI, OTC-NSAID epidemic, native-medicine heavy-metal gentle warning, KMC counselling, NOTTO mention
 - REFER-ONLY findings (ZERO findingMeds links): AKI-SEVERE, HYPERKALEMIA-SEVERE (emergency ECG), UREMIA-SEVERE, TRANSPLANT-REJECTION-SUSPECT, NEPHROTIC-NEW (biopsy), NEPHRITIC-FLARE, PYELONEPHRITIS-OBSTRUCTED, AKI-POST-SNAKE, ACIDOSIS-SUSPECT, PREGNANCY-CKD-HIGH-RISK (OBG joint); also zero links on HYPERKALEMIA-MILD / HYPONATREMIA-MILD / SIMPLE-CYST-FU / AKI-RECOVERY-FU / PREGNANCY-CKD (diet/monitoring)
 - Safety exclusions honored: NO NSAIDs anywhere (paracetamol-only analgesic line in Crocin/Dolo salts), no herbals, no chelation, no lithium, no Urimax (URO-owned); EPO/sevelamer/keto-analogues = continuation-verify framing; allopurinol never-in-flare + slow titration; febuxostat CV caution; ACEi/ARB K+/creatinine check + CAR-01 coordination; inter-dialysis gain <2 kg; fistula-arm rules; pregnancy-CKD joint OBG zero meds
+
+---
+Task ID: P2-BATCH3
+Agent: Main (orchestrator, Z.ai)
+Task: P2 batch-3 — author + wire + deploy URO-01/END-01/NEP-01 (T2 packs), prod E2E for NEP-01.
+
+Work Log:
+- Launched 3 parallel pack-author agents (P3-B3-URO/END/NEP). URO-01 (472 rows) + END-01 (460 rows) SUCCEEDED with validation clean; NEP-01 first attempt timed out pre-write → relaunched with lean prompt → SUCCESS: nep-01.ts 915 lines, 450 rows, PACK NEP-01 VALID ✓.
+- END-01 note: medicines=30 (vs ~52 target) — agent chose depth via 14 Thyronorm dose-tier entries rather than inventing unverifiable brands; correct call for unverified-dose mode.
+- Wired all 3 into packs/index.ts (PACKS map now 19 entries) + registry.ts (URO/END/NEP packCode set + showInOnboarding flipped true — dropdown now 19 specialties all with badges). validate-packs.ts → ALL 19 PACKS VALID ✓. bun run lint clean.
+- SANDBOX E2E: receipts: URO-01 {44 C/O, 92 Q, 184 sugg, 54 meds} / END-01 {43, 96, 192, 30} / NEP-01 {44, 88, 176, 42} — counts match DB. First complaints: पेशाब में जलन/Burning Urination; गर्दन में थायरॉइड की सूजन/Thyroid Swelling; रिपोर्ट में क्रिएटिनिन बढ़ा/Creatinine High on Report. Medicines: Niftran family; Thyronorm dose tiers; Nefrosave family.
+- Commit 109319f pushed. PROD DEPLOY → Ready in 2m.
+- PROD E2E (agent-browser): registered qa-prod-nep@doctorooms.test → onboarding dropdown shows NEW badges: Urologist ✓ Endocrinologist ✓ Nephrologist ✓ (19 total now) → selected Nephrologist → review "Nephrology Starter Pack auto-installs (44 complaints · 42 medicines · 88 questions)" exact counts → launch → prod data verified: 44 complaints (रिपोर्ट में क्रिएटिनिन first), 42 medicines (Nefrosave, Nefrosave Forte, Ketostril, Ketosteril). Screenshot qa-p2-nep-complaints.png.
+- Cron job recreated as 443058 (previous one deleted by platform again).
+
+Stage Summary:
+- 🎉 P2 BATCH-3 LIVE IN PRODUCTION: 19 specialty packs total (10 T1 + CAR/GAS/OPH + PSY/NEU/PUL + URO/END/NEP). Onboarding dropdown: ALL 19 specialties carry "Starter pack ✓" badges.
+- Cold-start coverage now ~98% of Indian OPD volume. Pack library ~8,800 content rows.
+- India-specific safety wiring this batch: stone-belt fluid protocols (URO), Thyronorm 45-min empty-stomock compliance (END — India's most-missed instruction), NSAID-never-in-CKD + OTC-painkiller-epidemic framing + snake-bite AKI (NEP).
+- REMAINING P2: 2 packs (REP-01 IVF & Fertility, ONC-01 Oncology — both showInOnboarding:false/onc=true respectively; ONC visible badge-less until pack lands) → then P3.
+- PENDING OWNER: MBBS dose reviewer (19 packs amber-badged); admin password rotation ⚠️; Cloudinary CLOUD_NAME; Render realtime + UptimeRobot.
