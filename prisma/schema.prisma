@@ -119,11 +119,31 @@ model Doctor {
   sampleCollections        SampleCollection[]
   recallCampaigns          RecallCampaign[]
   tableTemplates           TableTemplateMaster[]
+  packInstalls             DoctorPackInstall[]
 
   // SECURITY (P4.7): Add indexes for doctor search/filter queries.
   @@index([specialization])
   @@index([city])
   @@index([state])
+}
+
+// ============ SPECIALTY STARTER PACKS ============
+// Install receipt: one row per (doctor, pack). Additive-only table —
+// pack content itself lives in the doctor's own master tables.
+model DoctorPackInstall {
+  id            String   @id @default(cuid())
+  doctorId      String
+  packCode      String
+  packVersion   String   @default("1.0.0")
+  status        String   @default("Installed") // Installed | Superseded | RolledBack
+  counts        String   @default("{}") // JSON receipt of installed item counts
+  installedById String? // null = system (onboarding auto-install); else admin userId
+  installedAt   DateTime @default(now())
+
+  doctor        Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, packCode])
+  @@index([packCode])
 }
 
 model Hospital {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/api-auth'
 import { logAction } from '@/lib/audit-log'
+import { installPack } from '@/lib/specialty-packs/install'
 
 /**
  * ONBOARDING-1: Doctor self-serve onboarding (solo practice, FREE plan —
@@ -188,6 +189,20 @@ export async function POST(req: NextRequest) {
       return { clinic, department, doctor, link, subscription }
     })
 
+    // ── Specialty Starter Pack (P0): auto-install on launch. Non-blocking —
+    // onboarding NEVER fails because of pack issues (docs/specialty-packs/03 §6 T1).
+    let pack: Awaited<ReturnType<typeof installPack>> = null
+    try {
+      pack = await installPack({
+        userId: user.id,
+        doctorId: created.doctor.id,
+        specialization,
+        installedById: null, // system install
+      })
+    } catch (packErr) {
+      console.error('[doctor-onboarding] starter pack install failed (non-blocking):', packErr)
+    }
+
     // Audit log (fire-and-forget style — never throws)
     try {
       await logAction({
@@ -197,7 +212,7 @@ export async function POST(req: NextRequest) {
         action: 'doctor_onboarded',
         entityType: 'doctor',
         entityId: created.doctor.id,
-        description: `Doctor onboarded: ${user.name} (${specialization}, ${city}) — clinic: ${created.clinic.hospitalName} on Free plan`,
+        description: `Doctor onboarded: ${user.name} (${specialization}, ${city}) — clinic: ${created.clinic.hospitalName} on Free plan${pack && pack.ok ? `; starter pack ${pack.packCode} v${pack.version} installed (${pack.summary})` : ''}`,
         severity: 'info',
         hospitalId: created.clinic.id,
         ipAddress: req.headers.get('x-forwarded-for') || '',
@@ -227,6 +242,18 @@ export async function POST(req: NextRequest) {
           planKey: created.subscription.planKey,
           status: created.subscription.status,
         },
+        ...(pack && pack.ok
+          ? {
+              starterPack: {
+                code: pack.packCode,
+                version: pack.version,
+                title: pack.title,
+                summary: pack.summary,
+                skipped: pack.skipped,
+                unverifiedDoses: pack.unverified,
+              },
+            }
+          : {}),
       },
       { status: 201 }
     )

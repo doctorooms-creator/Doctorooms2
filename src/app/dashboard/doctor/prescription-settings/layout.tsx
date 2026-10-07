@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { PackInstallBanner } from '@/components/dashboard/pack-install-banner'
 import {
   FolderOpen,
   Thermometer,
@@ -41,6 +42,9 @@ export default function PrescriptionSettingsLayout({
           Manage master data used in prescriptions — categories, complaints, suggestions, labels, findings, and print configuration.
         </p>
       </div>
+
+      {/* Specialty starter pack — empty-state banner / installed chip */}
+      <PackInstallBanner />
 
       {/* Sub-navigation tab bar */}
       <nav className="overflow-x-auto">

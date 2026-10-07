@@ -14,6 +14,7 @@ import {
   Building2,
   ArrowRight,
   ArrowLeft,
+  Backpack,
   Check,
   CheckCircle2,
   Loader2,
@@ -32,6 +33,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { onboardingSpecialties, resolvePackCode } from '@/lib/specialty-packs/registry'
+import { getPack } from '@/lib/specialty-packs/packs'
+import { packSummary } from '@/lib/specialty-packs/types'
 
 /**
  * ONBOARDING-1: Doctor self-serve onboarding wizard (solo practice, FREE plan).
@@ -39,20 +43,9 @@ import {
  * slide transitions, teal gradients, Card shell).
  */
 
-const SPECIALIZATIONS = [
-  'General Physician',
-  'Pediatrician',
-  'Dermatologist',
-  'Cardiologist',
-  'Orthopedist',
-  'Gynecologist',
-  'ENT Specialist',
-  'Neurologist',
-  'Psychiatrist',
-  'Dentist',
-  'Oncologist',
-  'Other',
-]
+// Specialty registry — single source of truth (docs/specialty-packs/01-DOCTOR-TAXONOMY.md).
+// Entries with packCode get a ready-made starter pack auto-installed on launch.
+const SPECIALTY_ENTRIES = onboardingSpecialties()
 
 const slideVariants = {
   enter: (direction: number) => ({
@@ -133,6 +126,10 @@ export function DoctorOnboardingClient() {
   const finalSpecialization =
     form.specialization === 'Other' ? form.customSpecialization.trim() : form.specialization
 
+  // The starter pack that will auto-install at launch (fallback chain → GP-01).
+  const PACK_FOR_REVIEW = finalSpecialization ? getPack(resolvePackCode(finalSpecialization)) : getPack('GP-01')
+  const PACK_SUMMARY = PACK_FOR_REVIEW ? packSummary(PACK_FOR_REVIEW) : ''
+
   const goNext = () => {
     if (step === 0) {
       if (!form.specialization) {
@@ -189,6 +186,12 @@ export function DoctorOnboardingClient() {
         return
       }
       toast.success('Your practice is live! Welcome to Doctorooms 🎉')
+      if (data.starterPack) {
+        toast.success(
+          `🎒 ${data.starterPack.title} installed — ${data.starterPack.summary}. Aap abhi customize kar sakte hain!`,
+          { duration: 6000 }
+        )
+      }
       router.push('/dashboard/doctor')
     } catch {
       toast.error('Something went wrong. Please try again.')
@@ -340,11 +343,19 @@ export function DoctorOnboardingClient() {
                           <SelectValue placeholder="Select your specialization" />
                         </SelectTrigger>
                         <SelectContent>
-                          {SPECIALIZATIONS.map((s) => (
-                            <SelectItem key={s} value={s}>
-                              {s}
+                          {SPECIALTY_ENTRIES.map((s) => (
+                            <SelectItem key={s.code} value={s.name}>
+                              <span className="flex items-center justify-between gap-3 w-full">
+                                {s.name}
+                                {s.packCode && (
+                                  <span className="text-[10px] font-medium text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 rounded-full px-2 py-0.5 whitespace-nowrap">
+                                    Starter pack ✓
+                                  </span>
+                                )}
+                              </span>
                             </SelectItem>
                           ))}
+                          <SelectItem value="Other">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -578,6 +589,21 @@ export function DoctorOnboardingClient() {
                       full clinic engine (OPD queue, digital Rx, 1 receptionist + 1 nurse seats).
                       Upgrade anytime from{' '}
                       <span className="font-medium text-foreground">Plan &amp; Billing</span>.
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-950/20 p-3 flex items-start gap-2">
+                    <Backpack className="h-4 w-4 text-teal-600 dark:text-teal-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">Starter pack included</span> —{' '}
+                      {PACK_FOR_REVIEW ? (
+                        <>
+                          {PACK_FOR_REVIEW.meta.title} auto-installs at launch ({PACK_SUMMARY}),
+                          so your 6-step Rx wizard is ready from Day-1. Sab kuch customize kar sakte hain.
+                        </>
+                      ) : (
+                        <>General Practice base content installs at launch, so your Rx wizard isn't blank on Day-1.</>
+                      )}
                     </p>
                   </div>
                 </motion.div>
