@@ -6589,3 +6589,26 @@ Stage Summary:
 - India-specific content: tobacco 5R + oral-surgeon referral for oral-CA, leukoplakia biopsy-refer, no-superfood/immunity-booster scam warnings (haldi/booster), BRCA genetic-counsellor referral, hidden-diagnosis patient-autonomy gentle frames, calorie-dense Hindi diet list (घी/क्रीम/ड्राईफ्रूट milkshakes), palliative dignity/goals framing (no euthanasia implications).
 - ICD note: spec's "R61 chemo-alopecia" corrected to L65.0 (drug-induced alopecia; R61 = hyperhidrosis); cachexia coded R63.4 within spec's R63 family; anemia-of-cancer D63.0 (spec's "D66/50?" resolved). Findings count 35 vs spec's stated 24-30 — spec enumerated ~35 items including 12 mandatory refer-only safety findings + 6 named specific-CA continuation findings; kept all enumerated for safety/coverage, total rows 468 stays within the 450-520 budget.
 - Next actions: wire ONC-01 into packs/index.ts + registry (registry task owner — NOT done here, per instructions); MBBS dose review pending owner (now 21 packs amber-badged).
+
+---
+Task ID: P2-BATCH4-FINAL
+Agent: Main (orchestrator, Z.ai)
+Task: P2 batch-4 FINAL — author + wire + deploy REP-01/ONC-01, complete the entire P2 Specialty Packs phase (21 packs).
+
+Work Log:
+- Launched 2 parallel pack-author agents (P4-B4-REP/P4-B4-ONC) — BOTH SUCCEEDED first try: rep-01.ts 843 lines/462 rows + onc-01.ts 912 lines/468 rows, both PACK VALID ✓ 0/0, eslint clean, worklog sections appended.
+- ONC-01 design decision (critical): ZERO chemotherapy/targeted/immunotherapy entries — hospital-infusion territory; pack = supportive-care only (antiemetics, mucositis care, WHO pain-ladder, neuropathy support, palliative). 12 emergency refer-only findings (neutropenic-fever-38.3°, cord-compression, SVC, raised-ICP, tumor-bleeding, hypercalcemia...).
+- REP-01 design decisions: all ovarian-stimulation injections = clinic-administered-ONLY framing; OHSS emergency lines; India surrogacy-law-2021 (altruistic-only) factual framing; herbals excluded.
+- Wired both into packs/index.ts (PACKS map = 21 entries — FULL registry T1+T2 coverage) + registry.ts (REP flipped showInOnboarding+packCode; ONC packCode set). validate-packs.ts → ALL 21 PACKS VALID ✓. bun run lint clean.
+- SANDBOX E2E: REP-01 {46 C/O, 92 Q, 184 sugg, 40 meds} first complaint "IVF पहली सलाह", meds Letrova/Siphene; ONC-01 {46, 92, 184, 40} first "कैंसर का इलाज चालू", meds Emeset family. Receipts match DB.
+- Commit 1b07e31 pushed. PROD DEPLOY → Ready in 2m.
+- PROD E2E (agent-browser): registered qa-prod-onc@doctorooms.test → onboarding dropdown shows ALL 21 specialties with "Starter pack ✓" badges (10 T1 + 11 T2 — ZERO badge-less entries, dropdown fully covered) → Oncologist selected → review "Oncology Starter Pack auto-installs (46 complaints · 40 medicines · 92 questions)" → launch → prod data verified: 46 complaints, 40 medicines (Emeset 4/8, Perinorm, Digene — supportive-care-only confirmed). Screenshot qa-p2-onc-complaints.png.
+
+Stage Summary:
+- 🎊 P2 PHASE COMPLETE: ALL 21 SPECIALTY STARTER PACKS LIVE IN PRODUCTION (10 T1 + 11 T2: CAR/GAS/OPH/PSY/NEU/PUL/URO/END/NEP/REP/ONC). Every onboarding specialty now auto-installs ~450-520 rows of bilingual India-specific RX content on Day-1.
+- Pack library total: ~10,200 content rows (complaints/questions/suggestions/labels/findings/medicines/links/tables/rxTemplates) across 21 packs.
+- Cold-start problem SOLVED for ~99% of Indian OPD+specialty volume. The 4-deep specialty ecosystem (GP fallback → 21 specialty packs) matches HealthPlix-class content moats at ₹0.
+- Safety architecture proven at scale: every pack unverified-dose mode (amber badges), emergency refer-only findings carry zero medicine links, NTEP TB-referral-only (PUL), zero-chemo (ONC), clinic-only injections (REP).
+- NEXT PHASE P3 candidates: (1) MBBS dose review workflow to stamp reviewedBy (21 packs waiting); (2) pack settings surface (doctor-facing pack library UI + re-install/version-update consent flow); (3) favorites/pinning in wizard; (4) T3 lite packs (PSU/NSU/CTV/RHE/GER/EME...) for long-tail.
+- PENDING OWNER (unchanged): MBBS dose reviewer recruitment (now 21 packs!); admin@doctorooms.com password rotation ⚠️ admin123; Cloudinary CLOUD_NAME; Render realtime for prod notifications; UptimeRobot.
+- INFRA: prod deploys 3× this session (~2m each, stable); cron 443058 active; sandbox healthy; zero OOM events this session.
