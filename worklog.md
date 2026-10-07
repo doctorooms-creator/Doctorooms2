@@ -6407,3 +6407,40 @@ Stage Summary:
 - REMAINING P2: 8 packs (PSY/PUL/NEU/URO/END/NEP/REP/ONC) — Psychiatrist/Neurologist/Oncologist still badge-less in dropdown (fallback GP-01), PUL/URO/END/NEP/REP not yet in dropdown (flip showInOnboarding when pack lands).
 - PENDING OWNER: MBBS dose reviewer; admin@doctorooms.com password rotation (admin123 ⚠️); Cloudinary CLOUD_NAME; Render realtime + UptimeRobot.
 - NEXT: P2 batch-2 (PSY-01, NEU-01, PUL-01) via parallel pack-author agents (lean prompt pattern works — CAR succeeded on 2nd attempt; consider pre-seeding from 1st-attempt timeout pattern: agents should write file FIRST, validate after) → batch-3 (URO/END/NEP) → batch-4 (REP/ONC) → P3 (pack settings surface, favorites, version-consent).
+
+---
+Task ID: P2-PSY
+Agent: pack-author
+Task: Author PSY-01 psychiatry starter pack file
+
+Work Log:
+- Read types.ts (SpecialtyPack interface — source of truth) + gp-01.ts (format precedent) only.
+- Authored src/lib/specialty-packs/packs/psy-01.ts (925 lines, 140K) exporting PSY01_PACK, mirroring gp-01 structure/style exactly (bilingual Devanagari-primary, unverified-dose mode, ICD-10 findings, real Indian brands).
+- Ran bun scripts/validate-one-pack.ts PSY-01 → "PACK PSY-01 VALID ✓" 0 errors 0 warnings (fixed link count 43→42 to land inside 34-42 band).
+- Ran bunx eslint on the file → clean (exit 0).
+- Custom safety audit script: // idx N comments 94/94 zero drift; exactly 2 suggestions per question (188, no uncovered); 13 refer-only findings with ZERO findingMeds links; 6 suicide-screen questions (q2/q9/q12/q17/q84/q87) + 17 questions carrying Tele-MANAS 14416 / 112 crisis lines; no forbidden classes.
+- Final counts: 6 categories · 44 C/O · 94 questions · 188 suggestions · 12 labels · 30 findings · 55 medicines · 42 findingMeds · 6 tables · 6 rxTemplates = 483 rows total.
+
+Stage Summary:
+- PSY-01 (T2, v1.0.0, Psychiatry) authored and validated — India tier-2/3 psychiatry OPD mix: depression/anxiety/OCD/sleep/substance + heavy follow-up-continuation (bipolar F31, schizophrenia F20, OCD FU) + counselling-first framing.
+- Refer-only findings (zero meds, validator-verified): SUICIDAL-IDEATION-HIGH, PSYCHOSIS-ACUTE, ALCOHOL-WITHDRAWAL-SEVERE, POST-PARTUM-PSYCHOSIS, POSTPARTUM-DEP-SCREEN (O90), DELIRIUM-ACUTE, EATING-DISORDER-SUSPECT, DEMENTIA-EVAL, CHILD-ADHD-EVAL, BIPOLAR-MANIA-ACUTE, LITHIUM-TOXICITY-SUSPECT, SEROTONIN-SYNDROME-SUSPECT, OSA-SEVERE.
+- Safety exclusions made: no clozapine/restricted antipsychotics, no injectables/decanoates, no MAOIs, no stimulants (child-ADHD = refer-only), no convulsive-therapy content, no varenicline (NRT used instead), Zopax skipped per spec; lithium/valproate/antipsychotics are continuation-verify-only (never new starts); ALL benzos/Z-drugs carry max-2-4-weeks + taper + dependence + never-with-alcohol notes, rxTemplate benzo duration ≤7 days; valproate/paroxetine NEVER-in-pregnancy flags; anti-stigma + crisis lines (Tele-MANAS 14416, 112) throughout; 1-week medicine-dispense-limit framing on at-risk presentations.
+- Note: meta uses title (types.ts PackMeta has no specialization/name field — specialization resolved via registry.ts); did not touch packs/index.ts or registry.ts.
+---
+Task ID: P2-NEU
+Agent: pack-author
+Task: Author NEU-01 neurology starter pack file
+
+Work Log:
+- Read types.ts (SpecialtyPack contract) + gp-01.ts (format precedent) only.
+- Authored src/lib/specialty-packs/packs/neu-01.ts (855 lines, NEU01_PACK, T2, v1.0.0, Neurologist specialization noted in meta.sourceNotes since SpecialtyPack has no specialization field).
+- Built: 6 categories (HDC/EPL/STR/NMN/VTS/MOV), 44 complaints, 88 questions (2 per complaint, every line annotated // idx N with zero drift, verified by script), 176 suggestions (exactly 2 per question), 12 labels, 40 findings (19 managed + 21 refer-only), 54 medicines (real Indian brands, all flags.verified=false), 43 findingMeds links, 6 tables, 6 rxTemplates = 475 total rows.
+- Ran bun scripts/validate-one-pack.ts NEU-01 → "PACK NEU-01 VALID ✓", 0 errors 0 warnings.
+- Ran bunx eslint on the file → clean (exit 0); standalone tsc --strict → clean (exit 0).
+- Renamed REHAB-STATUS → REHAB-FU so no refer-only-looking keyword remains on a med-linked finding.
+
+Stage Summary:
+- NEU-01 authored and validated: 6 categories · 44 C/O · 88 questions · 176 suggestions · 12 labels · 40 findings · 54 medicines · 43 links · 6 tables · 6 Rx templates · 475 rows.
+- Refer-only findings with ZERO medicine links (21): SAH-SUSPECT, MENINGITIS-SUSPECT, RAISED-ICP-SUSPECT, STROKE-ACUTE, TIA-ACUTE, SEIZURE-FIRST-EVER, STATUS-EPILEPTICUS, GBS-SUSPECT, MG-SUSPECT, MS-SUSPECT, BRAIN-TUMOR-FLAGS, MOTOR-NEURON-SUSPECT, DELIRIUM-ACUTE, CHILD-MILESTONE-DELAY, MYASTHENIA-CRISIS-SUSPECT, BELLS-SUSPECT, MENIERE-SUSPECT, PD-SUSPECT, DEMENTIA-SUSPECT, DOUBLE-VISION-SUSPECT, CTS-SUSPECT (screen→NCS).
+- Safety exclusions kept: diclofenac/Voveran excluded (cardiac); acute stroke/TIA zero meds (thrombolysis = hospital/108); AEDs/Parkinson/dementia/stroke-prevention as continuation-verify only (never-abrupt, valproate pregnancy-never, lamotrigine SJS titration, phenytoin narrow-TI/gingival, carbamazepine hyponatremia/SJS); triptans capped 2 doses/24 h + 24 h gap + coronary-never + SSRI caution; MOH >10 days/month warnings on NSAIDs/paracetamol; Ultracet SOS-only with dependence note; no opioids chronic; no child dosing (pediatric neuro referral instead); ACT-FAST + 108 + 4.5-hour window lines across all sudden-onset complaint suggestions.
+- Did not touch packs/index.ts, registry.ts, or any other file. No dev server/build/tests run.
