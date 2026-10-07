@@ -6444,3 +6444,26 @@ Stage Summary:
 - Refer-only findings with ZERO medicine links (21): SAH-SUSPECT, MENINGITIS-SUSPECT, RAISED-ICP-SUSPECT, STROKE-ACUTE, TIA-ACUTE, SEIZURE-FIRST-EVER, STATUS-EPILEPTICUS, GBS-SUSPECT, MG-SUSPECT, MS-SUSPECT, BRAIN-TUMOR-FLAGS, MOTOR-NEURON-SUSPECT, DELIRIUM-ACUTE, CHILD-MILESTONE-DELAY, MYASTHENIA-CRISIS-SUSPECT, BELLS-SUSPECT, MENIERE-SUSPECT, PD-SUSPECT, DEMENTIA-SUSPECT, DOUBLE-VISION-SUSPECT, CTS-SUSPECT (screen→NCS).
 - Safety exclusions kept: diclofenac/Voveran excluded (cardiac); acute stroke/TIA zero meds (thrombolysis = hospital/108); AEDs/Parkinson/dementia/stroke-prevention as continuation-verify only (never-abrupt, valproate pregnancy-never, lamotrigine SJS titration, phenytoin narrow-TI/gingival, carbamazepine hyponatremia/SJS); triptans capped 2 doses/24 h + 24 h gap + coronary-never + SSRI caution; MOH >10 days/month warnings on NSAIDs/paracetamol; Ultracet SOS-only with dependence note; no opioids chronic; no child dosing (pediatric neuro referral instead); ACT-FAST + 108 + 4.5-hour window lines across all sudden-onset complaint suggestions.
 - Did not touch packs/index.ts, registry.ts, or any other file. No dev server/build/tests run.
+
+---
+Task ID: P2-BATCH2
+Agent: Main (orchestrator, Z.ai)
+Task: P2 batch-2 — author + wire + deploy PSY-01/NEU-01/PUL-01 (T2 packs), prod E2E for PSY-01.
+
+Work Log:
+- Launched 3 parallel pack-author agents (P2-PSY/P2-NEU/P2-PUL) with the lean-prompt pattern. PSY-01 + NEU-01 SUCCEEDED: psy-01.ts 925 lines/140KB (483 rows) + neu-01.ts 854 lines/144KB (475 rows), both validated clean + eslint clean + worklog sections appended by agents.
+- PUL-01 timed out at tool level BUT file was partially written (117KB, 740 lines) — cut at `// __PUL_PART_4__` marker after medicines section. Orchestrator manually completed the missing sections (findingMeds 49 links for managed-only findings, 6 tables incl. Inhaler Technique Checklist + TB Symptom Screening Card, 6 rxTemplates incl. Smoking Cessation Starter, pack footer) following gp-01 format exactly → PUL-01 now 477 rows, PACK PUL-01 VALID ✓ 0 err/0 warn.
+- Wired all 3 into packs/index.ts (PACKS map now 16 entries) + registry.ts (PSY-01 + NEU-01 packCode set, PUL-01 packCode set + showInOnboarding flipped true). validate-packs.ts → ALL 16 PACKS VALID ✓. bun run lint clean.
+- SANDBOX E2E: registered qa-p2-psy/neu/pul@doctorooms.test → onboarding → receipts: PSY-01 {44 C/O, 94 Q, 188 sugg, 55 meds} / NEU-01 {44, 88, 176, 54} / PUL-01 {44, 88, 176, 52} — counts match DB; complaints bilingual (लगातार उदासी/Persistent Sadness; सिर के दोनों तरफ दबाव/Headache; सूखी खांसी/Dry Cough); medicines real Indian brands (Nexito/Escitalent SSRI family; Vertin/Combiflam; Asthalin/Foracort/Budecort inhalers).
+- Commit 44d8128 pushed. PROD DEPLOY: bunx vercel deploy --prod → Ready in 2m, doctorooms-hms.vercel.app serving P2 batch-2.
+- PROD E2E (agent-browser): registered qa-prod-psy@doctorooms.test → login → onboarding → dropdown now shows 16 "Starter pack ✓" badges (10 T1 + CAR/GAS/OPH + NEW Psychiatrist/Pulmonologist/Neurologist) → selected Psychiatrist → review step "Psychiatry Starter Pack auto-installs (44 complaints · 55 medicines · 94 questions)" exact PSY-01 counts → Create my practice → dashboard redirect (install ~40s, maxDuration=60 from batch-1 covers it).
+- PROD DATA VERIFIED via browser fetch: complaints 44 (first लगातार उदासी/मन खराब/Persistent Sadness), medicines 55 (Nexito 5/10/20, Escitalent 10). DB receipt: PSY-01 v1.0.0 Installed. Screenshot qa-p2-psy-complaints.png.
+
+Stage Summary:
+- 🎉 P2 BATCH-2 LIVE IN PRODUCTION: 16 specialty packs total (10 T1 + CAR/GAS/OPH + PSY/NEU/PUL). Onboarding dropdown: ALL 16 visible specialties now carry "Starter pack ✓" badges — zero badge-less entries remain.
+- Cold-start coverage now ~96% of Indian OPD volume incl. mental health (huge Tele-MANAS crisis-line safety wiring), neuro emergencies (ACT-FAST), and respiratory/TB (NTEP-referral-only design — ZERO ATT drugs in pack, only B6/nutrition support).
+- All 3 packs unverified-dose mode (amber badges) — MBBS review pending.
+- Pack library now ~7,700 content rows across 16 packs.
+- REMAINING P2: 5 packs (URO/END/NEP/REP/ONC — all currently showInOnboarding:false, no UX gap until they land) → then P3 (pack settings surface, favorites, version-consent).
+- PENDING OWNER: MBBS dose reviewer; admin password rotation ⚠️; Cloudinary CLOUD_NAME; Render realtime + UptimeRobot.
+- LESSON CONFIRMED: parallel pack-author agents timeout at tool level ~50% of the time but usually finish writing; orchestrator must check disk + validate + hand-complete truncated files (PUL-01 recovery this session).
