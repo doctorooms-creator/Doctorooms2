@@ -1,0 +1,10 @@
+import { db } from '../src/lib/db'
+const installs = await db.doctorPackInstall.findMany({ take: 12, orderBy: { installedAt: 'desc' }, select: { packCode: true, status: true, installedAt: true } })
+console.log('DB reachable ✓ — pack installs:', installs.length)
+for (const i of installs) console.log(' -', i.packCode, i.status, i.installedAt.toISOString())
+const withSb = await db.user.count({ where: { profileImg: { contains: 'supabase' } } })
+const total = await db.user.count()
+console.log(`profileImg supabase refs: ${withSb} of ${total} users`)
+const myObg = await db.user.findUnique({ where: { email: 'qa-p1-obg@doctorooms.test' }, select: { id: true } })
+console.log('qa-p1-obg exists:', !!myObg)
+await db.$disconnect()
