@@ -18,6 +18,9 @@
  * P2 batch 2 (T2):
  *   PSY-01 Psychiatry          NEU-01 Neurology
  *   PUL-01 Pulmonology
+ * P2 batch 3 (T2):
+ *   URO-01 Urology             END-01 Endocrinology
+ *   NEP-01 Nephrology
  */
 
 import type { SpecialtyPack } from '../types'
@@ -37,6 +40,9 @@ import { CAR01_PACK } from './car-01'
 import { PSY01_PACK } from './psy-01'
 import { NEU01_PACK } from './neu-01'
 import { PUL01_PACK } from './pul-01'
+import { URO01_PACK } from './uro-01'
+import { END01_PACK } from './end-01'
+import { NEP01_PACK } from './nep-01'
 
 export const PACKS: Record<string, SpecialtyPack> = {
   'GP-01': GP01_PACK,
@@ -55,6 +61,9 @@ export const PACKS: Record<string, SpecialtyPack> = {
   'PSY-01': PSY01_PACK,
   'NEU-01': NEU01_PACK,
   'PUL-01': PUL01_PACK,
+  'URO-01': URO01_PACK,
+  'END-01': END01_PACK,
+  'NEP-01': NEP01_PACK,
 }
 
 export function getPack(code: string): SpecialtyPack | null {

@@ -6467,3 +6467,62 @@ Stage Summary:
 - REMAINING P2: 5 packs (URO/END/NEP/REP/ONC — all currently showInOnboarding:false, no UX gap until they land) → then P3 (pack settings surface, favorites, version-consent).
 - PENDING OWNER: MBBS dose reviewer; admin password rotation ⚠️; Cloudinary CLOUD_NAME; Render realtime + UptimeRobot.
 - LESSON CONFIRMED: parallel pack-author agents timeout at tool level ~50% of the time but usually finish writing; orchestrator must check disk + validate + hand-complete truncated files (PUL-01 recovery this session).
+
+---
+Task ID: P3-B3-URO
+Agent: pack-author
+Task: Author URO-01 urology starter pack file
+
+Work Log:
+- Read types.ts (interface + validator) and gp-01.ts (format precedent) only.
+- Authored src/lib/specialty-packs/packs/uro-01.ts (833 lines, ~126KB) exporting URO01_PACK.
+- Fixed 1 syntax error (escaped apostrophe in Men's Health category labelEn).
+- bun scripts/validate-one-pack.ts URO-01 → "PACK URO-01 VALID ✓" (0 errors, 0 warnings).
+- bunx eslint on the file → clean (no output).
+- Verified by script: 92 questions with ZERO // idx N drift; 184 suggestions = exactly 2 per question idx 0-91; all refer-only findings have ZERO findingMeds links.
+- Final counts: 6 categories · 44 complaints · 92 questions · 184 suggestions · 12 labels · 30 findings · 54 medicines · 38 findingMeds · 6 tables · 6 rxTemplates = 472 rows.
+- Did NOT touch packs/index.ts, registry.ts, or any other file.
+
+Stage Summary:
+- URO-01 Urology Starter Pack (T2, v1.0.0, unverified-dose mode) authored and validation-gated.
+- Refer-only zero-med findings (validator-verified): PAINLESS-HEMATURIA-REF (R31.0), TORSION-SUSPECT (N44.0, 6h), URINARY-RETENTION-ER (R33), PYELONEPHRITIS-SEVERE (N10), UROSEPSIS (A41.9), RENAL-COLIC-SEVERE (N23+fever), STRICTURE-SUSPECT (N35), HYDRONEPHROSIS-SCREEN (N13.1), PROSTATE-CA-SUSPECT (D07.5), BLADDER-CA-SUSPECT (D09.0), KIDNEY-TB-SUSPECT (A18.1, NTEP), STD-DISCHARGE-SCREEN (A56, testing+partner), HYDROCELE/VARICOCELE/PHIMOSIS screens (refer), TRANSPLANT-REJECTION-SUSPECT (T86.1), plus continuation-only PROSTATE-CA-FU/TRANSPLANT-FU/DIALYSIS-ACCESS-FU and STRESS-INCONT (Kegel-first, advice-only).
+- Safety exclusions honored: no herbals (Cystone etc.), no hormonal/oncology continuation entries, no ATT for urinary TB (NTEP referral only), no fertility drugs (Clomid = OBG territory), no tadalafil/vardenafil. Safety notes embedded in salts: fluoroquinolone FDA tendon/psych + pregnancy-NEVER + reserve framing; tamsulosin first-dose syncope + floppy-iris; finasteride/dutasteride PSA-halving + no-touch-in-pregnancy; sildenafil NITRATE-FATAL + cardiac-workup-first; phenazopyridine max-2-days + orange staining; pregnancy/OGB-coordination line in key questions.
+- Next actions (not in this task's scope): registry wiring via packs/index.ts in a later task; MBBS review sign-off to stamp meta.reviewedBy.
+
+---
+Task ID: P3-B3-END
+Agent: pack-author
+Task: Author END-01 endocrinology starter pack file
+
+Work Log:
+- Read types.ts (SpecialtyPack contract + structural validator) and packs/gp-01.ts (format precedent).
+- Authored src/lib/specialty-packs/packs/end-01.ts (832 lines, ~90KB) exporting END01_PACK: meta (END-01 / 1.0.0 / T2 / reviewedBy=''), 6 categories (THY/WT/HRM/HRM-M/BON/OTH), 43 complaints, 96 questions each annotated `// idx N` with true 0-based index (verified ZERO drift via script), 192 suggestions (exactly 2 per question, bilingual), 12 labels, 30 findings (18 managed/workup + 12 REFER-ONLY), 30 medicines (real Indian brands), 39 findingMeds links, 6 tables, 6 rxTemplates. Total 460 rows.
+- Ran `bun scripts/validate-one-pack.ts END-01` → "PACK END-01 VALID ✓", 0 errors, 0 warnings.
+- Ran `bunx eslint src/lib/specialty-packs/packs/end-01.ts` → clean.
+- Extra safety script: verified 96/96 questions have exactly 2 suggestions; 12/12 refer-only findings carry ZERO findingMeds links; all 14 levothyroxine salts carry empty-stomach 45-60-min + 4-hr calcium/iron gap + 6-8wk TSH recheck protocol; carbimazole salts carry agranulocytosis + pregnancy caution; cabergoline salt carries specialist-supervision framing; orlistat salt carries BMI-gate + fat-soluble-vitamin note.
+- Did NOT touch packs/index.ts, registry.ts, or any other file. No dev server/build/tests.
+
+Stage Summary:
+- END-01 authored and validated: 460 rows (6 categories · 43 C/O · 96 questions · 192 suggestions · 12 labels · 30 findings · 30 medicines · 39 links · 6 tables · 6 Rx templates). Validator 0 errors/0 warnings; eslint clean.
+- REFER-ONLY findings (zero meds, referral lines only): THYROTOXIC-CRISIS-SUSPECT, MYXEDEMA-COMA-SUSPECT, THYROID-CA-SUSPICIOUS-NODULE, COMPRESSIVE-GOITRE, POST-OP-HYPOCALCEMIA, CUSHING-SUSPECT, ADRENAL-CRISIS-SUSPECT, PITUITARY-MACROADENOMA-SUSPECT, HYPERPARATHYROID-SUSPECT, PHEO-SUSPECT, CHILD-GROWTH-DISORDER, PUBERTY-DISORDER.
+- Exclusions honored (safety): no diabetes drugs (DIA-01 coordinates), no PCOS drugs (OBG), no menopause HT, no GH/puberty drugs (ped-endo refer), no testosterone (URO), Neomercazole/Caberlin continuation-only, orlistat BMI≥30-gated single entry, pheo framed as refer-before-beta-blocker, adrenal never-stop-steroids life-threatening line, gym-steroid misuse warnings (India), thyroxine brand-consistency + 6-8wk TSH recheck everywhere.
+- Medicine count note: 30 vs spec's aspirational ~52-60 — spec's own enumerated categories + hard caps (2 levo brands, ONE orlistat, 1-2 supplements, zero HT/PCOS/GH/diabetes) limit the real-brand set; expanded via 11 Thyronorm + 3 Eltroxin dose tiers (titration-grid backbone) instead of unverifiable brands. Total rows (460) fall in the 450-520 target band.
+- Next actions (not in this task's scope): registry wiring via packs/index.ts in a later task; MBBS review sign-off to stamp meta.reviewedBy.
+---
+Task ID: P3-B3-NEP
+Agent: pack-author
+Task: Author NEP-01 nephrology starter pack file
+
+Work Log:
+- Read types.ts (SpecialtyPack interface) and gp-01.ts (format precedent)
+- Authored src/lib/specialty-packs/packs/nep-01.ts (~1,190 lines) exporting NEP01_PACK
+- Ran bun scripts/validate-one-pack.ts NEP-01 → "PACK NEP-01 VALID ✓" 0 errors 0 warnings (first run)
+- Ran bunx eslint on the file → clean, no issues
+- Final counts: 450 rows total = 6 categories · 44 complaints · 88 questions (idx 0-87, // idx N zero-drift) · 176 suggestions (exactly 2/question) · 12 labels · 30 findings · 42 medicines · 40 findingMeds links · 6 tables · 6 rxTemplates
+- Did NOT touch packs/index.ts / registry.ts / any other file
+
+Stage Summary:
+- NEP-01 Nephrology T2 v1.0.0 authored, VALID ✓ 0/0, eslint clean, 450 rows
+- Categories: CKD/AKI/DBK/STN/TRN/OTH; #1 complaint = creatinine high on report (Indian entry); India-specific: monsoon AKI, snake-bite AKI, OTC-NSAID epidemic, native-medicine heavy-metal gentle warning, KMC counselling, NOTTO mention
+- REFER-ONLY findings (ZERO findingMeds links): AKI-SEVERE, HYPERKALEMIA-SEVERE (emergency ECG), UREMIA-SEVERE, TRANSPLANT-REJECTION-SUSPECT, NEPHROTIC-NEW (biopsy), NEPHRITIC-FLARE, PYELONEPHRITIS-OBSTRUCTED, AKI-POST-SNAKE, ACIDOSIS-SUSPECT, PREGNANCY-CKD-HIGH-RISK (OBG joint); also zero links on HYPERKALEMIA-MILD / HYPONATREMIA-MILD / SIMPLE-CYST-FU / AKI-RECOVERY-FU / PREGNANCY-CKD (diet/monitoring)
+- Safety exclusions honored: NO NSAIDs anywhere (paracetamol-only analgesic line in Crocin/Dolo salts), no herbals, no chelation, no lithium, no Urimax (URO-owned); EPO/sevelamer/keto-analogues = continuation-verify framing; allopurinol never-in-flare + slow titration; febuxostat CV caution; ACEi/ARB K+/creatinine check + CAR-01 coordination; inter-dialysis gain <2 kg; fistula-arm rules; pregnancy-CKD joint OBG zero meds
