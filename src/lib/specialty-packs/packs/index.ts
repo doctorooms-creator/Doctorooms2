@@ -12,6 +12,9 @@
  *   DRM-01 Dermatology         ORT-01 Orthopedics
  *   ENT-01 ENT                 SUR-01 General Surgery
  *   DEN-01 Dentistry
+ * P2 batch 1 (T2):
+ *   CAR-01 Cardiology          GAS-01 Gastroenterology
+ *   OPH-01 Ophthalmology
  */
 
 import type { SpecialtyPack } from '../types'
@@ -25,6 +28,9 @@ import { ORT01_PACK } from './ort-01'
 import { ENT01_PACK } from './ent-01'
 import { SUR01_PACK } from './sur-01'
 import { DEN01_PACK } from './den-01'
+import { GAS01_PACK } from './gas-01'
+import { OPH01_PACK } from './oph-01'
+import { CAR01_PACK } from './car-01'
 
 export const PACKS: Record<string, SpecialtyPack> = {
   'GP-01': GP01_PACK,
@@ -37,6 +43,9 @@ export const PACKS: Record<string, SpecialtyPack> = {
   'ENT-01': ENT01_PACK,
   'SUR-01': SUR01_PACK,
   'DEN-01': DEN01_PACK,
+  'CAR-01': CAR01_PACK,
+  'GAS-01': GAS01_PACK,
+  'OPH-01': OPH01_PACK,
 }
 
 export function getPack(code: string): SpecialtyPack | null {
