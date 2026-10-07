@@ -344,3 +344,98 @@ export async function sendRawSms(
 export async function testSmsProvider(phone: string): Promise<SendSmsResult> {
   return sendRawSms(phone, 'Doctorooms test message — your SMS gateway is configured correctly.', 'sms')
 }
+
+// ─── Channel Status Helpers (notification-settings UI) ───────────────────
+
+/**
+ * True when a REAL SMS provider is wired up (not the dev 'log' sink).
+ * MSG91 needs an auth key; Twilio needs SID + token + a from-number.
+ */
+export function isSmsConfigured(): boolean {
+  const provider = getProvider()
+  if (provider === 'msg91') return Boolean(process.env.MSG91_AUTH_KEY)
+  if (provider === 'twilio') {
+    return Boolean(
+      process.env.TWILIO_ACCOUNT_SID &&
+      process.env.TWILIO_AUTH_TOKEN &&
+      process.env.TWILIO_FROM_SMS
+    )
+  }
+  return false
+}
+
+/**
+ * True when WhatsApp delivery is possible — either a Twilio WhatsApp
+ * from-number or Gupshup source credentials are configured.
+ */
+export function isWhatsAppConfigured(): boolean {
+  if (process.env.GUPSHUP_API_KEY && process.env.GUPSHUP_SOURCE_NUMBER) return true
+  return Boolean(
+    process.env.TWILIO_ACCOUNT_SID &&
+    process.env.TWILIO_AUTH_TOKEN &&
+    process.env.TWILIO_FROM_WHATSAPP
+  )
+}
+
+export interface SendViaChannelOptions {
+  userId: string
+  hospitalId?: string
+  /** Raw phone (normalized to E.164 internally). */
+  recipient: string
+  message: string
+  templateName: string
+  /** 'SMS' | 'WhatsApp' | 'Both' (case-insensitive). */
+  channel?: string
+}
+
+/**
+ * Fire-and-forget channel send WITH a NotificationLog audit row.
+ * Used by the admin/hospital "test send" flow — the caller then reads the
+ * latest NotificationLog row to surface the result. Never throws.
+ */
+export async function sendViaChannel(opts: SendViaChannelOptions): Promise<void> {
+  try {
+    const phone = normalizePhone(opts.recipient || '')
+    const rawChannel = (opts.channel || 'SMS').toLowerCase()
+    const channel: 'sms' | 'whatsapp' | 'both' =
+      rawChannel === 'whatsapp' ? 'whatsapp' : rawChannel === 'both' ? 'both' : 'sms'
+
+    const provider = getProvider()
+    let result: SendSmsResult
+    if (provider === 'log') {
+      result = await sendViaLog(phone, opts.message, channel)
+    } else if (provider === 'msg91') {
+      result = await sendViaMsg91(phone, opts.message)
+    } else {
+      result = await sendViaTwilio(phone, opts.message, channel)
+    }
+
+    // Audit trail row — status mirrors the provider result.
+    await db.notificationLog
+      .create({
+        data: {
+          userId: opts.userId,
+          hospitalId: opts.hospitalId || null,
+          channel: channel === 'whatsapp' ? 'WhatsApp' : channel === 'both' ? 'SMS+WhatsApp' : 'SMS',
+          recipient: phone,
+          content: opts.message,
+          templateName: opts.templateName,
+          status: result.success ? 'Sent' : 'Failed',
+          externalId: result.messageId || '',
+          errorMessage: result.error || '',
+          sentAt: result.success ? new Date() : null,
+        },
+      })
+      .catch((e: unknown) => {
+        console.error('[notify-channels] NotificationLog write failed:', e instanceof Error ? e.message : String(e))
+      })
+
+    if (result.success) {
+      console.log(`[notify-channels] sent via ${result.provider} to ${phone} (${opts.templateName})`)
+    } else {
+      console.warn(`[notify-channels] FAILED via ${result.provider} to ${phone}: ${result.error}`)
+    }
+  } catch (e: unknown) {
+    console.error('[notify-channels] sendViaChannel error:', e instanceof Error ? e.message : String(e))
+  }
+}

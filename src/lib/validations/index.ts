@@ -10,6 +10,7 @@ export * from './bed'
 export * from './ot'
 export * from './inventory'
 export * from './charge-master'
+export * from './insurance'
 
 /** Validate request body against a Zod schema. Returns parsed data or error response. */
 export function validateBody<T>(schema: z.ZodType<T>, body: unknown):
