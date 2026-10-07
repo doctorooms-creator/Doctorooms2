@@ -6547,3 +6547,45 @@ Stage Summary:
 - India-specific safety wiring this batch: stone-belt fluid protocols (URO), Thyronorm 45-min empty-stomock compliance (END — India's most-missed instruction), NSAID-never-in-CKD + OTC-painkiller-epidemic framing + snake-bite AKI (NEP).
 - REMAINING P2: 2 packs (REP-01 IVF & Fertility, ONC-01 Oncology — both showInOnboarding:false/onc=true respectively; ONC visible badge-less until pack lands) → then P3.
 - PENDING OWNER: MBBS dose reviewer (19 packs amber-badged); admin password rotation ⚠️; Cloudinary CLOUD_NAME; Render realtime + UptimeRobot.
+---
+Task ID: P4-B4-REP
+Agent: pack-author
+Task: Author REP-01 IVF & fertility starter pack file
+
+Work Log:
+- Read types.ts (SpecialtyPack interface + validator) and gp-01.ts (format precedent); checked uro-01.ts for `// idx N` question-index convention.
+- Authored src/lib/specialty-packs/packs/rep-01.ts (843 lines) exporting REP01_PACK, 462 total rows:
+  6 categories (FER/OVR/IVF/PRE/MAL/COU) · 46 complaints · 92 questions (2 per complaint, `// idx 0..91` comments = true 0-based index, ZERO drift) · 184 suggestions (exactly 2 per question, bilingual patient-printable) · 12 labels (cycle day, follicle mm, endometrium mm, AMH, FSH/LH, TSH, prolactin, semen count, motility %, BMI, weight, stress 0-10) · 28 findings (ICD-10) · 40 medicines (real Indian brands) · 42 findingMeds links · 6 tables · 6 rxTemplates.
+- Ran `bun scripts/validate-one-pack.ts REP-01` → "PACK REP-01 VALID ✓", 0 errors 0 warnings (first run).
+- Ran `bunx eslint src/lib/specialty-packs/packs/rep-01.ts` → clean, exit 0.
+- Programmatic invariant checks: 2-suggestions-per-question exact (no missing/dup idx); `// idx` comments match true array order; all findingMeds/rxTemplate medicine names resolve.
+- Did NOT touch packs/index.ts, registry.ts, or any other file. No dev server/build/tests.
+
+Stage Summary:
+- 20th pack live in library: REP-01 IVF & Fertility (T2) — cold-start coverage for IVF/IUI clinics; ~9,260 total pack rows.
+- Safety rails baked in: FSH/hMG/hCG/GnRH injections = CLINIC-ADMINISTERED-ONLY (never home self-inject); OHSS red flags (rapid weight gain/breathlessness/severe abdominal pain) emergency lines on every stimulation/retrieval/2WW touchpoint; ectopic-risk line with any IVF positive test (OBG early-scan coordination, OBG-01 owns ANC); letrozole off-label-in-some-countries note (India-common practice) + specialist-monitor; clomiphene max-cycle + multiples-risk counselling; miscarriage grief never-blame framing; family-pressure boundary script; IVF cost EMI/bundle checklist.
+- REFER-ONLY findings with ZERO findingMeds links: AZOOSPERMIA (uro-andrology), RECURRENT-MISCARRIAGE-SUSPECT (workup), ECTOPIC-SUSPECT (emergency), OHSS-SEVERE (emergency), SEPTIC-MISCARRIAGE (emergency), POI-SEVERE (<30y genetic workup), ONCOFERTILITY-URGENT (time-sensitive). Coordinate-only (no links): HYPERPROLACTIN-FERTILITY (END), STRESS-FERTILITY (PSY).
+- Exclusions per policy: herbal fertility products (Addyzoa etc.) EXCLUDED from medicines; metformin/bromocriptine/cabergoline/Duphaston excluded (DIA/END/OBG packs own them — coordinate-lines only); Thyronorm included as continuation-verify framing (END owns titration); all fertility meds flagged pregnancy:'na' + verified:false (unverified-dose mode, meta.reviewedBy='').
+- Cross-pack coordination wired in content: OBG (PCOS/fibroid/adenomyosis/early pregnancy), END (thyroid/prolactin/obesity), URO (azoospermia/varicocele/erectile), DIA (glycemic control), PSY (stress/relationship/2WW anxiety).
+- Next actions: wire REP-01 into packs/index.ts + registry (registry task owner); remaining pack: ONC-01 Oncology; MBBS dose review still pending owner (now 20 packs amber-badged).
+
+---
+Task ID: P4-B4-ONC
+Agent: pack-author
+Task: Author ONC-01 oncology starter pack file
+
+Work Log:
+- Read types.ts (SpecialtyPack interface + validatePack) and packs/gp-01.ts (format precedent).
+- Authored src/lib/specialty-packs/packs/onc-01.ts (912 lines, export const ONC01_PACK) — medical-oncology OPD, supportive/symptom-control scope.
+- Ran bun scripts/validate-one-pack.ts ONC-01 → "PACK ONC-01 VALID ✓", 0 errors 0 warnings.
+- Ran bunx eslint src/lib/specialty-packs/packs/onc-01.ts → clean (exit 0).
+- Extra self-checks: exactly 2 suggestions per question (92 questions × 2 = 184, none missing/duplicated); // idx N comments on all 92 questions match true 0-based index (ZERO drift, verified programmatically).
+- Final counts (468 rows total): 6 categories (FUP/SYM/PAI/ADJ/PAL/OTH) · 46 complaints · 92 questions · 184 suggestions · 12 labels (pain score, ECOG, oral-intake grade, ulcer grade, breakthrough/24h, bowel-days, sleep hrs, Hb-if-brought, temp/wt/BP/pulse) · 35 findings (23 managed-supportive + 12 refer-only) · 40 medicines (supportive-care only) · 41 findingMeds links · 6 tables (WHO ladder grid, neutropenic fever action card, chemo side-effect diary, mouth-care protocol, stoma care card, end-stage comfort log) · 6 rxTemplates (post-cycle bundle, mucositis, ladder-1, opioid-continuation-verify, anemia, palliative-home initial).
+
+Stage Summary:
+- SAFETY EXCLUSION (core decision): ZERO chemotherapy / targeted / immunotherapy / endocrine anti-cancer medicine entries — infusion/hospital territory. Chemo/hormone/Tamoxifen appear ONLY as continuation-verify framing in questions/suggestions. Megestrol/appetite steroids skipped (spec: skip if uncertain). No G-CSF, no zoledronic (infusion → refer-line), no ESA entry (iron-support + specialist line only).
+- Refer-only findings with ZERO findingMeds links (12): NEUTROPENIC-FEVER, SPINAL-CORD-COMPRESSION, SVC-SYNDROME-SUSPECT, RAISED-ICP-METS, TUMOR-BLEEDING, HYPERCALCEMIA-SUSPECT, NEW-LEUKOPLAKIA, NEW-NECK-LUMP, NEW-BREAST-LUMP, BONE-METS-NEW-FRACTURE-RISK, PLEURAL-EFFUSION-MALIGNANT, BRAIN-METS-NEW. NEUTROPENIA-FU + CANCER-SURVEILLANCE also carry zero medicine links (monitoring only). All emergency lines (38.3°C rule, no-wait/no-self-Crocin, cord-compression, SVC, raised-ICP, bleeding, hypercalcemia) embedded in suggestions/tables/rx advice.
+- Opioid safety: Morphitroy 10 = continuation-verify ONLY (schedule X, never-crush, laxative-always, never-self-increase; dependence-fear gentle reframe only in palliative advice). Tramadol/Ultracet = SOS + specialist-frame. Laxative (Cremaffin) linked as MANDATORY under PAIN-NOS whenever opioids run.
+- India-specific content: tobacco 5R + oral-surgeon referral for oral-CA, leukoplakia biopsy-refer, no-superfood/immunity-booster scam warnings (haldi/booster), BRCA genetic-counsellor referral, hidden-diagnosis patient-autonomy gentle frames, calorie-dense Hindi diet list (घी/क्रीम/ड्राईफ्रूट milkshakes), palliative dignity/goals framing (no euthanasia implications).
+- ICD note: spec's "R61 chemo-alopecia" corrected to L65.0 (drug-induced alopecia; R61 = hyperhidrosis); cachexia coded R63.4 within spec's R63 family; anemia-of-cancer D63.0 (spec's "D66/50?" resolved). Findings count 35 vs spec's stated 24-30 — spec enumerated ~35 items including 12 mandatory refer-only safety findings + 6 named specific-CA continuation findings; kept all enumerated for safety/coverage, total rows 468 stays within the 450-520 budget.
+- Next actions: wire ONC-01 into packs/index.ts + registry (registry task owner — NOT done here, per instructions); MBBS dose review pending owner (now 21 packs amber-badged).
