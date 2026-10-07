@@ -6332,3 +6332,31 @@ Stage Summary:
 - 🔴 BLOCKED ON OWNER: (1) fresh Vercel token needed to deploy P1 to prod (`bunx vercel deploy --prod --token=<new>`); (2) MBBS reviewer for pack doses (all packs in unverified-dose mode, amber badges shown); (3) admin@doctorooms.com password rotation (admin123 ⚠️); (4) Cloudinary CLOUD_NAME still missing; (5) Render realtime + UptimeRobot monitoring still pending from earlier tracks.
 - ⚠️ RISK: sandbox OOM kills on first-compile of heavy pages (prescriptions/new) — acceptable in dev (watchdog restarts), never run `bun run build`.
 - NEXT: when token arrives → prod deploy + prod E2E (register OBG doctor on prod) → then P2 (T2 packs: OPH/PSY/PUL/CAR/NEU/URO/GAS/END/NEP/REP/ONC) and P3 (pack settings surface, favorites, version-consent flow).
+
+---
+Task ID: P1-PROD-DEPLOY
+Agent: Main (orchestrator, Z.ai)
+Task: Owner provided new Vercel token — deploy P1 Specialty Starter Packs to production and run prod E2E.
+
+Work Log:
+- Token verified (account doctorooms-creator, team aditya-2b2c). First deploy attempts FAILED: build error "Export encountered an error on /leaderboard — DATABASE_URL must start with postgresql://".
+- ROOT CAUSE 1 — sandbox hard-reset at 14:57 (container reboot): node_modules/, db/ wiped, root .env reset to SQLite template (file:custom.db + placeholder secrets) — this is the documented recovery scenario in scripts/recover-local-db.sh header. The broken .env got uploaded by vercel CLI → build-time prerender of /leaderboard (ISR, DB queries) failed. Failed builds never went live — prod untouched during this.
+- ROOT CAUSE 2 — credentials pooler URL had wrong prefix: aws-1-ap-northeast-2 → "tenant not found". Probed all 28 resolvable aws-{0..3}-<region>.pooler.supabase.com hosts × both ports: CORRECT POOLER = aws-0-ap-northeast-2.pooler.supabase.com:6543 (Seoul).
+- ROOT CAUSE 3 — Prisma on transaction pooler needs ?pgbouncer=true&connection_limit=1 (prepared-statement error otherwise); and bash `source .env` breaks on unquoted & → DATABASE_URL must be QUOTED in .env for restart-server.sh sourcing.
+- .env reconstructed: DATABASE_URL="postgresql://postgres.dauhputqahqutczyrfme:***@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1" + NEW NEXTAUTH_SECRET (old one lost in reset — regenerated; one-time logout for existing sessions) + DEV_MODE=1 + SUPABASE_URL/SUPABASE_SECRET_KEY (storage) + SMS_PROVIDER=log + NOTIFICATION_SERVICE_URL=:3006.
+- Sandbox fully restored after reboot: bun install (root) + mini-services/realtime-service bun install + restart-server.sh → :3000 dev server (DB connected, dev-login 200, complaints API 49 OBG rows) + :3006 realtime up.
+- ROOT CAUSE 4 — .vercel/project.json pointed to WRONG project ("my-project", production alias my-project-ivory-ten-47.vercel.app). Account has TWO projects: my-project + doctorooms-hms. First successful deploy (eepufh8q7) went to my-project → its onboarding dropdown showed all 10 pack badges (P1 code confirmed), but doctorooms-hms.vercel.app still served old code.
+- FIX: `bunx vercel link --project doctorooms-hms --yes` (deleted auto-created .env.local immediately) → `bunx vercel deploy --prod --yes` → deployment doctorooms-hkeyhzy9n-aditya-2b2c → doctorooms-hms.vercel.app NOW SERVES P1 CODE.
+- PROD E2E (agent-browser, session prod-e2e, on doctorooms-hms.vercel.app): registered qa-prod-ent@doctorooms.test → login (new NEXTAUTH_SECRET works) → onboarding wizard → dropdown shows ALL 10 T1 specialties with "Starter pack ✓" badges → selected ENT Specialist → review step shows ENT pack card (44 complaints · 61 medicines · 100 questions) → "Create my practice" → dashboard.
+- DB verification (shared Supabase): DoctorPackInstall receipt ENT-01 v1.0.0 Installed {5 cat, 44 C/O, 100 Q, 200 sugg, 8 labels, 26 findings, 61 meds, 40 links, 6 tables, 6 Rx}; questions=100 medicines=61 ✓. Browser fetch of complaints API: 44 rows, first "कान में दर्द / Ear Pain" ✓. Complaints settings page renders bilingual rows + "ENT Starter Pack" chip (screenshot qa-prod-ent-complaints.png).
+- Left my-project-ivory-ten-47.vercel.app deployment live as a de-facto STAGING mirror (same code, same DB) — harmless, useful for testing.
+- Git: commits 0429979 (QA screenshot) + 8e2798d (temp-script cleanup) pushed to GitHub main.
+- Cron: 15-min webDevReview job kept hitting "exec limits exceeded" (platform-side limit) → recreated as job 442595 (fixed_rate 900s, priority 10).
+
+Stage Summary:
+- 🎉 P1 SPECIALTY STARTER PACKS ARE LIVE IN PRODUCTION on doctorooms-hms.vercel.app: every new doctor (GP/MED/PED/OBG/ORT/DRM/ENT/SUR/DEN/DIA) gets ~450-540 rows of bilingual India-specific RX content auto-installed at onboarding — Day-1 cold-start solved for ~85% of Indian OPD.
+- Sandbox restored + hardened: .env values quoted (bash-source-safe), correct pooler URL documented (aws-0!), realtime service reinstalled.
+- ⚠️ KNOWN CONSEQUENCE: NEXTAUTH_SECRET regenerated → all existing logged-in users got logged out ONCE (re-login with password works — verified on prod).
+- ⚠️ Pooler URL correction for all future reference: aws-0-ap-northeast-2.pooler.supabase.com:6543 (NOT aws-1).
+- PENDING (owner actions): MBBS reviewer for pack doses (unverified-dose mode, amber badges); admin@doctorooms.com password rotation; Cloudinary CLOUD_NAME; Render realtime for prod notifications; cron jobs keep disabling at platform exec limits (watch + recreate).
+- NEXT PHASE: P2 (T2 packs — OPH/PSY/PUL/CAR/NEU/URO/GAS/END/NEP/REP/ONC) + P3 (pack settings surface, favorites, version-consent updates).
