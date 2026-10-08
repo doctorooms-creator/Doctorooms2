@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { usePrescriptionStore } from '@/lib/prescription-store'
+import { RX_DATA_STALE, rxDataKey } from '@/lib/rx-save'
 import { useSocket } from '@/hooks/useSocket'
 import { useAuthStore } from '@/lib/auth-store'
 import { useQueryClient } from '@tanstack/react-query'
@@ -346,9 +347,11 @@ async function loadExistingPrescription(
   try {
     // P4-F: fetchQuery populates the SHARED cache key the steps read from —
     // one full-Rx fetch per session instead of one per step mount.
+    // P4-G: staleTime lets a quick wizard reopen reuse the warm cache.
     const data = await qc.fetchQuery({
-      queryKey: ['rx-prescription-data', rxId],
+      queryKey: rxDataKey(rxId),
       queryFn: () => fetch(`/api/prescription/${rxId}`).then((r) => r.json()),
+      staleTime: RX_DATA_STALE,
     })
     const rx = data?.prescription
     if (!rx) return

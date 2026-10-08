@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { usePrescriptionStore } from '@/lib/prescription-store'
+import { RX_DATA_STALE, rxDataKey } from '@/lib/rx-save'
 import { mergeVitalsWithLabels } from '@/lib/prescription-labels'
 
 interface RxData {
@@ -65,6 +66,7 @@ interface RxData {
 
 export function Step6Finish({ onPrint }: { onPrint: (rxId: string) => void }) {
   const prescriptionId = usePrescriptionStore((s) => s.prescriptionId)
+  const bookingId = usePrescriptionStore((s) => s.bookingId)
   const nextVisit = usePrescriptionStore((s) => s.nextVisit)
   const setNextVisit = usePrescriptionStore((s) => s.setNextVisit)
   const isSaving = usePrescriptionStore((s) => s.isSaving)
@@ -73,10 +75,15 @@ export function Step6Finish({ onPrint }: { onPrint: (rxId: string) => void }) {
   const queryClient = useQueryClient()
   const [calOpen, setCalOpen] = useState(false)
 
+  // P4-F: shared cache key — one full-Rx GET per consultation. P4-G:
+  // staleTime + save-time PATCHES keep this fresh, so the finish preview
+  // renders INSTANTLY on mount (was: a full refetch because the previous
+  // step's save had just invalidated the cache).
   const { data, isLoading, isError } = useQuery<{ prescription: RxData }>({
-    queryKey: ['rx-prescription-data', prescriptionId],
+    queryKey: rxDataKey(prescriptionId),
     queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
     enabled: !!prescriptionId,
+    staleTime: RX_DATA_STALE,
     refetchOnWindowFocus: false,
   })
 
@@ -89,7 +96,9 @@ export function Step6Finish({ onPrint }: { onPrint: (rxId: string) => void }) {
     }
   }, [rx?.nextVisit, nextVisit, setNextVisit])
 
-  // Finalize mutation
+  // Finalize mutation — P4-G: the API now commits the critical writes in
+  // one transaction and defers all notification side-effects, so this
+  // resolves as soon as the data is actually durable (≈2× faster).
   const finalizeMutation = useMutation({
     mutationFn: () =>
       fetch(`/api/prescription/${prescriptionId}/finalize`, {
@@ -103,8 +112,29 @@ export function Step6Finish({ onPrint }: { onPrint: (rxId: string) => void }) {
         if (!r.ok) throw new Error(`Finalize failed (HTTP ${r.status})`)
         return r.json()
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rx-prescription-data'] })
+    onSuccess: (res: {
+      prescription?: { status?: string; nextVisit?: string | null }
+    }) => {
+      // Patch the finalized state straight into the shared cache — no
+      // full-Rx refetch (the print overlay fetches /print on its own).
+      queryClient.setQueryData<{ prescription?: Record<string, unknown> }>(
+        rxDataKey(prescriptionId),
+        (old) =>
+          old?.prescription
+            ? {
+                prescription: {
+                  ...old.prescription,
+                  status: res.prescription?.status || 'Active',
+                  nextVisit: res.prescription?.nextVisit || nextVisit?.toISOString() || null,
+                },
+              }
+            : old
+      )
+      // Booking moved to Visited — refresh the caches that render it so
+      // dashboards/dialogs never show a stale status after the consult.
+      queryClient.invalidateQueries({ queryKey: ['booking', bookingId] })
+      queryClient.invalidateQueries({ queryKey: ['doctor-queue'] })
+      queryClient.invalidateQueries({ queryKey: ['doctor-stats'] })
       toast.success('Prescription finalized!')
       onPrint(prescriptionId || '')
     },

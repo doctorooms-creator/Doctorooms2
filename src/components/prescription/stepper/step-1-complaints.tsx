@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Search, Check, AlertCircle, Star, Pin, TrendingUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePrescriptionStore, type ComplaintWithCategory } from '@/lib/prescription-store'
+import { saveRxSection, patchRxCache, RX_DATA_STALE, rxDataKey } from '@/lib/rx-save'
 import {
   useRxFavorites,
   type FavoriteComplaint,
@@ -147,35 +148,32 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
 
   // P4-F: read the full Rx through the SHARED query cache key — deduped
   // across steps (was: a raw fetch per step mount ≈ 6-7 full-Rx GETs per
-  // consultation). Saves invalidate this key, so data stays fresh after edit.
+  // consultation). P4-G: staleTime + cache PATCHES on save (never
+  // invalidation) keep it fresh with zero refetches mid-consultation.
   const { data: rxData } = useQuery<{ prescription: { chiefComplaints?: Array<{ coId: string }> } }>({
-    queryKey: ['rx-prescription-data', prescriptionId],
+    queryKey: rxDataKey(prescriptionId),
     queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
     enabled: !!prescriptionId,
+    staleTime: RX_DATA_STALE,
   })
 
-  // Fetch existing saved complaints to initialize selection
+  // Fetch existing saved complaints to initialize selection.
+  // P4-G snap-back fix: PRISTINE-ONLY hydration — the store is only filled
+  // while it is still empty, so a cache patch (or a remount after navigating
+  // back) can never clobber an in-progress selection.
   useEffect(() => {
     const pco = rxData?.prescription?.chiefComplaints || []
-    if (pco.length > 0) {
-      setSelectedComplaintIds(pco.map((c) => c.coId))
-    }
-  }, [rxData, setSelectedComplaintIds])
+    if (selectedComplaintIds.length > 0 || pco.length === 0) return
+    setSelectedComplaintIds(pco.map((c) => c.coId))
+  }, [rxData, selectedComplaintIds.length, setSelectedComplaintIds])
 
-  // Save mutation
+  // Save mutation — P4-G: single transactional batch endpoint; the saved
+  // rows are PATCHED straight into the shared cache (no invalidation → no
+  // full-Rx refetch behind the transition).
   const saveMutation = useMutation({
-    mutationFn: () =>
-      fetch(`/api/prescription/${prescriptionId}/complaints`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ complaintIds: selectedComplaintIds }),
-      }).then((r) => {
-        // Hard-reject non-2xx so onError fires — no fake success toasts.
-        if (!r.ok) throw new Error(`Save failed (HTTP ${r.status})`)
-        return r.json()
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rx-prescription-data'] })
+    mutationFn: () => saveRxSection(prescriptionId || '', { complaintIds: selectedComplaintIds }),
+    onSuccess: (res) => {
+      patchRxCache(queryClient, prescriptionId, res)
       markStepCompleted(1)
       toast.success('Complaints saved')
       goToNext()

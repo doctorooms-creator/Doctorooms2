@@ -17,6 +17,7 @@ import {
 import { Plus, Trash2, Grid3X3, Table2, X, PlusCircle, MinusCircle, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePrescriptionStore, type TableData } from '@/lib/prescription-store'
+import { saveRxSection, patchRxCache, RX_DATA_STALE, rxDataKey } from '@/lib/rx-save'
 
 function generateId() {
   return Math.random().toString(36).substring(2, 9)
@@ -68,11 +69,13 @@ export function Step3Tables() {
   // Load existing tables from prescription
   // P4-F: reads through the SHARED query cache key — deduped across steps
   // (was: a raw fetch per step mount). The tables.length > 0 guard keeps
-  // unsaved in-progress tables from being clobbered.
+  // unsaved in-progress tables from being clobbered. P4-G: staleTime +
+  // cache PATCHES on save keep it fresh with zero refetches.
   const { data: rxData } = useQuery<{ prescription?: { diagnosisTables?: Array<Record<string, unknown>> } }>({
-    queryKey: ['rx-prescription-data', prescriptionId],
+    queryKey: rxDataKey(prescriptionId),
     queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
     enabled: !!prescriptionId,
+    staleTime: RX_DATA_STALE,
   })
 
   useEffect(() => {
@@ -239,20 +242,13 @@ export function Step3Tables() {
     updateTable(tableIdx, { cols: newCols, cellValues: newCells, headerLabel: newHeaderLabel })
   }
 
-  // Save mutation
+  // Save mutation — P4-G: single transactional batch endpoint; saved rows
+  // are PATCHED straight into the shared cache (no invalidation → no
+  // full-Rx refetch behind the transition).
   const saveMutation = useMutation({
-    mutationFn: () =>
-      fetch(`/api/prescription/${prescriptionId}/tables`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tables }),
-      }).then((r) => {
-        // Hard-reject non-2xx so onError fires — no fake success toasts.
-        if (!r.ok) throw new Error(`Save failed (HTTP ${r.status})`)
-        return r.json()
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rx-prescription-data'] })
+    mutationFn: () => saveRxSection(prescriptionId || '', { tables }),
+    onSuccess: (res) => {
+      patchRxCache(queryClient, prescriptionId, res)
       markStepCompleted(3)
       toast.success('Tables saved')
       goToNext()

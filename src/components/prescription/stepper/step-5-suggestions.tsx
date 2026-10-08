@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Plus, Lightbulb, Check, X, Stethoscope } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePrescriptionStore, type ComplaintWithCategory, type CustomSuggestion } from '@/lib/prescription-store'
+import { saveRxSection, patchRxCache, RX_DATA_STALE, rxDataKey } from '@/lib/rx-save'
 
 // Draft-input key for the "General Advice" section (advice not tied to a complaint)
 const GENERAL_KEY = '__general__'
@@ -132,11 +133,13 @@ export function Step5Suggestions() {
 
   // Load existing suggestions from prescription
   // P4-F: reads through the SHARED query cache key — deduped across steps
-  // (was: a raw fetch per step mount).
+  // (was: a raw fetch per step mount). P4-G: staleTime + cache PATCHES on
+  // save keep it fresh with zero refetches.
   const { data: rxData } = useQuery<{ prescription?: { suggestions?: unknown[] } }>({
-    queryKey: ['rx-prescription-data', prescriptionId],
+    queryKey: rxDataKey(prescriptionId),
     queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
     enabled: !!prescriptionId,
+    staleTime: RX_DATA_STALE,
   })
 
   useEffect(() => {
@@ -176,19 +179,14 @@ export function Step5Suggestions() {
 
   // Save mutation — payload passed in explicitly so auto-flushed drafts
   // (added below in handleSave) are never lost to a stale closure.
+  // P4-G: single transactional batch endpoint; saved rows are PATCHED
+  // straight into the shared cache (no invalidation → no full-Rx refetch
+  // behind the transition).
   const saveMutation = useMutation({
     mutationFn: (payload: { suggestionIds: string[]; customSuggestions: CustomSuggestion[] }) =>
-      fetch(`/api/prescription/${prescriptionId}/suggestions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).then((r) => {
-        // Hard-reject non-2xx so onError fires — no fake success toasts.
-        if (!r.ok) throw new Error(`Save failed (HTTP ${r.status})`)
-        return r.json()
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rx-prescription-data'] })
+      saveRxSection(prescriptionId || '', payload),
+    onSuccess: (res) => {
+      patchRxCache(queryClient, prescriptionId, res)
       markStepCompleted(5)
       toast.success('Suggestions saved')
       goToNext()

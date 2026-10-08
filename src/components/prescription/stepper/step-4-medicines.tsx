@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePrescriptionStore, type MedicineRow } from '@/lib/prescription-store'
+import { saveRxSection, patchRxCache, RX_DATA_STALE, rxDataKey } from '@/lib/rx-save'
 import { useRxFavorites, type FavoriteMedicine } from '@/lib/use-rx-favorites'
 
 function generateId() {
@@ -142,11 +143,13 @@ export function Step4Medicines() {
   // Load existing medicines from prescription
   // P4-F: reads through the SHARED query cache key — deduped across steps
   // (was: a raw fetch per step mount). medicines.length guard keeps
-  // unsaved in-progress rows from being clobbered.
+  // unsaved in-progress rows from being clobbered. P4-G: staleTime +
+  // cache PATCHES on save keep it fresh with zero refetches.
   const { data: rxData } = useQuery<{ prescription?: { medicines?: Array<Record<string, unknown>> } }>({
-    queryKey: ['rx-prescription-data', prescriptionId],
+    queryKey: rxDataKey(prescriptionId),
     queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
     enabled: !!prescriptionId,
+    staleTime: RX_DATA_STALE,
   })
 
   useEffect(() => {
@@ -268,20 +271,13 @@ export function Step4Medicines() {
     toast.success(`${med.name} added`)
   }
 
-  // Save mutation
+  // Save mutation — P4-G: single transactional batch endpoint; saved rows
+  // are PATCHED straight into the shared cache (no invalidation → no
+  // full-Rx refetch behind the transition).
   const saveMutation = useMutation({
-    mutationFn: () =>
-      fetch(`/api/prescription/${prescriptionId}/medicines`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ medicines, disease: selectedFindingName || undefined }),
-      }).then((r) => {
-        // Hard-reject non-2xx so onError fires — no fake success toasts.
-        if (!r.ok) throw new Error(`Save failed (HTTP ${r.status})`)
-        return r.json()
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rx-prescription-data'] })
+    mutationFn: () => saveRxSection(prescriptionId || '', { medicines, disease: selectedFindingName || undefined }),
+    onSuccess: (res) => {
+      patchRxCache(queryClient, prescriptionId, res)
       markStepCompleted(4)
       toast.success('Medicines saved')
       goToNext()

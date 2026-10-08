@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Scale, Heart, Thermometer, Activity, Wind, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePrescriptionStore, type LabelValue } from '@/lib/prescription-store'
+import { saveRxSection, patchRxCache, RX_DATA_STALE, rxDataKey } from '@/lib/rx-save'
 
 export function Step2Vitals() {
   const prescriptionId = usePrescriptionStore((s) => s.prescriptionId)
@@ -59,7 +60,8 @@ export function Step2Vitals() {
   }, [masterLabels.length, labelValues.length, setLabelValues])
 
   // P4-F: read the full Rx through the SHARED query cache key — deduped
-  // across steps (was: a raw fetch per step mount).
+  // across steps (was: a raw fetch per step mount). P4-G: staleTime + cache
+  // PATCHES on save keep it fresh with zero refetches mid-consultation.
   const { data: rxData } = useQuery<{
     prescription?: {
       weight?: string
@@ -68,15 +70,27 @@ export function Step2Vitals() {
       labels?: Array<{ labelId: string; label: string; labelEn: string; value: string; labelUnit: string; showUnit: boolean }>
     }
   }>({
-    queryKey: ['rx-prescription-data', prescriptionId],
+    queryKey: rxDataKey(prescriptionId),
     queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
     enabled: !!prescriptionId,
+    staleTime: RX_DATA_STALE,
   })
 
-  // Load existing vitals from prescription
+  // Load existing vitals from prescription.
+  // P4-G snap-back fix: PRISTINE-ONLY hydration — the form is only filled
+  // while every field is still untouched, so a cache patch (or a remount
+  // after navigating back) can never wipe in-progress typing.
+  const isPristine =
+    !vitals.weight &&
+    !vitals.bp &&
+    !vitals.temperature &&
+    !vitals.pulse &&
+    !vitals.spo2 &&
+    labelValues.every((l) => !l.value)
+
   useEffect(() => {
     const rx = rxData?.prescription
-    if (!rx) return
+    if (!rx || !isPristine) return
     if (rx.weight) setVitals({ weight: rx.weight })
     if (rx.bp) setVitals({ bp: rx.bp })
     if (rx.temperature) setVitals({ temperature: rx.temperature })
@@ -92,22 +106,15 @@ export function Step2Vitals() {
         }))
       )
     }
-  }, [rxData, setVitals, setLabelValues])
+  }, [rxData, isPristine, setVitals, setLabelValues])
 
-  // Save mutation
+  // Save mutation — P4-G: single transactional batch endpoint; saved rows
+  // are PATCHED straight into the shared cache (no invalidation → no
+  // full-Rx refetch behind the transition).
   const saveMutation = useMutation({
-    mutationFn: () =>
-      fetch(`/api/prescription/${prescriptionId}/vitals`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vitals, labels: labelValues }),
-      }).then((r) => {
-        // Hard-reject non-2xx so onError fires — no fake success toasts.
-        if (!r.ok) throw new Error(`Save failed (HTTP ${r.status})`)
-        return r.json()
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rx-prescription-data'] })
+    mutationFn: () => saveRxSection(prescriptionId || '', { vitals, labels: labelValues }),
+    onSuccess: (res) => {
+      patchRxCache(queryClient, prescriptionId, res)
       markStepCompleted(2)
       toast.success('Vitals saved')
       goToNext()

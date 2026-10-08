@@ -38,69 +38,8 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Update prescription status and next visit
-    const updated = await db.prescription.update({
-      where: { id },
-      data: {
-        status: 'Active',
-        nextVisit: nextVisit ? new Date(nextVisit) : null,
-      },
-      include: {
-        booking: { select: { id: true } },
-        doctor: {
-          select: {
-            // contactNo/phoneNo live on the Doctor model, NOT on User
-            // (selecting them under `user` caused PrismaClientValidationError 500s)
-            contactNo: true,
-            phoneNo: true,
-            user: { select: { name: true, email: true, mobileNo: true } },
-            specialization: true,
-            address: true,
-            city: true,
-            state: true,
-            registrationDetail: true,
-          },
-        },
-        // PCo has NO relation to CoMaster (only raw coId) — hydrated below
-        chiefComplaints: true,
-        labels: true,
-        medicines: true,
-        suggestions: true,
-        diagnosisTables: true,
-      },
-    })
-
-    // Hydrate chief complaints with their CoMaster details
-    const coIds = updated.chiefComplaints.map((c) => c.coId).filter(Boolean)
-    const coMasters = coIds.length
-      ? await db.coMaster.findMany({ where: { id: { in: coIds } } })
-      : []
-    const coMap = new Map(coMasters.map((c) => [c.id, c]))
-    const chiefComplaints = updated.chiefComplaints.map((c) => {
-      const co = coMap.get(c.coId)
-      return {
-        ...c,
-        co: co ? { coDetail: co.coDetail, coDetailEn: co.coDetailEn } : null,
-      }
-    })
-
-    // Map doctor-level phone fields into `doctor.user` (client type expects them there)
-    const { doctor: doc, ...restUpdated } = updated
-    const mappedUpdated = {
-      ...restUpdated,
-      chiefComplaints,
-      doctor: {
-        ...doc,
-        user: {
-          name: doc.user.name,
-          email: doc.user.email,
-          contactNo: doc.contactNo,
-          phoneNo: doc.phoneNo,
-        },
-      },
-    }
-
-    // Fetch booking details for notification before status change
+    // Read the booking BEFORE the status flip — the notification block below
+    // must only fire when this finalize is what moved it off Approve.
     const bookingBeforeUpdate = await db.booking.findUnique({
       where: { id: prescription.bookingId },
       select: {
@@ -115,46 +54,69 @@ export async function POST(
       },
     })
 
-    // Booking has no `department` relation — fetch the department name separately
-    let departmentName: string | null = null
-    if (bookingBeforeUpdate?.departmentId) {
-      const dept = await db.department.findUnique({
-        where: { id: bookingBeforeUpdate.departmentId },
-        select: { name: true },
-      })
-      departmentName = dept?.name || null
-    }
+    // ── P4-G: critical writes in ONE transaction ──
+    // Prescription → Active (+ next visit) and booking → Visited commit
+    // atomically; a failure can never leave the Rx finalized while the
+    // booking still shows Approve (or vice-versa).
+    await db.$transaction([
+      db.prescription.update({
+        where: { id },
+        data: {
+          status: 'Active',
+          nextVisit: nextVisit ? new Date(nextVisit) : null,
+        },
+      }),
+      db.booking.update({
+        where: { id: prescription.bookingId },
+        data: { status: 'Visited' },
+      }),
+    ])
 
-    // Update booking status to Visited
-    await db.booking.update({
-      where: { id: prescription.bookingId },
-      data: { status: 'Visited' },
-    })
+    // ── P4-G: fire-and-forget tail (never blocks the print) ──
+    // Queue notifications (patient-side "consultation started" + approaching
+    // alert), department name lookup and the Rx #50 celebration are all
+    // side-effects the doctor must NOT wait for — the old route awaited the
+    // two notification sends inline before responding. Errors are swallowed
+    // individually so one failing side-effect can't kill the rest.
+    void (async () => {
+      try {
+        if (bookingBeforeUpdate && bookingBeforeUpdate.status === 'Approve') {
+          // Booking has no `department` relation — fetch the name inline.
+          let departmentName: string | null = null
+          if (bookingBeforeUpdate.departmentId) {
+            const dept = await db.department.findUnique({
+              where: { id: bookingBeforeUpdate.departmentId },
+              select: { name: true },
+            })
+            departmentName = dept?.name || null
+          }
 
-    // Send notification only if booking wasn't already Visited/Finish
-    if (bookingBeforeUpdate && bookingBeforeUpdate.status === 'Approve') {
-      const doctorName = doctor.user.name.replace('Dr. ', '')
-      await sendQueueNotification('consultation_started', {
-        bookingId: bookingBeforeUpdate.id,
-        doctorId: doctor.id,
-        patientUserId: bookingBeforeUpdate.userId,
-        doctorName,
-        tokenNumber: bookingBeforeUpdate.tokenNumber,
-        departmentName,
-      })
-      await notifyApproachingPatient(
-        doctor.id,
-        bookingBeforeUpdate.tokenOrder,
-        bookingBeforeUpdate.bookingDate
-      )
-    }
+          const doctorName = doctor.user.name.replace('Dr. ', '')
+          await sendQueueNotification('consultation_started', {
+            bookingId: bookingBeforeUpdate.id,
+            doctorId: doctor.id,
+            patientUserId: bookingBeforeUpdate.userId,
+            doctorName,
+            tokenNumber: bookingBeforeUpdate.tokenNumber,
+            departmentName,
+          })
+          await notifyApproachingPatient(
+            doctor.id,
+            bookingBeforeUpdate.tokenOrder,
+            bookingBeforeUpdate.bookingDate
+          )
+        }
+      } catch (err) {
+        console.error('Finalize notification tail error:', err)
+      }
 
-    // ── Celebration moment: Rx #50 (roadmap) ─────────────────────────────
-    // Exactly-once: fires only when this finalize makes the doctor's ACTIVE
-    // prescription count hit 50. Fire-and-forget — never blocks the response.
-    db.prescription
-      .count({ where: { doctorId: prescription.doctorId, status: 'Active' } })
-      .then((rxCount) => {
+      // ── Celebration moment: Rx #50 (roadmap) ─────────────────────────
+      // Exactly-once: fires only when this finalize makes the doctor's ACTIVE
+      // prescription count hit 50.
+      try {
+        const rxCount = await db.prescription.count({
+          where: { doctorId: prescription.doctorId, status: 'Active' },
+        })
         if (rxCount !== 50) return
         emitNotification('celebration', [`user:${user.id}`], {
           title: '🏆 50th Prescription!',
@@ -162,20 +124,32 @@ export async function POST(
             'Aapne 50 prescriptions Doctorooms par likhi — practice fully digital ho gayi! Ye achievement celebrate karein 🎉',
           kind: 'rx50',
         })
-        db.notification
-          .create({
-            data: {
-              userId: user.id,
-              title: '🏆 50th Prescription Completed',
-              message:
-                'Congrats! Aapne apni 50th prescription Doctorooms par finalize ki. Practice fully digital ho gayi!',
-            },
-          })
-          .catch(() => {})
-      })
-      .catch(() => {})
+        await db.notification.create({
+          data: {
+            userId: user.id,
+            title: '🏆 50th Prescription Completed',
+            message:
+              'Congrats! Aapne apni 50th prescription Doctorooms par finalize ki. Practice fully digital ho gayi!',
+          },
+        })
+      } catch {
+        // Celebration must never surface as a finalize failure.
+      }
+    })()
 
-    return NextResponse.json({ prescription: mappedUpdated })
+    // ── Light response: the only client (step-6) never reads the body — it
+    // immediately opens the print overlay, which fetches /print on its own.
+    // The old route re-fetched the ENTIRE prescription (10+ relations) for
+    // a payload nobody consumed.
+    return NextResponse.json({
+      ok: true,
+      prescription: {
+        id,
+        status: 'Active',
+        nextVisit: nextVisit || null,
+        bookingStatus: 'Visited',
+      },
+    })
   } catch (error) {
     console.error('Finalize prescription error:', error)
     return NextResponse.json({ error: 'Failed to finalize prescription' }, { status: 500 })

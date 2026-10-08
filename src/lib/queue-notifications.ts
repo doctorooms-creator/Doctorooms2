@@ -10,7 +10,8 @@ type QueueNotificationEvent =
 interface QueueNotificationContext {
   bookingId: string
   doctorId: string
-  patientUserId: string
+  // Walk-in patients have no linked user account (booking.userId is nullable).
+  patientUserId?: string | null
   doctorName: string
   tokenNumber?: string | number | null
   departmentName?: string | null
@@ -32,7 +33,7 @@ export async function sendQueueNotification(
   ctx: QueueNotificationContext
 ) {
   try {
-    const notifications: { userId: string; title: string; message: string }[] = []
+    const notifications: { userId: string | null | undefined; title: string; message: string }[] = []
 
     switch (event) {
       case 'consultation_started': {
@@ -86,10 +87,16 @@ export async function sendQueueNotification(
       }
     }
 
-    if (notifications.length === 0) return
+    // Recipients without a valid userId (walk-in patients, booking.userId = null)
+    // are skipped: Notification.userId is NOT NULL in the schema, so writing
+    // them would throw. No DB write, no error — valid recipients unchanged.
+    const recipients = notifications.filter(
+      (n): n is { userId: string; title: string; message: string } => !!n.userId
+    )
+    if (recipients.length === 0) return
 
     await db.notification.createMany({
-      data: notifications.map(n => ({
+      data: recipients.map(n => ({
         userId: n.userId,
         title: n.title,
         message: n.message,
@@ -140,6 +147,8 @@ export async function notifyApproachingPatient(
     })
 
     if (!approachingBooking) return
+    // Walk-in patient with no linked user account — nobody to notify.
+    if (!approachingBooking.userId) return
 
     // Check if we already sent this notification recently (within 5 minutes)
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000)
@@ -219,6 +228,8 @@ export async function notifyNextPatient(
     })
 
     if (!nextBooking) return
+    // Walk-in patient with no linked user account — nobody to notify.
+    if (!nextBooking.userId) return
 
     // Check for recent duplicate
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000)
