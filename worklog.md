@@ -6848,3 +6848,29 @@ Stage Summary:
 - CRITICAL finding: silent data-loss bug — every "New Appointment" hospital-mode booking fails invisibly with false success toast. Recommended P4-D hotfix batch FIRST (half day).
 - Prod QA residue: owner's test data (Rajesh Clinic hospital, doctor Rajesh, staff ×4, patients Aditya/Rahul/Ramesh, 1 booking with prescription, Aditya Joshi hospital account) — usable for future E2E verification.
 - Dev server OOM-killed once (~07:04Z), restarted cleanly; cron watchdog + restart-server.sh pattern proven again.
+
+---
+Task ID: P4-ANALYSIS-R3
+Agent: Main (Z.ai)
+Task: Owner testing round 3 — ANALYZE ONLY (no development): RX wizard (6-step prescription) very slow — booking detail open + every step save taking long.
+
+Work Log:
+- Owner instruction repeated: DO NOT START DEVELOPMENT — analysis only.
+- Launched Explore agent: full performance map of doctor appointments → prescriptions/new?bookingId wizard flow (no booking detail page exists — dashboard rows go straight to wizard).
+- MEASURED REAL PRODUCTION TIMINGS (QA account qa-prod-gas, curl, warm requests) — the smoking gun:
+  · Static landing: 0.10s (network fine)
+  · /api/auth/me (2 queries): 1.6s → per-request floor ~0.6s + ~0.6s PER sequential DB query (perfect linear fit across all endpoints)
+  · Booking detail (3 q): 3.4-3.6s · Labels (3-4 q): 3.4s · Complaints (4-5 q): 4.0s · Medicines (4-5 q): 4.0s · Findings (5-6 q, 133KB): 4.4s
+  · Step-1 complaints save (7 sequential q, NO transaction, delete-all→recreate→read-back): 5.3s (with EMPTY list!)
+  · Full-Rx GET (~8 q, 6-relation include): 5.5s · Suggestions step-5 (377KB ALL-rows payload): 5.2s
+  · rx-favorites (P3-BATCH3, ~10 sequential q): 8.5-8.8s — SLOWEST endpoint
+- REGION MISMATCH CONFIRMED: response header x-vercel-id "hkg1::iad1" = lambda in Washington DC; DB = Supabase Seoul pooler; vercel.json has NO regions config (only crons) → Vercel defaults to US. US↔Seoul RTT + pgbouncer transaction mode + connection_limit=1 = ~0.6s per sequential query.
+- Architecture multipliers (code-verified): per-step saves = 7 sequential queries no transaction; finalize = 13-15 sequential queries incl. AWAITED notification fan-out; full-Rx GET fetched 6-7× per consultation (raw fetch per step useEffect + duplicate at open); suggestions downloads ALL ~400 rows (377KB) for client-side filtering; refetchOnWindowFocus ON globally; masters staleTime only 60s; rx-favorites re-fires on step 1 AND step 4 + every pin toggle; session lookup = +1 query on every request (~30/session); onboarding-status re-fetch on every navigation; 60s commission polling during consultation.
+- Total: ~30 HTTP requests + ~140-150 sequential DB queries per consultation ≈ 60-90s of pure waiting — matches owner's complaint exactly.
+- Wrote PLAN-RX-WIZARD-PERFORMANCE.md: measured-evidence table, 4-level root causes, fix batches P4-F (regions icn1 + quick wins — 1-line config = ~5× speedup, ~half day) and P4-G (transactions for saves, rx-favorites 10→2-3 queries, finalize fire-and-forget notifications, session cache, ~1 day → end state consultation wait ~6-10s). Updated master batch order: P4-F → P4-D (silent booking fail) → P4-A → P4-G → P4-E → P4-B → P4-C.
+
+Stage Summary:
+- ZERO code changes — analysis only. 3 plan files now: R1 PLAN-HOSPITAL-ADMIN-ROLE-CLEANUP.md · R2 PLAN-RECEPTIONIST-BOOKING-FLOW.md · R3 PLAN-RX-WIZARD-PERFORMANCE.md.
+- Biggest finding of the round: US-region lambda + Seoul DB = ~0.6s per sequential DB query; wizard multiplies it 140-150×. Fix #1 = add "regions":["icn1"] to vercel.json (1 line, ~5× speedup).
+- Sandbox timings differ (local DB) — this problem is production-only, which is why it wasn't caught in sandbox E2E.
+- Honest note logged: rx-favorites (P3-BATCH3) is the slowest single endpoint in production (8.8s) — scheduled for optimization in P4-G after region fix makes it ~1.5s.
