@@ -49,6 +49,7 @@ export function Step3Tables() {
   // Fetch table templates
   const { data: templatesData, isLoading: templatesLoading } = useQuery({
     queryKey: ['rx-table-templates'],
+    staleTime: 5 * 60 * 1000, // P4-F
     queryFn: () =>
       fetch('/api/dashboard/doctor/prescription-settings/table-templates?status=Active').then((r) => r.json()),
   })
@@ -65,65 +66,75 @@ export function Step3Tables() {
   }>
 
   // Load existing tables from prescription
+  // P4-F: reads through the SHARED query cache key — deduped across steps
+  // (was: a raw fetch per step mount). The tables.length > 0 guard keeps
+  // unsaved in-progress tables from being clobbered.
+  const { data: rxData } = useQuery<{ prescription?: { diagnosisTables?: Array<Record<string, unknown>> } }>({
+    queryKey: ['rx-prescription-data', prescriptionId],
+    queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
+    enabled: !!prescriptionId,
+  })
+
   useEffect(() => {
-    if (!prescriptionId || tables.length > 0) {
-      if (prescriptionId && tables.length > 0) setLoadingExisting(false)
-      else if (!prescriptionId) setLoadingExisting(false)
+    if (!prescriptionId) {
+      setLoadingExisting(false)
       return
     }
-    setLoadingExisting(true)
-    fetch(`/api/prescription/${prescriptionId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const dt = data.prescription?.diagnosisTables || []
-        if (dt.length > 0) {
-          const parsed: TableData[] = dt.map((t: Record<string, unknown>) => {
-            let headerLabel: string[] = []
-            let colsLabel: string[] = []
-            let footerLabel: string[] = []
-            try { headerLabel = JSON.parse(String(t.headerLabel || '[]')) } catch { /* empty */ }
-            try { colsLabel = JSON.parse(String(t.colsLabel || '[]')) } catch { /* empty */ }
-            try { footerLabel = JSON.parse(String(t.footerLabel || '[]')) } catch { /* empty */ }
+    if (tables.length > 0) {
+      setLoadingExisting(false)
+      return
+    }
+    // Full Rx still loading — keep the skeleton up.
+    if (!rxData) return
+    const dt = rxData?.prescription?.diagnosisTables || []
+    if (dt.length === 0) {
+      setLoadingExisting(false)
+      return
+    }
+    const parsed: TableData[] = dt.map((t: Record<string, unknown>) => {
+      let headerLabel: string[] = []
+      let colsLabel: string[] = []
+      let footerLabel: string[] = []
+      try { headerLabel = JSON.parse(String(t.headerLabel || '[]')) } catch { /* empty */ }
+      try { colsLabel = JSON.parse(String(t.colsLabel || '[]')) } catch { /* empty */ }
+      try { footerLabel = JSON.parse(String(t.footerLabel || '[]')) } catch { /* empty */ }
 
-            // Saved cell values — JSON object keyed "row-col" (e.g. "0-1").
-            // Legacy rows may hold "[]" (array default); only accept objects.
-            let savedCells: Record<string, string> = {}
-            try {
-              const parsedCells = JSON.parse(String(t.cellValues || '{}'))
-              if (parsedCells && typeof parsedCells === 'object' && !Array.isArray(parsedCells)) {
-                savedCells = parsedCells as Record<string, string>
-              }
-            } catch { /* empty */ }
-
-            const cellValues: Record<string, string> = {}
-            const rows = Number(t.rows) || 1
-            const cols = Number(t.cols) || 1
-            for (let r = 0; r < rows; r++) {
-              for (let c = 0; c < cols; c++) {
-                const key = emptyCellKey(r, c)
-                cellValues[key] = typeof savedCells[key] === 'string' ? savedCells[key] : ''
-              }
-            }
-
-            return {
-              id: String(t.id),
-              templateId: String(t.templateId || ''),
-              name: '',
-              rows,
-              cols,
-              headerLabel,
-              colsLabel,
-              cellValues,
-              footerLabel,
-              extraLabel: String(t.extraLabel || ''),
-            }
-          })
-          setTables(parsed)
+      // Saved cell values — JSON object keyed "row-col" (e.g. "0-1").
+      // Legacy rows may hold "[]" (array default); only accept objects.
+      let savedCells: Record<string, string> = {}
+      try {
+        const parsedCells = JSON.parse(String(t.cellValues || '{}'))
+        if (parsedCells && typeof parsedCells === 'object' && !Array.isArray(parsedCells)) {
+          savedCells = parsedCells as Record<string, string>
         }
-        setLoadingExisting(false)
-      })
-      .catch(() => setLoadingExisting(false))
-  }, [prescriptionId, tables.length, setTables])
+      } catch { /* empty */ }
+
+      const cellValues: Record<string, string> = {}
+      const rows = Number(t.rows) || 1
+      const cols = Number(t.cols) || 1
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const key = emptyCellKey(r, c)
+          cellValues[key] = typeof savedCells[key] === 'string' ? savedCells[key] : ''
+        }
+      }
+
+      return {
+        id: String(t.id),
+        templateId: String(t.templateId || ''),
+        name: '',
+        rows,
+        cols,
+        headerLabel,
+        colsLabel,
+        cellValues,
+        footerLabel,
+        extraLabel: String(t.extraLabel || ''),
+      }
+    })
+    setTables(parsed)
+    setLoadingExisting(false)
+  }, [prescriptionId, tables.length, rxData, setTables])
 
   const handleAddEmpty = () => {
     addTable({

@@ -102,6 +102,7 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
   // Fetch complaints grouped by category
   const { data, isLoading, isError } = useQuery<{ complaints: ComplaintWithCategory[] }>({
     queryKey: ['rx-complaints'],
+    staleTime: 5 * 60 * 1000, // P4-F: master data — warm across the consultation
     queryFn: () =>
       fetch('/api/dashboard/doctor/prescription-settings/complaints?status=Active').then((r) => r.json()),
     placeholderData: keepPreviousData,
@@ -144,19 +145,22 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
   )
   const showQuickRows = !search.trim() && (pinnedList.length > 0 || mostUsedList.length > 0)
 
+  // P4-F: read the full Rx through the SHARED query cache key — deduped
+  // across steps (was: a raw fetch per step mount ≈ 6-7 full-Rx GETs per
+  // consultation). Saves invalidate this key, so data stays fresh after edit.
+  const { data: rxData } = useQuery<{ prescription: { chiefComplaints?: Array<{ coId: string }> } }>({
+    queryKey: ['rx-prescription-data', prescriptionId],
+    queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
+    enabled: !!prescriptionId,
+  })
+
   // Fetch existing saved complaints to initialize selection
   useEffect(() => {
-    if (!prescriptionId) return
-    fetch(`/api/prescription/${prescriptionId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const pco = data.prescription?.chiefComplaints || []
-        if (pco.length > 0) {
-          setSelectedComplaintIds(pco.map((c: { coId: string }) => c.coId))
-        }
-      })
-      .catch(() => {})
-  }, [prescriptionId, setSelectedComplaintIds])
+    const pco = rxData?.prescription?.chiefComplaints || []
+    if (pco.length > 0) {
+      setSelectedComplaintIds(pco.map((c) => c.coId))
+    }
+  }, [rxData, setSelectedComplaintIds])
 
   // Save mutation
   const saveMutation = useMutation({

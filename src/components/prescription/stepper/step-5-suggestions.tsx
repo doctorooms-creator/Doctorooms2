@@ -39,6 +39,7 @@ export function Step5Suggestions() {
   // the stepper's init-time prefetch).
   const { data: complaintsData } = useQuery<{ complaints: ComplaintWithCategory[] }>({
     queryKey: ['rx-complaints'],
+    staleTime: 5 * 60 * 1000, // P4-F
     queryFn: () =>
       fetch('/api/dashboard/doctor/prescription-settings/complaints?status=Active').then((r) => r.json()),
   })
@@ -65,22 +66,21 @@ export function Step5Suggestions() {
     co: { id: string; coDetail: string; coDetailEn: string } | null
   }>
 
-  // Fetch suggestions for all questions
+  // Fetch suggestions for all questions — P4-F speed fix: server-side
+  // questionIds filter (was: download ALL ~400 suggestions / 377KB then
+  // filter client-side). Same shape, ~25× smaller payload.
   const questionIds = questions.map((q) => q.id)
   const { data: suggestionsData } = useQuery({
     queryKey: ['rx-suggestions-for-questions', questionIds],
     queryFn: async () => {
       if (questionIds.length === 0) return { suggestions: [] }
-      // Fetch all suggestions; filter client-side
-      const res = await fetch(`/api/dashboard/doctor/prescription-settings/suggestions?status=Active`)
-      const data = await res.json()
-      return {
-        suggestions: data.suggestions.filter((s: { questionId: string }) =>
-          questionIds.includes(s.questionId)
-        ),
-      }
+      const res = await fetch(
+        `/api/dashboard/doctor/prescription-settings/suggestions?status=Active&questionIds=${questionIds.join(',')}`
+      )
+      return res.json()
     },
     enabled: questionIds.length > 0,
+    staleTime: 5 * 60 * 1000,
   })
 
   const allSuggestions = (suggestionsData?.suggestions || []) as Array<{
@@ -131,20 +131,22 @@ export function Step5Suggestions() {
   )
 
   // Load existing suggestions from prescription
+  // P4-F: reads through the SHARED query cache key — deduped across steps
+  // (was: a raw fetch per step mount).
+  const { data: rxData } = useQuery<{ prescription?: { suggestions?: unknown[] } }>({
+    queryKey: ['rx-prescription-data', prescriptionId],
+    queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
+    enabled: !!prescriptionId,
+  })
+
   useEffect(() => {
-    if (!prescriptionId) return
-    fetch(`/api/prescription/${prescriptionId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const ps = data.prescription?.suggestions || []
-        if (ps.length > 0) {
-          // For existing linked suggestions, we match by text content since we don't store suggestionId in PSuggestion
-          // Custom suggestions are handled separately
-          usePrescriptionStore.getState().setSelectedSuggestionIds([])
-        }
-      })
-      .catch(() => {})
-  }, [prescriptionId])
+    const ps = rxData?.prescription?.suggestions || []
+    if (ps.length > 0) {
+      // For existing linked suggestions, we match by text content since we don't store suggestionId in PSuggestion
+      // Custom suggestions are handled separately
+      usePrescriptionStore.getState().setSelectedSuggestionIds([])
+    }
+  }, [rxData])
 
   const setDraft = (key: string, value: string) =>
     setDrafts((prev) => ({ ...prev, [key]: value }))

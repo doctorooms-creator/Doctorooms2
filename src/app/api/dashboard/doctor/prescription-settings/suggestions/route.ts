@@ -14,6 +14,13 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get('search')?.trim() || ''
     const statusFilter = searchParams.get('status') || 'Active'
     const questionId = searchParams.get('questionId')?.trim() || ''
+    // P4-F speed fix: comma-separated question ids → server-side IN filter.
+    // Step 5 used to download ALL ~400 suggestions (377KB) and filter
+    // client-side; with this param it only receives what it can display.
+    const questionIdsRaw = searchParams.get('questionIds')?.trim() || ''
+    const questionIds = questionIdsRaw
+      ? questionIdsRaw.split(',').map((id) => id.trim()).filter(Boolean)
+      : []
 
     const doctor = await db.doctor.findUnique({
       where: { userId: user.id },
@@ -33,6 +40,8 @@ export async function GET(req: NextRequest) {
 
     if (questionId) {
       where.questionId = questionId
+    } else if (questionIds.length > 0) {
+      where.questionId = { in: questionIds }
     }
 
     if (search) {

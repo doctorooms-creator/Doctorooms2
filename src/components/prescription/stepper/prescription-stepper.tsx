@@ -115,34 +115,46 @@ export function PrescriptionStepper({ bookingId, onPrint }: PrescriptionStepperP
             // instantly (no skeleton flash) because its master data is
             // already cached. Fire-and-forget; errors are swallowed by
             // prefetchQuery and the step's own useQuery will retry.
+            // P4-F: masters get a 5-minute staleTime — they don't change
+            // mid-consultation, so back-navigation/step-switches reuse the
+            // cache instead of re-downloading 50-150KB payloads.
+            const MASTER_STALE = 5 * 60 * 1000
             void qc.prefetchQuery({
               queryKey: ['rx-complaints'], // Step 1
+              staleTime: MASTER_STALE,
               queryFn: () =>
                 fetch('/api/dashboard/doctor/prescription-settings/complaints?status=Active').then((r) => r.json()),
             })
             void qc.prefetchQuery({
               queryKey: ['rx-labels'], // Step 2 — custom vitals labels
+              staleTime: MASTER_STALE,
               queryFn: () =>
                 fetch('/api/dashboard/doctor/prescription-settings/labels?status=Active').then((r) => r.json()),
             })
             void qc.prefetchQuery({
               queryKey: ['rx-medicines-master'], // Step 4 — medicine master
+              staleTime: MASTER_STALE,
               queryFn: () => fetch('/api/dashboard/doctor/medicines?status=Active').then((r) => r.json()),
             })
             void qc.prefetchQuery({
               queryKey: ['rx-findings'], // Step 4 — findings dropdown
+              staleTime: MASTER_STALE,
               queryFn: () =>
                 fetch('/api/dashboard/doctor/prescription-settings/findings?status=Active').then((r) => r.json()),
             })
             void qc.prefetchQuery({
               queryKey: ['rx-table-templates'], // Step 3 — table templates
+              staleTime: MASTER_STALE,
               queryFn: () =>
                 fetch('/api/dashboard/doctor/prescription-settings/table-templates?status=Active').then((r) => r.json()),
             })
 
-            // If existing draft, load data and determine start step
+            // If existing draft, load data and determine start step.
+            // P4-F: fetches through the SHARED query cache key
+            // ['rx-prescription-data', rxId] so every step's useQuery hits
+            // the cache instead of re-fetching the full Rx 6-7× per session.
             if (!data.isNew) {
-              loadExistingPrescription(rxId, setPatientInfo, store.setCurrentStep, store.markStepCompleted)
+              void loadExistingPrescription(qc, rxId, setPatientInfo, store.setCurrentStep, store.markStepCompleted)
             }
             return
           }
@@ -325,15 +337,20 @@ export function PrescriptionStepper({ bookingId, onPrint }: PrescriptionStepperP
 }
 
 async function loadExistingPrescription(
+  qc: ReturnType<typeof useQueryClient>,
   rxId: string,
   setPatientInfo: (n: string, a: string, g: string) => void,
   setCurrentStep: (s: number) => void,
   markStepCompleted: (s: number) => void
 ) {
   try {
-    const res = await fetch(`/api/prescription/${rxId}`)
-    const data = await res.json()
-    const rx = data.prescription
+    // P4-F: fetchQuery populates the SHARED cache key the steps read from —
+    // one full-Rx fetch per session instead of one per step mount.
+    const data = await qc.fetchQuery({
+      queryKey: ['rx-prescription-data', rxId],
+      queryFn: () => fetch(`/api/prescription/${rxId}`).then((r) => r.json()),
+    })
+    const rx = data?.prescription
     if (!rx) return
 
     // Set patient info

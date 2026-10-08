@@ -50,7 +50,11 @@ export function useRxFavorites() {
   const query = useQuery<RxFavoritesData>({
     queryKey: ['rx-favorites'],
     queryFn: fetchFavorites,
-    staleTime: 30_000,
+    // P4-F: was 30s — favorites fired on BOTH step 1 and step 4 (and the
+    // endpoint is the slowest in prod at ~10 sequential queries). 2 minutes
+    // keeps it warm across the whole consultation; pin/unpin mutations
+    // invalidate immediately so edits stay instant.
+    staleTime: 2 * 60_000,
   })
 
   const pin = useMutation({

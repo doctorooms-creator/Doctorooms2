@@ -28,6 +28,7 @@ export function Step2Vitals() {
   // Fetch labels master
   const { data: labelsData, isLoading: labelsLoading } = useQuery({
     queryKey: ['rx-labels'],
+    staleTime: 5 * 60 * 1000, // P4-F
     queryFn: () =>
       fetch('/api/dashboard/doctor/prescription-settings/labels?status=Active').then((r) => r.json()),
     placeholderData: keepPreviousData,
@@ -57,32 +58,41 @@ export function Step2Vitals() {
     }
   }, [masterLabels.length, labelValues.length, setLabelValues])
 
+  // P4-F: read the full Rx through the SHARED query cache key — deduped
+  // across steps (was: a raw fetch per step mount).
+  const { data: rxData } = useQuery<{
+    prescription?: {
+      weight?: string
+      bp?: string
+      temperature?: string
+      labels?: Array<{ labelId: string; label: string; labelEn: string; value: string; labelUnit: string; showUnit: boolean }>
+    }
+  }>({
+    queryKey: ['rx-prescription-data', prescriptionId],
+    queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
+    enabled: !!prescriptionId,
+  })
+
   // Load existing vitals from prescription
   useEffect(() => {
-    if (!prescriptionId) return
-    fetch(`/api/prescription/${prescriptionId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const rx = data.prescription
-        if (!rx) return
-        if (rx.weight) setVitals({ weight: rx.weight })
-        if (rx.bp) setVitals({ bp: rx.bp })
-        if (rx.temperature) setVitals({ temperature: rx.temperature })
-        if (rx.labels && rx.labels.length > 0) {
-          setLabelValues(
-            rx.labels.map((l: { labelId: string; label: string; labelEn: string; value: string; labelUnit: string; showUnit: boolean }) => ({
-              labelId: l.labelId || l.label,
-              label: l.label,
-              labelEn: l.labelEn,
-              value: l.value,
-              labelUnit: l.labelUnit,
-              showUnit: l.showUnit,
-            }))
-          )
-        }
-      })
-      .catch(() => {})
-  }, [prescriptionId])
+    const rx = rxData?.prescription
+    if (!rx) return
+    if (rx.weight) setVitals({ weight: rx.weight })
+    if (rx.bp) setVitals({ bp: rx.bp })
+    if (rx.temperature) setVitals({ temperature: rx.temperature })
+    if (rx.labels && rx.labels.length > 0) {
+      setLabelValues(
+        rx.labels.map((l) => ({
+          labelId: l.labelId || l.label,
+          label: l.label,
+          labelEn: l.labelEn,
+          value: l.value,
+          labelUnit: l.labelUnit,
+          showUnit: l.showUnit,
+        }))
+      )
+    }
+  }, [rxData, setVitals, setLabelValues])
 
   // Save mutation
   const saveMutation = useMutation({

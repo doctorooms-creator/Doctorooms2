@@ -113,6 +113,7 @@ export function Step4Medicines() {
   // Fetch medicines master
   const { data: medData } = useQuery<{ medicines: MasterMedicine[] }>({
     queryKey: ['rx-medicines-master'],
+    staleTime: 5 * 60 * 1000, // P4-F: master data — warm across the consultation
     queryFn: () =>
       fetch('/api/dashboard/doctor/medicines?status=Active').then((r) => r.json()),
     placeholderData: keepPreviousData,
@@ -121,6 +122,7 @@ export function Step4Medicines() {
   // Fetch findings
   const { data: findingsData } = useQuery({
     queryKey: ['rx-findings'],
+    staleTime: 5 * 60 * 1000, // P4-F
     queryFn: () =>
       fetch('/api/dashboard/doctor/prescription-settings/findings?status=Active').then((r) => r.json()),
     placeholderData: keepPreviousData,
@@ -138,29 +140,33 @@ export function Step4Medicines() {
   )
 
   // Load existing medicines from prescription
+  // P4-F: reads through the SHARED query cache key — deduped across steps
+  // (was: a raw fetch per step mount). medicines.length guard keeps
+  // unsaved in-progress rows from being clobbered.
+  const { data: rxData } = useQuery<{ prescription?: { medicines?: Array<Record<string, unknown>> } }>({
+    queryKey: ['rx-prescription-data', prescriptionId],
+    queryFn: () => fetch(`/api/prescription/${prescriptionId}`).then((r) => r.json()),
+    enabled: !!prescriptionId,
+  })
+
   useEffect(() => {
     if (!prescriptionId || medicines.length > 0) return
-    fetch(`/api/prescription/${prescriptionId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        const pm = data.prescription?.medicines || []
-        if (pm.length > 0) {
-          const parsed: MedicineRow[] = pm.map((m: Record<string, unknown>) => ({
-            id: generateId(),
-            medicineName: String(m.medicine || ''),
-            doseOptions: [String(m.dose || '')].filter(Boolean),
-            selectedDose: String(m.dose || ''),
-            morning: Number(m.morning) || 0,
-            afternoon: Number(m.afternoon) || 0,
-            evening: Number(m.evening) || 0,
-            tab: Number(m.tab) || 1,
-            description: String(m.description || ''),
-          }))
-          setMedicines(parsed)
-        }
-      })
-      .catch(() => {})
-  }, [prescriptionId, medicines.length, setMedicines])
+    const pm = rxData?.prescription?.medicines || []
+    if (pm.length > 0) {
+      const parsed: MedicineRow[] = pm.map((m: Record<string, unknown>) => ({
+        id: generateId(),
+        medicineName: String(m.medicine || ''),
+        doseOptions: [String(m.dose || '')].filter(Boolean),
+        selectedDose: String(m.dose || ''),
+        morning: Number(m.morning) || 0,
+        afternoon: Number(m.afternoon) || 0,
+        evening: Number(m.evening) || 0,
+        tab: Number(m.tab) || 1,
+        description: String(m.description || ''),
+      }))
+      setMedicines(parsed)
+    }
+  }, [prescriptionId, medicines.length, rxData, setMedicines])
 
   // Load finding medicines
   const { data: findingMedsData, isFetching: isLoadingFindingMeds } = useQuery<{ medicines: FindingMedicine[] }>({
