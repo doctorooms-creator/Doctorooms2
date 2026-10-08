@@ -6612,3 +6612,28 @@ Stage Summary:
 - NEXT PHASE P3 candidates: (1) MBBS dose review workflow to stamp reviewedBy (21 packs waiting); (2) pack settings surface (doctor-facing pack library UI + re-install/version-update consent flow); (3) favorites/pinning in wizard; (4) T3 lite packs (PSU/NSU/CTV/RHE/GER/EME...) for long-tail.
 - PENDING OWNER (unchanged): MBBS dose reviewer recruitment (now 21 packs!); admin@doctorooms.com password rotation ⚠️ admin123; Cloudinary CLOUD_NAME; Render realtime for prod notifications; UptimeRobot.
 - INFRA: prod deploys 3× this session (~2m each, stable); cron 443058 active; sandbox healthy; zero OOM events this session.
+
+---
+Task ID: P3-BATCH1
+Agent: Main (orchestrator, Z.ai)
+Task: P3 phase-1 — Content Packs library (doctor-facing pack browser + on-demand install UI); sandbox-reset recovery.
+
+Work Log:
+- SANDBOX HARD-RESET RECOVERY: node_modules/ + local PG (db/pgdata, /home/z/pg17) + mini-service env all wiped; root .env rewritten to SQLite template. Ran bun install (961 pkgs) → bash scripts/recover-local-db.sh (zonky PG 17.5 re-downloaded, cluster re-init :5433, prisma db push 108 models, multispecialty+demo seeds) → restart-server.sh → realtime-service bun install + start (:3006). Full stack verified: dev-login ✓, packs API ✓, socket.io via gateway :81 ✓ (direct :3000 socket warnings are a testing artifact — user path goes through Caddy :81).
+- NEW FEATURE (P3 top candidate from P2-BATCH4-FINAL): Content Packs library.
+  * GET /api/dashboard/doctor/packs/library — full 21-pack catalog: pack meta + counts + totalRows + registry specialtyNames + GP-01 fallbackFor count + installed/installedAt/installedVersion/installedCounts from DoctorPackInstall receipts.
+  * Page /dashboard/doctor/prescription-settings/packs — overview stat cards (installed packs / content rows / available / awaiting review), unverified-dose notice (Hinglish), search + tier filter (BASE/T1/T2), 21 pack cards each with 5-stat icon grid (C/O, Q, Meds, Findings, Rx), specialty chips, amber unverified badge, install confirm dialog (append-only note + 30-60s expectation + dose-review warning), installed cards show date/version + "View in settings" link. Framer-motion stagger, skeletons, empty/error states, a11y (aria-labels, dl/dt/dd stat grid, sr-only).
+  * Prescription Settings layout: "Content Packs" tab added at FIRST position (Package icon).
+  * PackInstallBanner installed-chip: "All 21 packs →" link to the new page.
+- VERCEL DEPLOY FIX: sandbox reset had re-linked .vercel/project.json to a NEW empty project "my-project" (prj_DrI4c…) with zero env vars → first deploy failed on /leaderboard ISR prerender (DB unreachable at 127.0.0.1:5433 from that env). Re-linked with `bunx vercel link --project doctorooms-hms` (prj_XbtNhvhY…) → deploy Ready in 2m.
+- PROD DB POOLER UPDATE: the old aws-1-ap-northeast-2 pooler host rejects `postgres.dauhputqahqutczyrfme` ("tenant/user not found" / "no tenant identifier"). Pulled prod env via `vercel env pull`: DATABASE_URL now uses **aws-0**-ap-northeast-2.pooler.supabase.com:6543 (same user/pass, ?pgbouncer=true&connection_limit=1). Use aws-0 for direct prod DB scripts from now on.
+- SANDBOX E2E (dev Dr. Amit Shah): library API → 21 packs, GP-01 fallbackFor=13; search filter "Cardio" → 1 card; install Cardiology via dialog → receipt {45 C/O · 90 Q · 180 sugg · 60 meds · 38 findings · 43 links · 6 tables · 6 rx} EXACT match; card flips to installed; lint clean.
+- PROD E2E (agent-browser @ doctorooms-hms.vercel.app): login qa-prod-gas@doctorooms.test → Content Packs page renders 21 cards, GAS-01 shows Installed ✓ → install Cardiology via confirm dialog → success toast "lag gaya" → card flips to "View in settings" → prod DB receipts verified: GAS-01 (46 C/O · 100 Q · 61 meds, onboarding) + CAR-01 (45 C/O · 90 Q · 60 meds, via new UI) both exact-match. Screenshots: qa-p3-pack-library.png, qa-p3-prod-installing.png, qa-p3-prod-library.png.
+- Commit 0d0515e pushed to main; prod deploy Ready.
+
+Stage Summary:
+- 🚀 P3 FEATURE #1 LIVE IN PRODUCTION: Content Packs library — doctors can now browse ALL 21 packs and install any of them on demand (multi-specialty doctors, cross-coverage, curiosity-driven installs). Onboarding remains the primary path; this is the self-serve surface (docs 03 §6 "pack settings surface" first slice).
+- Sandbox fully recovered from hard reset (recovery script worked end-to-end: binaries download → cluster init → schema push → seeds → services).
+- Vercel link hijack-by-reset diagnosed + fixed (relink to doctorooms-hms). Prod pooler region is aws-0 now (was aws-1) — direct prod DB scripts must use the aws-0 host.
+- NEXT P3 candidates: (2) favorites/pinning in RX wizard; (3) MBBS dose-review workflow UI (admin-side reviewer console to stamp meta.reviewedBy — 21 packs waiting, flips amber badges to reviewed); (4) T3 lite packs (PSU/NSU/CTV/RHE/GER/EME long-tail).
+- PENDING OWNER (unchanged): MBBS dose reviewer recruitment (21 packs); admin password rotation ⚠️ admin123; Cloudinary CLOUD_NAME; Render realtime for prod notifications + UptimeRobot.
