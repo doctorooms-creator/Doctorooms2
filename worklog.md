@@ -7012,3 +7012,33 @@ Stage Summary:
 - ⏸ DEPLOY PENDING OWNER ACTION: needs a fresh Vercel token supplied to the agent (same as P1-PROD-DEPLOY session), then `bunx vercel deploy --prod --yes --token=...`, then re-measure prod timings (QA draft ready: booking cmuz3ecr10002mo9kpos8bpic / rx cmuz3fdr20001jy066gx8a1zu; measure POST /save {"vitals":{"weight":"61"}} cold+warm vs 0.36–0.40s baseline; verify request pattern 7→1 via wizard network log).
 - Remaining P4 backlog unchanged: P4-E (unified Book Patient page), P4-B (hospital-admin role cleanup), P4-C (doctor verification + hospital-affiliation onboarding).
 - Owner-side pending unchanged: MBBS reviewer recruitment, admin password rotation, Cloudinary CLOUD_NAME + now: Vercel token re-supply for deploys.
+
+---
+Task ID: P4-G-DEPLOY-1
+Agent: Main (Z.ai)
+Task: Owner supplied fresh Vercel token → deploy P4-G (commit bbed9b4) to prod + full post-deploy verification.
+
+Work Log:
+- Token verified (bunx vercel whoami → doctorooms-creator); git clean at 8ef2967 (bbed9b4 already on origin/main).
+- DEPLOYED: bunx vercel deploy --prod --yes --token=... → deployment doctorooms-p56q9vmcu-aditya-2b2c aliased to doctorooms-hms.vercel.app, Ready in 3m.
+- NEW /save ENDPOINT LIVE: POST /api/prescription/[id]/save now returns 401 unauthenticated (was 404 on old deployment) — route deployed.
+- Region check: x-vercel-id format now anonymized by Vercel (hkg1::j45pp-… style) — verified empirically by timing instead: auth/me warm 0.09–0.34s + /save(401) 0.08–0.09s = Seoul lambda next to Seoul DB (US would be ~1.6s+).
+- MEASURED (prod, QA session qa-prod-gas via saved /tmp/qa-cookies.txt, curl):
+  · POST /save {"vitals":{"weight":"61"}} → HTTP 200, response {"saved":["vitals"],...} correct echo; 0.59s cold / 0.27–0.29s warm vs OLD per-step endpoints 0.36–0.40s — AND the old flow additionally triggered a hidden 0.34s full-Rx refetch behind every save → per-save effective wait ~0.70s → 0.27s (~2.6×).
+  · full-Rx GET 0.34s warm (unchanged, as designed — now fires 1×/consultation instead of 7×).
+- PROD E2E (agent-browser @ doctorooms-hms.vercel.app, QA cookie session, wizard on booking cmuz3ecr10002mo9kpos8bpic / draft rx cmuz3fdr20001jy066gx8a1zu):
+  · Draft-resume worked: existing data (complaints + vitals weight 61) → wizard opened at step 3 with steps 1–2 marked completed.
+  · REQUEST PATTERN VERIFIED EXACT: current session = 1 init + 1 full-Rx GET (load) + 3×POST /save (steps 3 tables / 4 medicines / 5 advice) + ZERO full-Rx refetch after any save + ZERO legacy per-step endpoints. Network log simultaneously shows the OLD baseline session's pattern (legacy POST /complaints ×3 → full-Rx GET after each) for a direct before/after.
+  · Cache-patch architecture proven E2E: step-6 Finish preview rendered from cache showing data saved seconds earlier (Amlong 5 Tablet rows + custom advice "Follow up in 5 days if symptoms persist") with ZERO refetch.
+  · Persistence verified via API: medicines rows (Amlong 5 Tablet, morning 1, tab 30, dose string, safety description) + general advice suggestion row + vitals weight 61 all in prod DB; status still Draft (finalize intentionally NOT called on prod — safety pattern; fire-and-forget notifications were sandbox-verified ×2 in P4-G-SHIP-1).
+  · Step-4 empty-medicine validation guard verified live: Save with no medicines → toast "Add at least one medicine", dialog stays, ZERO network calls wasted.
+  · QA artifact: Amlong added twice (chip click + Enter keypress) — duplicate row is tester-side, not a bug; draft now carries weight 61 + 2× Amlong + advice (no longer pristine; served its measurement purpose).
+  · Evidence: /tmp/qa-g-prod-step6-finish.png, /tmp/qa-g-prod-current-step.png, /tmp/qa-g-prod-after-click.png.
+- Sandbox dev server was down after deploy session (known OOM issue) — restart-server.sh recovered it (200 in 112ms).
+
+Stage Summary:
+- 🚀 P4-G LIVE IN PRODUCTION (doctorooms-hms.vercel.app): per-consultation full-Rx GETs 7→1 confirmed on real prod traffic; saves transactional (~0.27s warm, was ~0.70s effective incl. hidden refetch ≈ 2.6×); finalize non-blocking; step-6 preview instant from cache.
+- Combined P4-F + P4-G result vs the original complaint: full consultation request volume ~30 → ~10, sequential DB queries ~140-150 → ~25, estimated wizard wait 60-90s → ~6-10s.
+- Deployment pipeline proven again with owner-supplied token (token does not persist across sandbox sessions — expect to re-request on next deploy).
+- Remaining P4 backlog unchanged: P4-E (unified Book Patient page), P4-B (hospital-admin role cleanup), P4-C (doctor verification + hospital-affiliation onboarding).
+- Owner-side pending unchanged: MBBS reviewer recruitment (reviewer@doctorooms.com ready), admin password rotation, Cloudinary CLOUD_NAME.
