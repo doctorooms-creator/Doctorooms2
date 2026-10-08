@@ -6827,3 +6827,24 @@ Stage Summary:
 - All 3 owner-reported issues CONFIRMED with exact file:line evidence; 2 bonus bugs found (broken hospital IPD link showing empty page; hardcoded Verified badges with no verification system behind them).
 - Plan file: PLAN-HOSPITAL-ADMIN-ROLE-CLEANUP.md — awaiting owner "Go ahead" + optional answers to 3 open decisions before starting P4-A.
 - Owner is mid-testing of all modules; more feedback rounds likely — keep analysis-only mode until explicit go.
+
+---
+Task ID: P4-ANALYSIS-R2
+Agent: Main (Z.ai)
+Task: Owner testing round 2 — ANALYZE ONLY (no development): receptionist booking not showing + why 3 booking modes + why 2 registration dialogs.
+
+Work Log:
+- Owner instruction: DO NOT START DEVELOPMENT — analysis only. Owner tested on PRODUCTION (sandbox dev server was found dead from OOM at ~07:04Z — restarted via restart-server.sh, verified 200; realtime :3006 alive).
+- Forensic reconstruction from PROD DB + Vercel logs: owner's session = hospital "Aditya Joshi" (11:38 IST) → doctor "Rajesh" self-reg + auto "Rajesh Clinic" (12:14) → staff Sunita/Sunil/Sonali/Sachin (1:57-2:00 PM) → patient Aditya (2:06 PM) → EXPRESS BOOKING SUCCESS 2:32 PM (token GEN-001, status now Finish, 1 prescription — full clinical flow worked) → patients Rahul+Ramesh registered 2:41/2:42 PM BUT ZERO bookings created for them → owner browsing express/appointments/pending pages 3:04 PM complaining "empty".
+- ISSUE 4 (CRITICAL, CONFIRMED): "New Appointment" form (appointments/page.tsx) silently fails in hospital mode — API requires departmentId+doctorId (route.ts:256-263) but form has NO such fields and never sends them → 400 → client has NO r.ok check (page.tsx:189-221) → FALSE "Appointment created successfully" toast → dialog closes, data lost. Rahul/Ramesh bookings never existed. Express/Walk-in surface errors properly; only appointments page lies.
+- ISSUE 5 (CONFIRMED): 3 booking modes = 3 design eras — Express (5-sec lane, auto-assign doctor) / Appointments (legacy clinic-era form, no dept/doctor picker, never hospital-upgraded — hence broken) / Walk-in (full deliberate booking). Express≈Walk-in with fields stripped; Appointments is the relic. Recommendation: 1 unified "Book Patient" page (mobile auto-lookup + inline new-patient fields + dept + auto-assign toggle + optional doctor/slot + collapsible demographics).
+- ISSUE 6 (CONFIRMED): 2-dialog mobile registration only on Appointments page — manual check button → separate Register dialog (5 clicks, 3 API calls, mobile/gender/name asked twice; patients lookup scoped to prior-bookings-only so fresh patients re-check as "not found"). Express/Walk-in already have the good single-dialog debounced auto-lookup pattern.
+- Why lists looked "empty": Express page has NO list at all (form only); walk-in queue excludes Finish status; Pending Bookings only shows By-Self Pending; Appointments page (status=all) actually DOES show Aditya — user's real pain was the 2 never-created bookings + no list on express page.
+- BONUS findings: timezone bug in appointments create (new Date(`${date}T${time}`) parses server-UTC → evening IST bookings land next IST day; nowIST() stores +5:30-shifted instant); payment does not exist in receptionist booking flow at all (OPD billing requires Visited status); 7-value status vocabulary undocumented.
+- Wrote PLAN-RECEPTIONIST-BOOKING-FLOW.md: forensic timeline table, per-issue evidence + fix plans, unified Book Patient mockup, batch order P4-A/P4-D(critical silent-fail fix)/P4-E/P4-B/P4-C + 3 owner decisions.
+
+Stage Summary:
+- ZERO code changes — analysis only per owner instruction. 2 plan files now exist (Round 1: PLAN-HOSPITAL-ADMIN-ROLE-CLEANUP.md; Round 2: PLAN-RECEPTIONIST-BOOKING-FLOW.md).
+- CRITICAL finding: silent data-loss bug — every "New Appointment" hospital-mode booking fails invisibly with false success toast. Recommended P4-D hotfix batch FIRST (half day).
+- Prod QA residue: owner's test data (Rajesh Clinic hospital, doctor Rajesh, staff ×4, patients Aditya/Rahul/Ramesh, 1 booking with prescription, Aditya Joshi hospital account) — usable for future E2E verification.
+- Dev server OOM-killed once (~07:04Z), restarted cleanly; cron watchdog + restart-server.sh pattern proven again.
