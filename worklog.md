@@ -6808,3 +6808,22 @@ Stage Summary:
 - PROD REVIEWER CREDENTIALS: reviewer@doctorooms.com / Reviewer#2026 (rotate after handing over; admin can also filter 'reviewer' in Users page).
 - P3 dev candidates remaining: pack version-update consent flow; PSU-02/SON-01/dental subspecialty packs. PENDING OWNER: recruit MBBS reviewer (now SAFE to do so — scoped account ready), admin password rotation ⚠️, Cloudinary CLOUD_NAME, Render realtime + UptimeRobot.
 - Sandbox QA residue: GAS-01 has 1 test verdict (Pan 40, reviewer); prod GP-01 has 1 test verdict (Crocin, reviewer) — harmless, real reviewer can re-decide.
+
+---
+Task ID: P4-ANALYSIS
+Agent: Main (Z.ai)
+Task: Owner's testing round — ANALYZE ONLY (no development) 3 reported issues in hospital admin panel; produce plan file.
+
+Work Log:
+- Owner explicitly said DO NOT START DEVELOPMENT — analysis + files only. Owner is testing all modules personally.
+- Launched read-only Explore agent; verified all 3 claims against code with file/line evidence.
+- ISSUE 1 (Add Doctor search) CONFIRMED: debounce written with useMemo instead of useEffect (department-doctors/page.tsx:168-172 — cleanup never runs → fetch per keystroke, 5 sequential calls for "rajesh"); global unindexed ILIKE '%term%' scan, no orderBy (search-doctors/route.ts:20-44); dropdown shows ONLY name+specialty — email returned by API but never rendered (584-601) → same-name doctors indistinguishable. take:10 exists (not "all").
+- ISSUE 2 (no-clinic doctor in patient search) CONFIRMED: /api/doctors filters only role+status (route.ts:16-20); register self-activates without email service (register/route.ts:86-92); NO verification/approval field on Doctor/Hospital in schema; onboarding AUTO-CREATES synthetic "${user.name} Clinic" (onboarding/route.ts:119-195) + DoctorHospital; patient trust badges HARDCODED isVerified=true (doctors/page.tsx:317, [id]/page.tsx:370-372); hospitalAddress self-declared free-text; synthetic clinics also pollute public hospitals directory.
+- ISSUE 3 (operational features in hospital admin) CONFIRMED — owner was RIGHT 5/5: IPD sidebar item = BROKEN duplicate (links receptionist page whose APIs 401 for hospital role → empty page); hospital admin has MORE OT power than doctors (CRUD+scheduling); nurse has ZERO bed-transfer access (API excludes nurse, route.ts:12-17); doctor has NO diet-order UI while hospital admin can write clinical diet orders; dead complete-discharge endpoint lets hospital write final diagnosis+summary text.
+- Wrote PLAN-HOSPITAL-ADMIN-ROLE-CLEANUP.md at repo root: full evidence tables, per-issue fix plans, proposed batches P4-A (search fix, ~half day) / P4-B (role cleanup, ~1.5d) / P4-C (verification + affiliation onboarding, ~1.5-2d), 3 open owner decisions (unverified visibility, OT scheduling owner vs doctor, registration approval gate).
+
+Stage Summary:
+- ZERO code changes — analysis only per owner instruction.
+- All 3 owner-reported issues CONFIRMED with exact file:line evidence; 2 bonus bugs found (broken hospital IPD link showing empty page; hardcoded Verified badges with no verification system behind them).
+- Plan file: PLAN-HOSPITAL-ADMIN-ROLE-CLEANUP.md — awaiting owner "Go ahead" + optional answers to 3 open decisions before starting P4-A.
+- Owner is mid-testing of all modules; more feedback rounds likely — keep analysis-only mode until explicit go.
