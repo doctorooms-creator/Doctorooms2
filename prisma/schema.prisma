@@ -120,6 +120,7 @@ model Doctor {
   recallCampaigns          RecallCampaign[]
   tableTemplates           TableTemplateMaster[]
   packInstalls             DoctorPackInstall[]
+  rxFavorites              RxFavorite[]
 
   // SECURITY (P4.7): Add indexes for doctor search/filter queries.
   @@index([specialization])
@@ -144,6 +145,25 @@ model DoctorPackInstall {
 
   @@unique([doctorId, packCode])
   @@index([packCode])
+}
+
+// ── RX wizard favorites/pinning (P3) ────────────────────────────────────────
+// Doctor explicitly pins their most-used complaints & medicines so the RX
+// wizard shows a one-tap quick row at the top of steps 1 & 4. "Most
+// prescribed" sections are derived live from PCo/PMedicine history — this
+// table only stores the explicit pins.
+model RxFavorite {
+  id        String   @id @default(cuid())
+  doctorId  String
+  kind      String // 'complaint' | 'medicine'
+  refId     String // CoMaster.id (complaint) | DoctorMedicine.id (medicine)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, kind, refId])
+  @@index([doctorId, kind])
 }
 
 // ── Specialty pack dose-review workflow (P3) ──────────────────────────────

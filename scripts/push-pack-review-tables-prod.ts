@@ -6,7 +6,7 @@
  * Usage:
  *   DATABASE_URL="<prod pooler url>" bun scripts/push-pack-review-tables-prod.ts
  */
-const { PrismaClient } = require('@prisma/client')
+const { PrismaClient } = await import('@prisma/client')
 
 const db = new PrismaClient()
 

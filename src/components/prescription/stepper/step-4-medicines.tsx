@@ -24,9 +24,14 @@ import {
   Moon,
   FlaskConical,
   X,
+  Star,
+  Pin,
+  TrendingUp,
+  Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePrescriptionStore, type MedicineRow } from '@/lib/prescription-store'
+import { useRxFavorites, type FavoriteMedicine } from '@/lib/use-rx-favorites'
 
 function generateId() {
   return Math.random().toString(36).substring(2, 9)
@@ -85,6 +90,25 @@ export function Step4Medicines() {
   const [searchOpen, setSearchOpen] = useState(-1) // which row's search is open, -1 = none
   const [medSearch, setMedSearch] = useState('')
   const searchRef = useRef<HTMLDivElement>(null)
+
+  // Pinned + most-prescribed quick-add chips (P3)
+  const {
+    data: favData,
+    pinnedMedicineIds,
+    pin,
+    unpin,
+  } = useRxFavorites()
+
+  const handleTogglePin = (medicine: { id: string; name: string }) => {
+    const isPinned = pinnedMedicineIds.has(medicine.id)
+    if (isPinned) {
+      unpin.mutate({ kind: 'medicine', refId: medicine.id })
+      toast.success(`Unpinned ${medicine.name}`)
+    } else {
+      pin.mutate({ kind: 'medicine', refId: medicine.id })
+      toast.success(`${medicine.name} pinned — ab quick-add me rahega`)
+    }
+  }
 
   // Fetch medicines master
   const { data: medData } = useQuery<{ medicines: MasterMedicine[] }>({
@@ -217,6 +241,27 @@ export function Step4Medicines() {
     setMedSearch('')
   }
 
+  // One-tap add from a pinned / most-used quick chip (P3) — same shape as
+  // handleSelectMedicine but sourced from the favorites API payload.
+  const handleQuickAdd = (med: FavoriteMedicine) => {
+    const defaultDose = med.doseArray?.[0] || ''
+    const row: MedicineRow = {
+      id: generateId(),
+      medicineId: med.id,
+      medicineName: med.name,
+      doseOptions: med.doseArray || [],
+      selectedDose: defaultDose,
+      morning: med.morning,
+      afternoon: med.afternoon,
+      evening: med.evening,
+      tab: med.tab,
+      description: med.description,
+    }
+    // Quick-add always appends (no search-mode row to replace here).
+    addMedicine(row)
+    toast.success(`${med.name} added`)
+  }
+
   // Save mutation
   const saveMutation = useMutation({
     mutationFn: () =>
@@ -246,6 +291,68 @@ export function Step4Medicines() {
     }
     setIsSaving(true)
     saveMutation.mutate(undefined, { onSettled: () => setIsSaving(false) })
+  }
+
+  const pinnedMeds = favData?.favorites.medicines || []
+  const mostUsedMeds = (favData?.mostUsed.medicines || []).filter(
+    (m) => !pinnedMedicineIds.has(m.id)
+  )
+
+  const renderQuickMedChip = (med: FavoriteMedicine & { count?: number }) => {
+    const isPinned = pinnedMedicineIds.has(med.id)
+    return (
+      <motion.button
+        key={`qmed-${med.id}`}
+        type="button"
+        whileTap={{ scale: 0.97 }}
+        onClick={() => handleQuickAdd(med)}
+        title={
+          med.doseArray?.[0]
+            ? `${med.name} · ${med.doseArray[0]} · ${med.morning}-${med.afternoon}-${med.evening} · ${med.tab}d`
+            : `${med.name} · ${med.morning}-${med.afternoon}-${med.evening} · ${med.tab}d`
+        }
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border bg-card border-border hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/30 transition-all"
+      >
+        <Zap className="h-3 w-3 text-teal-600 dark:text-teal-400" />
+        <span className="font-medium">{med.name}</span>
+        {med.count !== undefined && med.count > 0 && (
+          <span
+            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+            title={`Prescribed ${med.count} times`}
+          >
+            ×{med.count}
+          </span>
+        )}
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={isPinned ? `Unpin ${med.name}` : `Pin ${med.name}`}
+          aria-pressed={isPinned}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleTogglePin(med)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              e.stopPropagation()
+              handleTogglePin(med)
+            }
+          }}
+          className="inline-flex items-center justify-center h-4 w-4 rounded-full"
+          title={isPinned ? 'Unpin (hatao)' : 'Pin to quick-add (top me lagao)'}
+        >
+          <Star
+            className={
+              'h-3.5 w-3.5 transition-colors ' +
+              (isPinned
+                ? 'fill-amber-400 text-amber-500'
+                : 'text-muted-foreground/50 hover:text-amber-400')
+            }
+          />
+        </span>
+      </motion.button>
+    )
   }
 
   return (
@@ -279,6 +386,32 @@ export function Step4Medicines() {
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
         )}
       </div>
+
+      {/* ── Quick-add: Pinned + Most prescribed medicines (one tap) ── */}
+      {(pinnedMeds.length > 0 || mostUsedMeds.length > 0) && (
+        <div className="space-y-2">
+          {pinnedMeds.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-1.5 flex items-center gap-1">
+                <Pin className="h-3 w-3" /> Pinned — aapki go-to dawaiyan
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {pinnedMeds.map(renderQuickMedChip)}
+              </div>
+            </div>
+          )}
+          {mostUsedMeds.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-teal-700 dark:text-teal-300 mb-1.5 flex items-center gap-1">
+                <TrendingUp className="h-3 w-3" /> Most prescribed — aapki history se
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {mostUsedMeds.map(renderQuickMedChip)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Medicine Rows */}
       <AnimatePresence mode="popLayout">
@@ -333,23 +466,47 @@ export function Step4Medicines() {
                             </div>
                           ) : (
                             <div>
-                              {filteredMeds.map((m) => (
-                                <button
-                                  key={m.id}
-                                  type="button"
-                                  onClick={() => handleSelectMedicine(m)}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
-                                >
-                                  <Pill className="h-3.5 w-3.5 text-teal-600 shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-medium truncate">{m.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {m.doseArray?.[0] || 'No dose'} | {m.tab}d |{' '}
-                                      {m.morning}-{m.afternoon}-{m.evening}
-                                    </p>
+                              {filteredMeds.map((m) => {
+                                const isPinned = pinnedMedicineIds.has(m.id)
+                                return (
+                                  <div
+                                    key={m.id}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-accent transition-colors text-left"
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectMedicine(m)}
+                                      className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                                    >
+                                      <Pill className="h-3.5 w-3.5 text-teal-600 shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <p className="font-medium truncate">{m.name}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                          {m.doseArray?.[0] || 'No dose'} | {m.tab}d |{' '}
+                                          {m.morning}-{m.afternoon}-{m.evening}
+                                        </p>
+                                      </div>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTogglePin(m)}
+                                      aria-label={isPinned ? `Unpin ${m.name}` : `Pin ${m.name}`}
+                                      aria-pressed={isPinned}
+                                      title={isPinned ? 'Unpin (hatao)' : 'Pin to quick-add (top me lagao)'}
+                                      className="h-7 w-7 shrink-0 inline-flex items-center justify-center rounded-md hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                                    >
+                                      <Star
+                                        className={
+                                          'h-3.5 w-3.5 transition-colors ' +
+                                          (isPinned
+                                            ? 'fill-amber-400 text-amber-500'
+                                            : 'text-muted-foreground/60 hover:text-amber-400')
+                                        }
+                                      />
+                                    </button>
                                   </div>
-                                </button>
-                              ))}
+                                )
+                              })}
                             </div>
                           )}
                         </div>
@@ -383,6 +540,43 @@ export function Step4Medicines() {
                       />
                     )}
                   </div>
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={
+                      med.medicineId && pinnedMedicineIds.has(med.medicineId)
+                        ? `Unpin ${med.medicineName}`
+                        : `Pin ${med.medicineName}`
+                    }
+                    disabled={!med.medicineId}
+                    title={
+                      med.medicineId
+                        ? pinnedMedicineIds.has(med.medicineId)
+                          ? 'Unpin from quick-add'
+                          : 'Pin to quick-add'
+                        : 'Pin available for master-list medicines'
+                    }
+                    className={
+                      'h-9 w-9 shrink-0 mb-0.5 ' +
+                      (med.medicineId && pinnedMedicineIds.has(med.medicineId)
+                        ? 'text-amber-500'
+                        : 'text-muted-foreground hover:text-amber-400')
+                    }
+                    onClick={() => {
+                      if (!med.medicineId) return
+                      handleTogglePin({ id: med.medicineId, name: med.medicineName })
+                    }}
+                  >
+                    <Star
+                      className={
+                        'h-4 w-4 ' +
+                        (med.medicineId && pinnedMedicineIds.has(med.medicineId)
+                          ? 'fill-amber-400 text-amber-500'
+                          : '')
+                      }
+                    />
+                  </Button>
 
                   <Button
                     variant="ghost"

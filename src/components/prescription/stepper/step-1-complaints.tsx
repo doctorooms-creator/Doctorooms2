@@ -8,15 +8,63 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Search, Check, AlertCircle } from 'lucide-react'
+import { Search, Check, AlertCircle, Star, Pin, TrendingUp } from 'lucide-react'
 import { toast } from 'sonner'
 import { usePrescriptionStore, type ComplaintWithCategory } from '@/lib/prescription-store'
+import {
+  useRxFavorites,
+  type FavoriteComplaint,
+} from '@/lib/use-rx-favorites'
 
 type GroupedComplaints = {
   categoryId: string | null
   categoryName: string
   categoryNameEn: string
   items: ComplaintWithCategory[]
+}
+
+// Small star toggle — rendered INSIDE pill chips, so it is a span with
+// role="button" (a nested <button> inside <button> is invalid HTML).
+// stopPropagation keeps the chip's selection click untouched.
+function StarToggle({
+  isPinned,
+  onToggle,
+  label,
+}: {
+  isPinned: boolean
+  onToggle: () => void
+  label: string
+}) {
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      aria-label={isPinned ? `Unpin ${label}` : `Pin ${label}`}
+      aria-pressed={isPinned}
+      onClick={(e) => {
+        e.stopPropagation()
+        onToggle()
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          e.stopPropagation()
+          onToggle()
+        }
+      }}
+      className="inline-flex items-center justify-center h-4 w-4 rounded-full transition-colors"
+      title={isPinned ? 'Unpin (hatao)' : 'Pin to top (top me lagao)'}
+    >
+      <Star
+        className={
+          'h-3.5 w-3.5 transition-colors ' +
+          (isPinned
+            ? 'fill-amber-400 text-amber-500'
+            : 'text-muted-foreground/50 hover:text-amber-400')
+        }
+      />
+    </span>
+  )
 }
 
 export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void }) {
@@ -31,6 +79,25 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
 
   const [search, setSearch] = useState('')
   const queryClient = useQueryClient()
+
+  // Pinned + most-prescribed quick rows (P3)
+  const {
+    data: favData,
+    pinnedComplaintIds,
+    pin,
+    unpin,
+  } = useRxFavorites()
+
+  const handleTogglePin = (complaint: { id: string; coDetail: string }) => {
+    const isPinned = pinnedComplaintIds.has(complaint.id)
+    if (isPinned) {
+      unpin.mutate({ kind: 'complaint', refId: complaint.id })
+      toast.success(`Unpinned "${complaint.coDetail}"`)
+    } else {
+      pin.mutate({ kind: 'complaint', refId: complaint.id })
+      toast.success(`"${complaint.coDetail}" pinned — ab wizard ke top me rahega`)
+    }
+  }
 
   // Fetch complaints grouped by category
   const { data, isLoading, isError } = useQuery<{ complaints: ComplaintWithCategory[] }>({
@@ -68,6 +135,14 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
     }
     return Array.from(map.values())
   }, [complaints, search])
+
+  // Quick rows: pinned (explicit) + most-prescribed (auto, pins filtered out).
+  // Only shown when search is empty — searching already filters everything.
+  const pinnedList = favData?.favorites.complaints || []
+  const mostUsedList = (favData?.mostUsed.complaints || []).filter(
+    (c) => !pinnedComplaintIds.has(c.id)
+  )
+  const showQuickRows = !search.trim() && (pinnedList.length > 0 || mostUsedList.length > 0)
 
   // Fetch existing saved complaints to initialize selection
   useEffect(() => {
@@ -111,6 +186,44 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
     saveMutation.mutate(undefined, {
       onSettled: () => setIsSaving(false),
     })
+  }
+
+  const renderQuickChip = (complaint: FavoriteComplaint & { count?: number }) => {
+    const isSelected = selectedComplaintIds.includes(complaint.id)
+    const isPinned = pinnedComplaintIds.has(complaint.id)
+    return (
+      <motion.button
+        key={`quick-${complaint.id}`}
+        type="button"
+        whileTap={{ scale: 0.97 }}
+        onClick={() => toggleComplaint(complaint.id)}
+        className={
+          'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border transition-all ' +
+          (isSelected
+            ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+            : 'bg-card border-border hover:border-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/30')
+        }
+      >
+        {isSelected && <Check className="h-3 w-3" />}
+        <span>{complaint.coDetail}</span>
+        {complaint.count !== undefined && complaint.count > 0 && (
+          <span
+            className={
+              'text-[10px] font-semibold px-1.5 py-0.5 rounded-full ' +
+              (isSelected ? 'bg-teal-500/40 text-teal-50' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300')
+            }
+            title={`Prescribed ${complaint.count} times`}
+          >
+            ×{complaint.count}
+          </span>
+        )}
+        <StarToggle
+          isPinned={isPinned}
+          onToggle={() => handleTogglePin(complaint)}
+          label={complaint.coDetail}
+        />
+      </motion.button>
+    )
   }
 
   if (isLoading) {
@@ -162,6 +275,38 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
         </div>
       )}
 
+      {/* ── Quick rows: Pinned + Most prescribed (one tap, no scrolling) ── */}
+      {showQuickRows && (
+        <div className="space-y-3">
+          {pinnedList.length > 0 && (
+            <Card className="border-amber-200/70 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/20">
+              <CardContent className="pt-4 pb-4 space-y-2">
+                <h4 className="text-sm font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                  <Pin className="h-3.5 w-3.5" />
+                  <span>Pinned — aapke top complaints</span>
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {pinnedList.map(renderQuickChip)}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {mostUsedList.length > 0 && (
+            <Card className="border-teal-200/70 dark:border-teal-900/40 bg-teal-50/40 dark:bg-teal-950/20">
+              <CardContent className="pt-4 pb-4 space-y-2">
+                <h4 className="text-sm font-semibold text-teal-700 dark:text-teal-300 flex items-center gap-1.5">
+                  <TrendingUp className="h-3.5 w-3.5" />
+                  <span>Most prescribed — aapki history se</span>
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {mostUsedList.map(renderQuickChip)}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
       <div className="max-h-[60vh] overflow-y-auto space-y-4 pr-1">
         <AnimatePresence mode="popLayout">
           {grouped.map((group) => (
@@ -181,6 +326,7 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
               <div className="flex flex-wrap gap-2">
                 {group.items.map((complaint) => {
                   const isSelected = selectedComplaintIds.includes(complaint.id)
+                  const isPinned = pinnedComplaintIds.has(complaint.id)
                   return (
                     <motion.button
                       key={complaint.id}
@@ -205,6 +351,11 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
                           ({complaint.coDetailEn})
                         </span>
                       )}
+                      <StarToggle
+                        isPinned={isPinned}
+                        onToggle={() => handleTogglePin(complaint)}
+                        label={complaint.coDetail}
+                      />
                     </motion.button>
                   )
                 })}
@@ -219,6 +370,10 @@ export function Step1Complaints({ onSaveComplete }: { onSaveComplete: () => void
           </div>
         )}
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Tip: <Star className="inline h-3 w-3 text-amber-400 fill-amber-400" /> tap the star on any complaint to pin it — pinned complaints appear at the top for one-tap selection.
+      </p>
 
       <div className="flex justify-end pt-4 border-t">
         <Button
