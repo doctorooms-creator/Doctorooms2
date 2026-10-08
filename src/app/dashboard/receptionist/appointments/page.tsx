@@ -99,6 +99,25 @@ interface PatientLookupResult {
   createdAt: string
 }
 
+// Shape returned by /api/dashboard/receptionist/schedule in hospital mode
+// (same endpoint the Walk-in page uses — doctors grouped by department)
+interface BookingScheduleDoctor {
+  id: string
+  name: string
+  profileImg: string | null
+  specialization: string
+  designation: string
+  fees: number
+}
+
+interface BookingScheduleData {
+  isHospitalMode?: boolean
+  departments?: Array<{
+    department: { id: string; name: string; shortCode: string; icon: string }
+    doctors: BookingScheduleDoctor[]
+  }>
+}
+
 const statusColors: Record<string, string> = {
   Pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400',
   Approve: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400',
@@ -156,6 +175,9 @@ export default function ReceptionistAppointmentsPage() {
   const [formWeight, setFormWeight] = useState('')
   const [formPhysicalHandicap, setFormPhysicalHandicap] = useState('No')
   const [formRelationWithMe, setFormRelationWithMe] = useState('')
+  // Hospital-mode only: department + doctor selection
+  const [formDepartmentId, setFormDepartmentId] = useState('')
+  const [formDoctorId, setFormDoctorId] = useState('')
 
   // Mobile lookup state
   const [lookupStatus, setLookupStatus] = useState<'idle' | 'searching' | 'found' | 'not_found'>('idle')
@@ -177,6 +199,8 @@ export default function ReceptionistAppointmentsPage() {
     appointments: ReceptionistAppointment[]
     statusCounts: Record<string, number>
     doctor: { id: string; name: string; fees: number } | null
+    isHospitalMode?: boolean
+    departments?: Array<{ id: string; name: string; shortCode: string }>
   }>({
     queryKey: ['receptionist-appointments', statusFilter, search, fromDate, toDate],
     queryFn: () =>
@@ -186,8 +210,25 @@ export default function ReceptionistAppointmentsPage() {
     refetchInterval: 10000,
   })
 
+  // Hospital mode: fetch departments + their doctors (same endpoint/pattern as
+  // the Walk-in page) so the New Appointment form can pick department & doctor.
+  // Only fetched when the appointments API reports hospital mode.
+  const isHospitalMode = !!data?.isHospitalMode
+  const { data: scheduleData, isLoading: scheduleLoading } = useQuery<BookingScheduleData>({
+    queryKey: ['receptionist-booking-schedule'],
+    queryFn: () => fetch('/api/dashboard/receptionist/schedule').then((r) => r.json()),
+    enabled: isHospitalMode,
+    staleTime: 5 * 60 * 1000,
+  })
+  const hospitalDepartments = scheduleData?.departments ?? []
+  const selectedDepartment = hospitalDepartments.find(
+    (g) => g.department.id === formDepartmentId
+  )
+  const departmentDoctors = selectedDepartment?.doctors ?? []
+  const selectedDoctor = departmentDoctors.find((d) => d.id === formDoctorId) || null
+
   const createMutation = useMutation({
-    mutationFn: (body: {
+    mutationFn: async (body: {
       patientName: string
       mobile: string
       disease: string
@@ -202,21 +243,33 @@ export default function ReceptionistAppointmentsPage() {
       height: string
       physicallyChallenged: string
       relationWithMe: string
-    }) =>
-      fetch('/api/dashboard/receptionist/appointments', {
+      departmentId?: string
+      doctorId?: string
+    }) => {
+      const res = await fetch('/api/dashboard/receptionist/appointments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
-      }).then((r) => r.json()),
-    onSuccess: () => {
+      })
+      const data = await res.json().catch(() => ({}))
+      // A 400/500 still resolves the fetch — only treat a real success as
+      // success so we never show a false "created" toast again.
+      if (!res.ok || data.success !== true) {
+        throw new Error(data.error || `Failed to create appointment (HTTP ${res.status})`)
+      }
+      return data
+    },
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['receptionist-appointments'] })
       queryClient.invalidateQueries({ queryKey: ['receptionist-stats'] })
-      toast.success('Appointment created successfully')
+      toast.success(`Appointment booked for ${variables.patientName}`)
       setDialogOpen(false)
       resetForm()
     },
-    onError: () => {
-      toast.error('Failed to create appointment')
+    onError: (err: Error) => {
+      // Keep the dialog open with all form data preserved — the receptionist
+      // can fix whatever the API rejected and re-submit without losing work.
+      toast.error(err.message || 'Failed to create appointment')
     },
   })
 
@@ -352,6 +405,12 @@ export default function ReceptionistAppointmentsPage() {
       toast.error('Mobile number is required')
       return
     }
+    // Hospital mode requires a department + doctor (the POST API enforces the
+    // same rule — catch it here so the user gets an inline nudge).
+    if (isHospitalMode && (!formDepartmentId || !formDoctorId)) {
+      toast.error('Please select a department and a doctor for this appointment')
+      return
+    }
     createMutation.mutate({
       patientName: formPatientName,
       mobile: formMobile,
@@ -367,6 +426,8 @@ export default function ReceptionistAppointmentsPage() {
       height: formHeight,
       physicallyChallenged: formPhysicalHandicap,
       relationWithMe: formRelationWithMe,
+      departmentId: isHospitalMode ? formDepartmentId : undefined,
+      doctorId: isHospitalMode ? formDoctorId : undefined,
     })
   }
 
@@ -422,6 +483,8 @@ export default function ReceptionistAppointmentsPage() {
     setFormWeight('')
     setFormPhysicalHandicap('No')
     setFormRelationWithMe('')
+    setFormDepartmentId('')
+    setFormDoctorId('')
     setLookupStatus('idle')
     setBookedCount(null)
   }
@@ -614,6 +677,89 @@ export default function ReceptionistAppointmentsPage() {
               </div>
 
               <Separator />
+
+              {/* DEPARTMENT & DOCTOR — hospital mode only */}
+              {isHospitalMode && (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Department &amp; Doctor
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Department */}
+                    <div className="space-y-2">
+                      <Label htmlFor="department">Department *</Label>
+                      <Select
+                        value={formDepartmentId}
+                        onValueChange={(value) => {
+                          setFormDepartmentId(value)
+                          // Reset doctor whenever the department changes so a
+                          // stale doctor from another department is never sent.
+                          setFormDoctorId('')
+                        }}
+                      >
+                        <SelectTrigger id="department" className="w-full">
+                          <SelectValue
+                            placeholder={scheduleLoading ? 'Loading departments…' : 'Select department'}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {hospitalDepartments.length === 0 && !scheduleLoading && (
+                            <div className="px-3 py-2 text-sm text-muted-foreground">
+                              No departments with doctors found
+                            </div>
+                          )}
+                          {hospitalDepartments.map((group) => (
+                            <SelectItem key={group.department.id} value={group.department.id}>
+                              {group.department.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Doctor */}
+                    <div className="space-y-2">
+                      <Label htmlFor="doctor">Doctor *</Label>
+                      <Select
+                        value={formDoctorId}
+                        onValueChange={setFormDoctorId}
+                        disabled={!formDepartmentId}
+                      >
+                        <SelectTrigger id="doctor" className="w-full">
+                          <SelectValue
+                            placeholder={
+                              !formDepartmentId
+                                ? 'Select a department first'
+                                : departmentDoctors.length === 0
+                                  ? 'No doctors in this department'
+                                  : 'Select doctor'
+                            }
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {departmentDoctors.map((doc) => (
+                            <SelectItem key={doc.id} value={doc.id}>
+                              {doc.name}
+                              {doc.specialization ? ` · ${doc.specialization}` : ''}
+                              {doc.fees > 0 ? ` · ₹${doc.fees}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedDoctor && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Stethoscope className="h-3 w-3" />
+                          Consultation fee: ₹{(selectedDoctor.fees || 0).toLocaleString('en-IN')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <Separator />
+                </>
+              )}
 
               {/* APPOINTMENT DETAILS SECTION */}
               <div className="space-y-1">

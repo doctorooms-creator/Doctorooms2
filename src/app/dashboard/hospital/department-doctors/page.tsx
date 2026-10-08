@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -99,6 +99,8 @@ interface DoctorSearchResult {
   profileImg: string | null
   email: string
   specialization: string
+  city: string
+  registrationDetail: string
 }
 
 // --- Animation variants ---
@@ -165,11 +167,16 @@ export default function DepartmentDoctorsPage() {
     isAvailable: true,
   })
 
-  // Debounce doctor search
-  useMemo(() => {
+  // Debounce doctor search (350ms). MUST be a useEffect — the previous
+  // useMemo version's cleanup function never ran, so every keystroke queued
+  // a new timer and "rajesh" fired 5 sequential API calls (ra, raj, raje…).
+  useEffect(() => {
+    // Skip while a doctor is already selected (the box then shows their
+    // name) — avoids a pointless background search for the full name.
+    if (selectedDoctor) return
     const timer = setTimeout(() => setSearchDebounce(searchDoctor), 350)
     return () => clearTimeout(timer)
-  }, [searchDoctor])
+  }, [searchDoctor, selectedDoctor])
 
   // --- Queries ---
   const { data: linksData, isLoading: linksLoading } = useQuery<{ doctorLinks: DoctorLink[] }>({
@@ -581,28 +588,45 @@ export default function DepartmentDoctorsPage() {
                     {!searchFetching && searchResults.doctors.length === 0 && (
                       <div className="p-3 text-center text-sm text-muted-foreground">No doctors found</div>
                     )}
-                    {searchResults?.doctors.map((doc) => (
-                      <button
-                        key={doc.id}
-                        type="button"
-                        className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
-                        onClick={() => selectSearchDoctor(doc)}
-                      >
-                        <Avatar className="h-7 w-7">
-                          <AvatarImage src={getAvatarDisplayUrl(doc.profileImg)} />
-                          <AvatarFallback className="text-[10px] bg-teal-100 dark:bg-teal-900">
-                            {doc.name.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">{doc.name}</p>
-                          <span className="truncate text-xs text-muted-foreground">{doc.specialization}</span>
-                        </div>
-                      </button>
-                    ))}
+                    {searchResults?.doctors.map((doc) => {
+                      // Identity line: email · city (· registration no. when
+                      // present) so two same-name doctors are distinguishable.
+                      const identityParts = [doc.email, doc.city].filter(Boolean)
+                      if (doc.registrationDetail) {
+                        identityParts.push(`Reg. ${doc.registrationDetail}`)
+                      }
+                      return (
+                        <button
+                          key={doc.id}
+                          type="button"
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+                          onClick={() => selectSearchDoctor(doc)}
+                        >
+                          <Avatar className="h-7 w-7">
+                            <AvatarImage src={getAvatarDisplayUrl(doc.profileImg)} />
+                            <AvatarFallback className="text-[10px] bg-teal-100 dark:bg-teal-900">
+                              {doc.name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline gap-2">
+                              <p className="truncate font-semibold">{doc.name}</p>
+                              <span className="truncate text-xs text-muted-foreground">{doc.specialization}</span>
+                            </div>
+                            {identityParts.length > 0 && (
+                              <p className="truncate text-xs text-muted-foreground">
+                                {identityParts.join(' · ')}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
                   </motion.div>
                 )}
               </AnimatePresence>
+              {/* Selected-doctor chip: identity line shown here too so the admin
+                  can double-check they picked the right same-name doctor. */}
               {selectedDoctor && (
                 <div className="flex items-center gap-2 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 dark:border-teal-800 dark:bg-teal-900/30">
                   <Avatar className="h-7 w-7">
@@ -611,7 +635,12 @@ export default function DepartmentDoctorsPage() {
                       {selectedDoctor.name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
-                  <span className="flex-1 text-sm font-medium">{selectedDoctor.name}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{selectedDoctor.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {[selectedDoctor.email, selectedDoctor.city].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
                   <Button
                     type="button"
                     variant="ghost"

@@ -2,7 +2,23 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/api-auth'
-import { istDateRange, nowIST, currentTimeIST } from '@/lib/date-utils'
+import { istDateRange, currentTimeIST } from '@/lib/date-utils'
+
+/**
+ * Build the correct UTC instant for an IST wall-clock date + time.
+ *
+ * `new Date(`${date}T${time}`)` parses in the server's local timezone (UTC in
+ * production), so an IST evening slot like 19:30 lands on the next IST day.
+ * `nowIST()` is equally wrong — it stores a future-shifted instant. Instead we
+ * anchor on the IST start-of-day instant from istDateRange() and add the
+ * wall-clock minutes, producing the exact UTC equivalent of the IST time.
+ */
+function istDateTime(dateStr: string, timeStr: string): Date {
+  const range = istDateRange(dateStr)
+  const [hours, minutes] = timeStr.split(':').map(Number)
+  const totalMinutes = (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0)
+  return new Date(range.start.getTime() + totalMinutes * 60000)
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -278,8 +294,8 @@ export async function POST(request: NextRequest) {
       }
 
       const bookingDate = time
-        ? new Date(`${date}T${time}`)
-        : nowIST()
+        ? istDateTime(date, time)
+        : new Date()
 
       const appointmentCount = await db.booking.count()
       const appointmentNo = `APT${String(appointmentCount + 1).padStart(6, '0')}`
@@ -330,10 +346,11 @@ export async function POST(request: NextRequest) {
       where: { id: receptionist.doctorId },
     })
 
-    // When no time slot selected, use current IST time for queue ordering
+    // When no time slot selected, use the actual current instant (not the
+    // future-shifted nowIST()) so queue ordering stays truthful.
     const bookingDate = time
-      ? new Date(`${date}T${time}`)
-      : nowIST()
+      ? istDateTime(date, time)
+      : new Date()
 
     // Generate appointment number
     const appointmentCount = await db.booking.count()

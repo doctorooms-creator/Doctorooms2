@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { StatCard } from '@/components/dashboard/stat-card'
@@ -56,16 +56,25 @@ const doctorStatusColors: Record<string, string> = {
 
 export default function HospitalDoctorsPage() {
   const [search, setSearch] = useState('')
+  // Debounced mirror of `search` — the /api/dashboard/hospital/doctors
+  // endpoint is the heavy full-list one (bookings count + ratings groupBy per
+  // doctor), so firing it on every keystroke is wasteful. 350ms debounce.
+  const [searchDebounce, setSearchDebounce] = useState('')
   const [specFilter, setSpecFilter] = useState('all')
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchDebounce(search), 350)
+    return () => clearTimeout(timer)
+  }, [search])
 
   const { data, isLoading } = useQuery<{
     doctors: HospitalDoctor[]
     specializations: string[]
   }>({
-    queryKey: ['hospital-doctors', search, specFilter],
+    queryKey: ['hospital-doctors', searchDebounce, specFilter],
     queryFn: () =>
       fetch(
-        `/api/dashboard/hospital/doctors?search=${encodeURIComponent(search)}&specialization=${specFilter}`
+        `/api/dashboard/hospital/doctors?search=${encodeURIComponent(searchDebounce)}&specialization=${specFilter}`
       ).then((r) => r.json()),
   })
 
