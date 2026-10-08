@@ -7042,3 +7042,26 @@ Stage Summary:
 - Deployment pipeline proven again with owner-supplied token (token does not persist across sandbox sessions — expect to re-request on next deploy).
 - Remaining P4 backlog unchanged: P4-E (unified Book Patient page), P4-B (hospital-admin role cleanup), P4-C (doctor verification + hospital-affiliation onboarding).
 - Owner-side pending unchanged: MBBS reviewer recruitment (reviewer@doctorooms.com ready), admin password rotation, Cloudinary CLOUD_NAME.
+
+---
+Task ID: P5-MOBILE-1
+Agent: Main (Z.ai)
+Task: Owner plan question — React Native patient app (Android+iOS, same DB/Cloudinary) + detailed prompt file for the Z.ai CLI.
+
+Work Log:
+- PLAN VERDICT given to owner: RN patient app on the SAME hosted backend = correct architecture (web = doctor/staff console, RN = patient client; zero data duplication). Recommended Expo managed workflow. Backend was cookie-only — main coordination gap identified.
+- RECON: mapped patient API surface (~30 endpoints under /api/patient/*, /api/dashboard/patient/*, /api/lab-reports/patient, public discovery /api/public/hospital/*, referral validate), auth chain (proxy.ts Edge gate → api-auth getAuthUser → verifyJwt + verifySession DB check), Cloudinary integration (server-side signed uploads via API routes — RN never holds keys), realtime (socket-token + NEXT_PUBLIC_REALTIME_URL pending Render).
+- BUILT mobile-ready auth (3 surgical, backward-compatible changes, commit "feat(p5-mobile)"):
+  · src/proxy.ts — /api/* Edge gate now accepts `Authorization: Bearer <jwt>` as fallback when the session cookie is absent (decode-only at Edge, same as cookie path).
+  · src/lib/api-auth.ts — getAuthUser() same Bearer fallback, full verifyJwt signature + verifySession DB revocation/expiry/status path identical to cookie.
+  · src/app/api/auth/login/route.ts — response body now includes `token` (the JWT) so RN persists it in expo-secure-store; browsers keep using the httpOnly cookie and ignore the field.
+- SANDBOX E2E GREEN: register patient qa-mobile-app@doctorooms.test → login → 300-char token → Bearer-only (no cookies) /api/auth/me 200 + /api/patient/profile 200; web cookie-flow regression 200; no-cred 401; garbage-bearer 401.
+- Lint: 0 errors. DEPLOYED to prod (Ready in 2m) + PROD VERIFIED with real mobile flow: register qa-mobile-app@doctorooms.test (QA residue, harmless @doctorooms.test email) → login → token → Bearer-only 200s on /api/auth/me, /api/dashboard/patient/appointments, /api/dashboard/patient/stats, /api/dashboard/patient/prescriptions, /api/patient/notifications, /api/lab-reports/patient, /api/patient/bills (0.5–1.5s each).
+- WROTE /home/z/my-project/PATIENT-APP-PROMPT.md — complete self-contained build prompt for the RN app (Z.ai CLI): product context (India/IST/₹/bilingual), architecture (no local DB, no Cloudinary keys), non-negotiable stack (Expo + expo-router + TS strict + NativeWind v4 + TanStack Query + Zustand + SecureStore + reanimated/moti + EAS), full "modern aesthetic" design system (teal #0d9488 brand, light/dark, floating pill tab bar, shimmer skeletons, staggered lists, ≥48px targets), VERIFIED API contracts incl. exact booking POST payload + slots/queue/check-slot params + upload multipart field names + 405 gotcha (bookings=POST-create, list=dashboard/patient/appointments), QA account for CLI testing, realtime feature-flagged (Render pending), 4 build phases, acceptance criteria, hard constraints.
+
+Stage Summary:
+- ✅ Backend is now mobile-ready IN PROD: RN app can authenticate with Bearer tokens today (verified end-to-end with a real patient account).
+- ✅ PATIENT-APP-PROMPT.md ready to hand to a fresh Z.ai CLI session (single file, fully self-contained, grounded in today's prod verification — no guesswork).
+- Architecture decision logged: ONE backend (Next.js/Vercel/Supabase-Seoul/Cloudinary) + web (doctor/staff) + RN (patient). Same DB, same files, same sessions table.
+- Owner-side notes: app store costs (Play $25 one-time, Apple $99/yr) + EAS account will be needed at Phase 4; realtime service on Render still pending (app degrades to 30s queue polling meanwhile); push notifications will need a small backend endpoint later (expo push tokens).
+- Remaining P4 backlog unchanged: P4-E, P4-B, P4-C.
