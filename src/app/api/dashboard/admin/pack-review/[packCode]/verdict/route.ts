@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { requireRole } from '@/lib/api-auth'
+import { requireAnyRole } from '@/lib/api-auth'
 import { getPack } from '@/lib/specialty-packs/packs'
 import { getPackReviewState } from '@/lib/specialty-packs/review-status'
 
 /**
- * Pack dose-review console — record one medicine verdict (admin only).
+ * Pack dose-review console — record one medicine verdict (admin + scoped reviewer).
  *
  * POST /api/dashboard/admin/pack-review/[packCode]/verdict
  *     { medicineName, verdict: 'verified' | 'needs_change' | 'pending', notes? }
@@ -20,7 +20,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ packCode: string }> }
 ) {
-  const user = await requireRole(req, 'admin')
+  const user = await requireAnyRole(req, ['admin', 'reviewer'])
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

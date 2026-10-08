@@ -5,6 +5,9 @@ import { db } from '@/lib/db'
 export async function GET(req: NextRequest) {
   try {
     const user = await requireRole(req, 'doctor')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const doctor = await db.doctor.findUnique({
       where: { userId: user.id },
@@ -29,6 +32,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const user = await requireRole(req, 'doctor')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const doctor = await db.doctor.findUnique({
       where: { userId: user.id },
@@ -62,6 +68,9 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const user = await requireRole(req, 'doctor')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { Prisma } from '@prisma/client'
-import { requireRole } from '@/lib/api-auth'
+import { requireAnyRole } from '@/lib/api-auth'
 import { logAction } from '@/lib/audit-log'
 import { getPack } from '@/lib/specialty-packs/packs'
 import { getPackReviewState } from '@/lib/specialty-packs/review-status'
 
 /**
- * Pack dose-review console — complete a pack review (admin only).
+ * Pack dose-review console — complete a pack review (admin + scoped reviewer).
  *
  * POST /api/dashboard/admin/pack-review/[packCode]/complete
  *     { reviewedByName }
@@ -28,7 +28,7 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ packCode: string }> }
 ) {
-  const user = await requireRole(req, 'admin')
+  const user = await requireAnyRole(req, ['admin', 'reviewer'])
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

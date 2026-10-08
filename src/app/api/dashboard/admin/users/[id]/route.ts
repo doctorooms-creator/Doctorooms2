@@ -8,6 +8,9 @@ export async function DELETE(
 ) {
   try {
     const authUser = await requireRole(request, 'admin')
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const { id } = await params
 

@@ -4,7 +4,10 @@ import { requireRole } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(request, 'admin')
+    const admin = await requireRole(request, 'admin')
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
@@ -41,11 +44,10 @@ export async function GET(request: NextRequest) {
               status: true,
             },
           },
-          _count: {
-            select: {
-              receivedRatings: true,
-            },
-          },
+          // NOTE: ratings are aggregated separately below via doctorRating
+          // groupBy on USER ids (DoctorRating.doctorId → User.id) — the old
+          // `_count: { select: { receivedRatings } }` include was invalid
+          // (relation lives on User, not Doctor) and 500'd the whole route.
         },
       }),
       db.doctor.findMany({

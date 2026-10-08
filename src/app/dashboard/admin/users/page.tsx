@@ -62,7 +62,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { getAvatarDisplayUrl } from '@/lib/avatar-url'
 
-const ROLES = ['All', 'admin', 'doctor', 'patient', 'hospital', 'receptionist', 'assistant', 'pharmacist']
+const ROLES = ['All', 'admin', 'doctor', 'patient', 'hospital', 'receptionist', 'assistant', 'pharmacist', 'reviewer']
 
 const roleColors: Record<string, string> = {
   admin: 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-400',
@@ -72,6 +72,7 @@ const roleColors: Record<string, string> = {
   receptionist: 'bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-400',
   assistant: 'bg-pink-100 text-pink-700 dark:bg-pink-900/50 dark:text-pink-400',
   pharmacist: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400',
+  reviewer: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/50 dark:text-cyan-400',
 }
 
 const statusColors: Record<string, string> = {

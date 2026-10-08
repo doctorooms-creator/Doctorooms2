@@ -76,7 +76,12 @@ function formatDate(iso: string | null): string {
   }
 }
 
-export default function PackReviewClient() {
+export default function PackReviewClient({
+  basePath = '/dashboard/admin/pack-review',
+}: {
+  /** Route base for links — reviewer pages pass /dashboard/reviewer/pack-review */
+  basePath?: string
+} = {}) {
   const [search, setSearch] = useState('')
 
   const { data, isLoading, isError, refetch } = useQuery<{ packs: PackProgress[] }>({
@@ -272,7 +277,7 @@ export default function PackReviewClient() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(idx * 0.03, 0.3) }}
             >
-              <Link href={`/dashboard/admin/pack-review/${p.packCode}`} className="block group">
+              <Link href={`${basePath}/${p.packCode}`} className="block group">
                 <Card className="hover:border-teal-300 dark:hover:border-teal-700 transition-colors">
                   <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex items-center gap-3 flex-1 min-w-0">

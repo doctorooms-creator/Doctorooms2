@@ -6,6 +6,9 @@ import { istDateRange } from '@/lib/date-utils'
 export async function GET(req: NextRequest) {
   try {
     const user = await requireRole(req, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const receptionist = await db.receptionist.findUnique({
       where: { userId: user.id },

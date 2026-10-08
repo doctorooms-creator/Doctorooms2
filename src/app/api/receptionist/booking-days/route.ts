@@ -5,6 +5,9 @@ import { db } from '@/lib/db'
 export async function GET(req: NextRequest) {
   try {
     const user = await requireRole(req, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const receptionist = await db.receptionist.findUnique({
       where: { userId: user.id },
@@ -34,6 +37,9 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const user = await requireRole(req, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const receptionist = await db.receptionist.findUnique({
       where: { userId: user.id },

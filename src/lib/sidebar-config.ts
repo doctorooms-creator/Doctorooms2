@@ -238,6 +238,13 @@ export const sidebarConfig: RoleSidebarMap = {
     { label: 'Profile', href: '/dashboard/lab-technician/profile', icon: UserCircle },
     { label: 'Change Password', href: '/dashboard/change-password', icon: KeyRound },
   ],
+  // Scoped role (P3-BATCH5): MBBS dose reviewer — ONLY the pack-review
+  // console + password change. No patients, no billing, no user management.
+  reviewer: [
+    { label: 'Dashboard', href: '/dashboard/reviewer', icon: LayoutDashboard },
+    { label: 'Pack Reviews', href: '/dashboard/reviewer/pack-review', icon: ClipboardCheck },
+    { label: 'Change Password', href: '/dashboard/change-password', icon: KeyRound },
+  ],
 }
 
 export function getSidebarItems(role: string): SidebarItem[] {

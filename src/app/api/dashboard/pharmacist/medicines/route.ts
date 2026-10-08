@@ -25,6 +25,9 @@ async function getMedicineScope(pharmacist: { doctorId: string | null; hospitalI
 export async function GET(request: NextRequest) {
   try {
     const user = await requireRole(request, 'pharmacist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const pharmacist = await db.doctorPharmacist.findUnique({
       where: { userId: user.id },
@@ -59,6 +62,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireRole(request, 'pharmacist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const pharmacist = await db.doctorPharmacist.findUnique({
       where: { userId: user.id },
@@ -108,6 +114,9 @@ export async function POST(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const user = await requireRole(request, 'pharmacist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const pharmacist = await db.doctorPharmacist.findUnique({
       where: { userId: user.id },
@@ -159,6 +168,9 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const user = await requireRole(request, 'pharmacist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const pharmacist = await db.doctorPharmacist.findUnique({
       where: { userId: user.id },

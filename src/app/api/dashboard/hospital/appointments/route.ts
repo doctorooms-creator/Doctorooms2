@@ -6,6 +6,9 @@ import { resolveAvatarUrl } from '@/lib/avatar-url'
 export async function GET(request: NextRequest) {
   try {
     const user = await requireRole(request, 'hospital')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const hospital = await db.hospital.findUnique({
       where: { userId: user.id },

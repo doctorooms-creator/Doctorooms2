@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireRole } from '@/lib/api-auth'
+import { requireAnyRole } from '@/lib/api-auth'
 import { packReviewProgress } from '@/lib/specialty-packs/review-status'
 
 /**
- * Pack dose-review console — list (admin only).
+ * Pack dose-review console — list (admin + scoped reviewer).
  *
  * GET /api/dashboard/admin/pack-review
  * → { packs: [{ packCode, title, tier, totalMedicines, verdicts, status, … }] }
@@ -12,7 +12,7 @@ import { packReviewProgress } from '@/lib/specialty-packs/review-status'
  * review workflow (P3).
  */
 export async function GET(req: NextRequest) {
-  const user = await requireRole(req, 'admin')
+  const user = await requireAnyRole(req, ['admin', 'reviewer'])
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }

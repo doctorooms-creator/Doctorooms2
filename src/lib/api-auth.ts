@@ -100,6 +100,24 @@ export async function requireRole(req: NextRequest, role: string): Promise<AuthU
   return null
 }
 
+/**
+ * Require auth + ANY of the given roles (case-insensitive).
+ * Used for scoped roles, e.g. pack-review console: ['admin', 'reviewer'] —
+ * the MBBS reviewer gets the console WITHOUT full admin access.
+ */
+export async function requireAnyRole(
+  req: NextRequest,
+  roles: string[]
+): Promise<AuthUser | null> {
+  const user = await getAuthUser(req)
+  if (!user) return null
+
+  const userRole = user.role.toLowerCase()
+  if (roles.some((r) => r.toLowerCase() === userRole)) return user
+
+  return null
+}
+
 /** Require auth (any role). Returns user or null. */
 export async function requireAuth(req: NextRequest): Promise<AuthUser | null> {
   return getAuthUser(req)
@@ -191,6 +209,15 @@ export const DEV_USERS: Record<string, AuthUser> = {
     gender: 'Male',
     profileImg: null,
     mobileNo: '+91 9876543216',
+  },
+  reviewer: {
+    id: 'dev-reviewer',
+    name: 'Dr. Meera Iyer, MBBS',
+    email: 'reviewer@doctorooms.com',
+    role: 'reviewer',
+    gender: 'Female',
+    profileImg: null,
+    mobileNo: '+91 9876543219',
   },
 }
 

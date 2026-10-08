@@ -5,6 +5,9 @@ import { requireRole } from '@/lib/api-auth'
 export async function GET(request: NextRequest) {
   try {
     const user = await requireRole(request, 'assistant')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const assistant = await db.doctorAssistant.findUnique({
       where: { userId: user.id },

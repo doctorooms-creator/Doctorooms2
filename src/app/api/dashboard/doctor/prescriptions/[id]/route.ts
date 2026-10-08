@@ -8,6 +8,9 @@ export async function GET(
 ) {
   try {
     const user = await requireRole(req, 'doctor')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const { id } = await params
 
@@ -96,6 +99,9 @@ export async function PUT(
 ) {
   try {
     const user = await requireRole(req, 'doctor')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const { id } = await params
     const doctor = await db.doctor.findUnique({

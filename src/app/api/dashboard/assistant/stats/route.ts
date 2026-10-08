@@ -6,6 +6,9 @@ import { todayISTRange } from '@/lib/date-utils'
 export async function GET(req: NextRequest) {
   try {
     const user = await requireRole(req, 'assistant')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const assistant = await db.doctorAssistant.findUnique({
       where: { userId: user.id },

@@ -7,6 +7,9 @@ import { istDateRange, nowIST, currentTimeIST } from '@/lib/date-utils'
 export async function GET(request: NextRequest) {
   try {
     const user = await requireRole(request, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const receptionist = await db.receptionist.findUnique({
       where: { userId: user.id },
@@ -210,6 +213,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const user = await requireRole(request, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const receptionist = await db.receptionist.findUnique({
       where: { userId: user.id },
@@ -382,6 +388,9 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const user = await requireRole(request, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const receptionist = await db.receptionist.findUnique({
       where: { userId: user.id },

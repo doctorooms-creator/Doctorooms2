@@ -6,7 +6,10 @@ import path from 'path'
 
 export async function GET(request: NextRequest) {
   try {
-    await requireRole(request, 'admin')
+    const admin = await requireRole(request, 'admin')
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search') || ''
@@ -48,7 +51,10 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    await requireRole(request, 'admin')
+    const admin = await requireRole(request, 'admin')
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const body = await request.json()
     const { id, status } = body
@@ -76,7 +82,10 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireRole(request, 'admin')
+    const admin = await requireRole(request, 'admin')
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const body = await request.json()
     const { id } = body

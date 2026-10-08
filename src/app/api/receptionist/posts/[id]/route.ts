@@ -30,6 +30,9 @@ export async function GET(
 ) {
   try {
     const user = await requireRole(req, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const { id } = await params
 
     const post = await db.post.findUnique({ where: { id } })
@@ -51,6 +54,9 @@ export async function PUT(
 ) {
   try {
     const user = await requireRole(req, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const { id } = await params
 
     const body = await req.json()
@@ -91,6 +97,9 @@ export async function DELETE(
 ) {
   try {
     const user = await requireRole(req, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const { id } = await params
 
     const post = await db.post.findUnique({ where: { id } })

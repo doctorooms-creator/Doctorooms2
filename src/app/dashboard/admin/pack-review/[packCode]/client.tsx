@@ -87,7 +87,14 @@ function freq(m: MedicineRow): string {
   return parts.join(' · ') || 'SOS'
 }
 
-export default function PackReviewDetailClient({ packCode }: { packCode: string }) {
+export default function PackReviewDetailClient({
+  packCode,
+  basePath = '/dashboard/admin/pack-review',
+}: {
+  packCode: string
+  /** Route base for the back-link — reviewer pages pass /dashboard/reviewer/pack-review */
+  basePath?: string
+}) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'pending' | 'verified' | 'needs_change'>('pending')
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({})
@@ -208,7 +215,7 @@ export default function PackReviewDetailClient({ packCode }: { packCode: string 
       {/* Header */}
       <div className="flex flex-col gap-3">
         <Link
-          href="/dashboard/admin/pack-review"
+          href={basePath}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors w-fit"
         >
           <ArrowLeft className="h-4 w-4" />

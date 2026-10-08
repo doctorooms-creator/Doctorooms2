@@ -20,6 +20,7 @@ import {
   Loader2,
   AlertCircle,
   User,
+  ClipboardCheck,
 } from 'lucide-react';
 
 interface RoleCard {
@@ -159,6 +160,16 @@ const SHARED_ROLES: RoleCard[] = [
     color: 'from-red-500 to-rose-600',
     borderHover: 'hover:border-red-400',
     textColor: 'text-red-600 dark:text-red-400',
+  },
+  {
+    role: 'reviewer',
+    label: 'Content Reviewer (MBBS)',
+    personName: 'Dr. Meera Iyer',
+    subText: 'Pack dose reviews only (scoped)',
+    icon: ClipboardCheck,
+    color: 'from-cyan-500 to-teal-600',
+    borderHover: 'hover:border-cyan-400',
+    textColor: 'text-cyan-600 dark:text-cyan-400',
   },
 ];
 

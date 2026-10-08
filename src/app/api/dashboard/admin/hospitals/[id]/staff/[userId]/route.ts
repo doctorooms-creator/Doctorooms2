@@ -7,7 +7,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
   try {
-    await requireRole(request, 'admin')
+    const admin = await requireRole(request, 'admin')
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const { id, userId } = await params
 
     // Verify hospital exists
@@ -83,7 +86,10 @@ export async function PUT(
   { params }: { params: Promise<{ id: string; userId: string }> }
 ) {
   try {
-    await requireRole(request, 'admin')
+    const admin = await requireRole(request, 'admin')
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const { id, userId } = await params
 
     // Verify hospital exists

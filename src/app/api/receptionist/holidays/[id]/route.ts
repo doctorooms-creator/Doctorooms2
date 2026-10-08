@@ -8,6 +8,9 @@ export async function DELETE(
 ) {
   try {
     const user = await requireRole(req, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const { id } = await params
 
     const receptionist = await db.receptionist.findUnique({

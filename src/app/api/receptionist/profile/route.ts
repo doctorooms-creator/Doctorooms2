@@ -5,6 +5,9 @@ import { requireRole } from '@/lib/api-auth'
 export async function GET(req: NextRequest) {
   try {
     const user = await requireRole(req, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const receptionist = await db.receptionist.findUnique({
       where: { userId: user.id },
@@ -54,6 +57,9 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const user = await requireRole(req, 'receptionist')
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const body = await req.json()
     const { name, mobileNo, gender, address } = body
 
