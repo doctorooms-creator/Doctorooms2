@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
@@ -24,6 +25,7 @@ import {
   Loader2,
   AlertTriangle,
   Sparkles,
+  ArrowRight,
 } from 'lucide-react'
 
 interface PackStatus {
@@ -153,6 +155,13 @@ export function PackInstallBanner() {
             Doses not yet medically reviewed — verify before prescribing
           </span>
         )}
+        <Link
+          href="/dashboard/doctor/prescription-settings/packs"
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 dark:text-teal-400 hover:text-teal-800 dark:hover:text-teal-300 hover:underline shrink-0"
+        >
+          All 21 packs
+          <ArrowRight className="h-3 w-3" />
+        </Link>
       </motion.div>
     )
   }

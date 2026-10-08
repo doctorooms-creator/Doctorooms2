@@ -13,10 +13,12 @@ import {
   Search,
   Table,
   Printer,
+  Package,
   type LucideIcon,
 } from 'lucide-react'
 
 const settingsTabs: { label: string; href: string; icon: LucideIcon }[] = [
+  { label: 'Content Packs', href: '/dashboard/doctor/prescription-settings/packs', icon: Package },
   { label: 'Categories', href: '/dashboard/doctor/prescription-settings/categories', icon: FolderOpen },
   { label: 'Complaints', href: '/dashboard/doctor/prescription-settings/complaints', icon: Thermometer },
   { label: 'Questions', href: '/dashboard/doctor/prescription-settings/questions', icon: CircleHelp },
