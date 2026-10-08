@@ -6874,3 +6874,94 @@ Stage Summary:
 - Biggest finding of the round: US-region lambda + Seoul DB = ~0.6s per sequential DB query; wizard multiplies it 140-150×. Fix #1 = add "regions":["icn1"] to vercel.json (1 line, ~5× speedup).
 - Sandbox timings differ (local DB) — this problem is production-only, which is why it wasn't caught in sandbox E2E.
 - Honest note logged: rx-favorites (P3-BATCH3) is the slowest single endpoint in production (8.8s) — scheduled for optimization in P4-G after region fix makes it ~1.5s.
+
+---
+Task ID: P4-D + P4-A
+Agent: Z.ai Code (subagent, batches P4-D & P4-A)
+Task: P4-D — Receptionist "New Appointment" silent-fail fix (false-success toast + missing dept/doctor pickers + timezone bug). P4-A — Hospital "Add Doctor" search fix (broken debounce + ambiguous dropdown + query tuning + second search box debounce).
+
+Work Log:
+
+## BATCH P4-D — Receptionist "New Appointment" silent-fail fix
+
+Files changed:
+1. `src/app/api/dashboard/receptionist/appointments/route.ts`
+2. `src/app/dashboard/receptionist/appointments/page.tsx`
+
+### Fix 1 — False success toast / silent fail (page.tsx createMutation)
+- createMutation previously did `fetch().then(r=>r.json())` with NO r.ok check → hospital-mode 400 still ran onSuccess (toast.success + dialog close + resetForm) = DATA LOSS.
+- Now: mutationFn parses JSON, throws when `!res.ok || data.success !== true`, with the API's error message. onError shows toast.error(err.message) and does NOT close the dialog — all form data stays preserved for fixing + resubmit.
+- onSuccess now toasts `Appointment booked for {patientName}` and invalidates ['receptionist-appointments'] + ['receptionist-stats'] (only fires on real success).
+
+### Fix 2 — Missing department/doctor pickers in hospital mode (page.tsx)
+- The appointments GET already returned `isHospitalMode:true` + `departments` — page never used it. POST always 400'd in hospital mode.
+- Page now reads `data.isHospitalMode`; when true, fetches `/api/dashboard/receptionist/schedule` (the same endpoint/pattern the Walk-in page uses; enabled only in hospital mode, staleTime 5min) and renders:
+  - Department * Select (from schedule's doctors-grouped-by-department)
+  - Doctor * Select (per selected department; disabled until a dept is chosen; reset when dept changes; items show name · specialization · ₹fees; fee hint under select)
+  - Client-side guard: hospital mode requires both before submit ("Please select a department and a doctor for this appointment")
+  - POST body now includes departmentId + doctorId (undefined in clinic mode)
+- Clinic mode (isHospitalMode false): pickers hidden, doctor fee card shown — old behavior untouched.
+
+### Fix 3 — Timezone bug in POST API (route.ts, both hospital & clinic branches)
+- `new Date(`${date}T${time}`)` parsed in server-local (UTC) → IST 19:30 landed next IST day; `nowIST()` fallback stored a +5:30 future-shifted instant.
+- Added local helper `istDateTime(dateStr, timeStr)`: anchors on `istDateRange(date).start` + wall-clock minutes → exact UTC instant. Replaced BOTH branches. Fallback (no time) = `new Date()` (not nowIST()). Removed nowIST import.
+- Verified: IST 18:45 → stored `2026-10-08T13:15:00.000Z` = 18:45+05:30 SAME day (list renders "Oct 8, 2026 18:45").
+
+## BATCH P4-A — Hospital "Add Doctor" search fix
+
+Files changed:
+1. `src/app/api/dashboard/hospital/search-doctors/route.ts`
+2. `src/app/dashboard/hospital/department-doctors/page.tsx`
+3. `src/app/dashboard/hospital/doctors/page.tsx`
+
+### Fix 1 — Broken debounce (department-doctors/page.tsx:168-172)
+- Was `useMemo(() => { setTimeout(...); return cleanup })` — cleanup never ran → fetch per keystroke ("rajesh" = 5 calls).
+- Converted to useEffect with proper cleanup; also skips re-search while a doctor is selected (search box shows their name — avoids a pointless background fetch).
+
+### Fix 2 — Ambiguous dropdown (API + UI)
+- API select now includes `city` + `registrationDetail` (Doctor model plain string fields).
+- Dropdown rows: bold name + specialization on line 1; muted identity line 2 = `email · city · Reg. {registrationDetail}` (parts omitted when empty). Avatar kept.
+- Selected-doctor chip also shows the email · city line so the admin can double-check before linking.
+
+### Fix 3 — Query tuning (API)
+- `orderBy: { user: { name: 'asc' } }` on both queries.
+- Prefix-priority: first `name startsWith(search)` (insensitive) — plus `startsWith('Dr. ' + search)` since most stored names carry the "Dr. " honorific — then contains (name OR email), merged deduped by Doctor.id, capped take 10 total; second query skipped when first fills the cap.
+- Global platform scope kept (by design — Add Doctor must find doctors registered anywhere).
+
+### Fix 4 — Second search box (hospital/doctors/page.tsx)
+- Had NO debounce; each keystroke hit /api/dashboard/hospital/doctors (heavy: bookings _count + ratings groupBy per doctor).
+- Added 350ms useEffect debounce (searchDebounce state mirrors search; queryKey + fetch use debounced value).
+
+## E2E evidence (agent-browser + curl, screenshots in /home/z/my-project)
+
+### P4-D (login: dev-login receptionist userId=cmuyzs0z40071mod4jw1ivt9v "Rina Patel" @ Zydus, hospital mode)
+- qa-p4d-1-form-filled.png — dialog with NEW Department * + Doctor * pickers, filled form
+- qa-p4d-2-booking-in-list.png — SUCCESS path: booked "Aditya Verma" APT000003, Dr. Amit Shah (Cardiology ₹800); row renders "Oct 8, 2026 18:45" (IST-correct); exactly 1 POST (201); DB row verified: bookingDate 2026-10-08T13:15:00.000Z = 18:45+05:30 same day, departmentId/doctorId/hospitalId/appointmentCharge 800/status Approve all correct
+- qa-p4d-3-error-toast-dialog-open.png — ERROR path (client guard): submitted without doctor → red toast "Please select a department and a doctor for this appointment", dialog OPEN, no success toast
+- qa-p4d-4-api-error-keeps-dialog.png — ERROR path (API-level, network-routed mock returning the API's 400 body): red toast "departmentId and doctorId are required in hospital mode", dialog OPEN with Ramesh Test/General Medicine/Dr. Mahesh Mehta all preserved, NO success toast, DB booking count for Ramesh Test = 0
+- qa-p4d-5-clinic-mode-no-pickers.png — CLINIC regression: temp clinic receptionist (doctorId set) → dialog shows doctor fee card, ZERO Department/Doctor pickers (old look); clinic POST curl: IST 19:30 → 2026-10-08T14:00:00.000Z ✓ (temp clinic test user + booking cleaned up afterwards)
+- curl checks: real 400 body `{"error":"departmentId and doctorId are required in hospital mode"}` reproduced pre-fix behavior; GET returns isHospitalMode:true + 10 departments; /schedule returns 10 dept groups with doctors (fees/designation)
+
+### P4-A (login: dev-login hospital userId=cmuyzs0u00000mod4fhuwtxmx "Zydus Hospital")
+- qa-p4a-1-dropdown-identity-lines.png — typed "rajesh" (6 keystrokes) → exactly 1 request to /search-doctors (browser network log + dev.log confirm; old code fired 5). Dropdown shows BOTH same-name doctors fully distinguishable: "Dr. Rajesh Kumar | Dermatology | rajesh@skinclinic.com · Ahmedabad · Reg. GJ-MCI-12345" and "Dr. Rajesh Kumar | General Medicine | rajesh.kumar2.p4a@test.doctorooms.com · Gandhinagar · Reg. GJ-48201"
+- qa-p4a-2-selected-chip.png — clicked 2nd result → selected chip = "Dr. Rajesh Kumar / rajesh.kumar2.p4a@test.doctorooms.com · Gandhinagar"
+- qa-p4a-3-link-created.png — full Link Doctor flow still works: linked 2nd Rajesh to General Medicine (Consultant, ₹350, Mon-Sat 10:00-14:00) → card renders + DB DoctorHospital row verified (Zydus | General Medicine | Consultant | fees 350 | Active); new doctor now also appears in appointments-page doctor dropdown (₹350)
+- qa-p4a-4-doctors-page-debounce.png — hospital/doctors page: typed "amit" (4 keystrokes) → exactly 1 request to the heavy /hospital/doctors endpoint; "Dr. Amit Shah" card renders
+- curl: search "ra" → prefix-matches (Rajat/Rajendra/Rajesh×2/Rajiv/Rakesh) ordered FIRST then contains-matches, name-asc within groups, 10 cap; search "sharma" → email-contains works; 1-char → empty
+
+## Test data created (sandbox only, kept for future QA)
+- Doctor "Dr. Rajesh Kumar" #2 (General Medicine, Gandhinagar, Reg. GJ-48201, email rajesh.kumar2.p4a@test.doctorooms.com) + its Zydus General Medicine link (E2E artifact)
+- registrationDetail set on original Dr. Rajesh Kumar (GJ-MCI-12345)
+- Doctor.hospitalId set on Dr. Amit Shah + Dr. Priya Patel (→ plain Doctors list page has data)
+- Booking "Aditya Verma" APT000003 (E2E success-path artifact)
+- Temp clinic-mode receptionist + its booking were DELETED after regression test
+
+## Verification
+- `bun run lint` — CLEAN (0 errors), run after all changes
+- dev.log: all routes 200, no compile errors; search-doctors request count for fast "rajesh" typing = 1 (was 5 with old useMemo debounce)
+- No RX wizard / prescription stepper files touched (verified — only the 5 files listed above changed)
+
+Stage Summary:
+- P4-D: The data-loss bug is dead — hospital-mode New Appointment now has working dept/doctor pickers, real success/error semantics (dialog stays open + API message on failure), IST-anchored bookingDate in both API branches, success toast carries patient name, list refetches on real success only.
+- P4-A: Add-Doctor search fires 1 request per burst instead of 5, results are identity-disambiguated (email · city · Reg. no) in both dropdown and selected chip, queries are name-ordered with prefix-priority, and the heavy plain-Doctors list page is debounced too. Link Doctor flow verified end-to-end post-change.
+- Deviations: (1) prefix query also matches "Dr. {search}" because names are stored with the honorific (spec's plain startsWith would never fire on this data); (2) API-error-path UI test used agent-browser network-route mock of the API's 400 body (real 400 verified separately via curl) because client-side dept/doctor guard now intercepts the missing-fields case before the API; (3) kept test doctors/booking in sandbox DB as future-QA fixtures (clearly-labeled test emails).
