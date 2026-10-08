@@ -6965,3 +6965,25 @@ Stage Summary:
 - P4-D: The data-loss bug is dead — hospital-mode New Appointment now has working dept/doctor pickers, real success/error semantics (dialog stays open + API message on failure), IST-anchored bookingDate in both API branches, success toast carries patient name, list refetches on real success only.
 - P4-A: Add-Doctor search fires 1 request per burst instead of 5, results are identity-disambiguated (email · city · Reg. no) in both dropdown and selected chip, queries are name-ordered with prefix-priority, and the heavy plain-Doctors list page is debounced too. Link Doctor flow verified end-to-end post-change.
 - Deviations: (1) prefix query also matches "Dr. {search}" because names are stored with the honorific (spec's plain startsWith would never fire on this data); (2) API-error-path UI test used agent-browser network-route mock of the API's 400 body (real 400 verified separately via curl) because client-side dept/doctor guard now intercepts the missing-fields case before the API; (3) kept test doctors/booking in sandbox DB as future-QA fixtures (clearly-labeled test emails).
+
+---
+Task ID: P4-SHIP-1
+Agent: Main (Z.ai)
+Task: Execute "Go ahead" — P4-F (speed emergency) + P4-D (silent booking fail) + P4-A (add-doctor search), deploy to prod, verify.
+
+Work Log:
+- P4-D + P4-A built by specialist subagent (see its own worklog entry; E2E evidence qa-p4d-*.png / qa-p4a-*.png in sandbox).
+- P4-F built by main: vercel.json regions ["icn1"]; providers refetchOnWindowFocus:false; masters staleTime 5min (stepper prefetches + all step queries); suggestions API questionIds IN-filter + step-5 server-side filter; full-Rx deduped via shared ['rx-prescription-data', id] key in steps 1-5 + stepper loadExisting via qc.fetchQuery; rx-favorites staleTime 2min.
+- SANDBOX E2E (full wizard, fresh draft): complaints→vitals→tables→medicines→advice→finalize→print all green; request pattern now exactly 1 full-Rx GET per save-invalidation (was 2/step + init = 12-13/session, now 7); suggestions request carries ?questionIds=...; booking→Visited; medicine+custom advice persisted in DB.
+- Committed 1c8d297 (P4-D+P4-A) + 96b2606 (P4-F) + worklog 0009788; pushed to GitHub main.
+- PROD DEPLOY: vercel deploy --prod. REGION CONFIRMED: x-vercel-id "hkg1::icn1" (was hkg1::iad1 = US). MEASURED WARM TIMINGS: auth/me 1.6s→0.2s (8×) · booking-detail 3.6s→1.07s · full-Rx 5.5s→0.88s (6×) · labels 3.4s→0.51s · complaints 4.0s→0.33s (12×) · medicines 4.0s→0.42s · findings 4.4s→0.37s (12×) · rx-favorites 8.8s→0.77s (11×) · suggestions 5.2s/377KB→0.26s/10.5KB (20× time, 36× payload).
+- PROD E2E: QA login → wizard open on resumed draft (P3 QA booking) → step-3 save → step 4 stable 12s (rapid-snapshot hawk test) → DB confirmed saves persist (1 complaint, 23 labels from old QA + tables save). Prod suggestion-filter verified with real question IDs (10.5KB payload).
+- One non-reproducible anomaly during first prod wizard session (apparent step snap-back during rapid eval-clicking on resumed draft) — could not reproduce in 2 subsequent attempts (sandbox pass-2 + prod hawk test both stable); most likely automation-click race with loadExisting's async draft-resume (pre-existing async behavior, race window now 6× smaller after region fix). Watching for recurrence in QA.
+- Dev server OOM-killed twice during session (known sandbox issue); restart-server.sh recovered both times.
+
+Stage Summary:
+- 🚀 P4-F LIVE IN PROD: every wizard action 6-12× faster (Seoul lambda next to Seoul DB). Estimated full-consultation wait: 60-90s → ~10-15s.
+- 🩹 P4-D LIVE: receptionist hospital-mode bookings actually persist now (false-success bug + missing dept/doctor pickers + IST timezone fix).
+- 🔍 P4-A LIVE: add-doctor search 1 request per pause + identity lines (email·city·reg#).
+- Remaining P4 backlog (owner may trigger): P4-G (save transactions, finalize fire-and-forget — further 2× on saves), P4-E (unified Book Patient page), P4-B (hospital-admin role cleanup), P4-C (doctor verification + hospital-affiliation onboarding).
+- Owner-side pending unchanged: MBBS reviewer recruitment (reviewer@doctorooms.com ready), admin password rotation, Cloudinary CLOUD_NAME.
