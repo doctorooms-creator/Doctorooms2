@@ -146,6 +146,42 @@ model DoctorPackInstall {
   @@index([packCode])
 }
 
+// ── Specialty pack dose-review workflow (P3) ──────────────────────────────
+// An MBBS reviewer works through every pack medicine and records a verdict.
+// When ALL medicines of a pack are verified, the pack is marked reviewed
+// (PackReview.status='reviewed') — doctor-facing amber "unverified dose"
+// badges flip to green, and installed DoctorMedicine rows get the
+// ' · UNVERIFIED DOSE' description note stripped.
+
+model PackReview {
+  id             String    @id @default(cuid())
+  packCode       String    @unique
+  status         String    @default("pending") // pending | in_progress | needs_changes | reviewed
+  reviewedByName String? // MBBS reviewer name stamped on completion
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  medicines      PackMedicineReview[]
+}
+
+model PackMedicineReview {
+  id           String    @id @default(cuid())
+  packCode     String
+  medicineName String
+  verdict      String    @default("pending") // pending | verified | needs_change
+  notes        String? // reviewer's correction note (required for needs_change)
+  reviewedById String? // admin/reviewer User id
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  packReview   PackReview @relation(fields: [packCode], references: [packCode], onDelete: Cascade)
+
+  @@unique([packCode, medicineName])
+  @@index([packCode])
+}
+
 model Hospital {
   id                String             @id @default(cuid())
   userId            String             @unique

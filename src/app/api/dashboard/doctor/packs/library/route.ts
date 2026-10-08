@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/api-auth'
 import { PACKS } from '@/lib/specialty-packs/packs'
 import { SPECIALTY_REGISTRY } from '@/lib/specialty-packs/registry'
 import { packCounts } from '@/lib/specialty-packs/types'
+import { getPackReviewStates, effectiveReview } from '@/lib/specialty-packs/review-status'
 
 /**
  * Specialty Pack Library — full browsable catalog for the logged-in doctor.
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
       orderBy: { installedAt: 'desc' },
     })
     const receiptMap = new Map(installs.map((i) => [i.packCode, i]))
+    const reviewStates = await getPackReviewStates()
 
     const parseCounts = (raw: string): Record<string, number> => {
       try {
@@ -67,12 +69,17 @@ export async function GET(req: NextRequest) {
     const library = Object.values(PACKS).map((pack) => {
       const c = packCounts(pack)
       const receipt = receiptMap.get(pack.meta.code)
+      const effective = effectiveReview(
+        pack.meta.code,
+        reviewStates.get(pack.meta.code) ?? null
+      )
       return {
         code: pack.meta.code,
         title: pack.meta.title,
         tier: pack.meta.tier,
         version: pack.meta.version,
-        reviewed: Boolean(pack.meta.reviewedBy),
+        reviewed: effective.reviewed,
+        reviewedBy: effective.reviewedBy,
         summary: `${c.complaints} complaints · ${c.medicines} medicines · ${c.questions} questions`,
         counts: {
           categories: c.categories,

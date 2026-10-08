@@ -26,6 +26,7 @@ import { db } from '@/lib/db'
 import { getPack } from './packs'
 import { validatePack, packCounts, type SpecialtyPack } from './types'
 import { resolvePackCode } from './registry'
+import { getPackReviewState, getPackReviewStates, effectiveReview } from './review-status'
 
 export interface InstallResult {
   ok: true
@@ -61,6 +62,11 @@ export async function installPack(opts: {
     return { ok: false, error: `Unknown pack code: ${packCode}` }
   }
 
+  // Dose-review state: a pack whose doses were verified via the admin
+  // MBBS review console installs WITHOUT the unverified-dose note.
+  const reviewState = await getPackReviewState(packCode)
+  const packReviewed = effectiveReview(packCode, reviewState).reviewed
+
   // ── Structural validation (defense in depth) ─────────────────────────
   const validation = validatePack(pack)
   if (!validation.ok) {
@@ -80,7 +86,7 @@ export async function installPack(opts: {
       version: existing.packVersion,
       title: pack.meta.title,
       alreadyInstalled: true,
-      unverified: !pack.meta.reviewedBy,
+      unverified: !packReviewed,
       counts,
       skipped: 0,
       summary: `${packCounts(pack).complaints} complaints · ${packCounts(pack).medicines} medicines · ${packCounts(pack).questions} questions`,
@@ -279,7 +285,7 @@ export async function installPack(opts: {
         const flagNote = m.flags
           ? ` | ${m.flags.pregnancy !== 'na' ? `Preg: ${m.flags.pregnancy}` : ''}${
               m.flags.schedule !== 'na' ? ` · Sch: ${m.flags.schedule}` : ''
-            }${m.flags.verified ? '' : ' · UNVERIFIED DOSE'}`
+            }${m.flags.verified || packReviewed ? '' : ' · UNVERIFIED DOSE'}`
           : ''
         return {
           name: m.name,
@@ -420,7 +426,7 @@ export async function installPack(opts: {
     packCode,
     version: pack.meta.version,
     title: pack.meta.title,
-    unverified: !pack.meta.reviewedBy,
+    unverified: !packReviewed,
     counts: receipt,
     skipped,
     summary,
@@ -439,18 +445,23 @@ function safeParseCounts(raw: string): Record<string, number> {
  * Pack status for a doctor — drives the empty-state banner and settings chip.
  */
 export async function packStatusForDoctor(doctorId: string, specialization: string) {
-  const [installs, complaints] = await Promise.all([
+  const [installs, complaints, reviewStates] = await Promise.all([
     db.doctorPackInstall.findMany({
       where: { doctorId, status: 'Installed' },
       select: { packCode: true, packVersion: true, counts: true, installedAt: true },
       orderBy: { installedAt: 'desc' },
     }),
     db.coMaster.count({ where: { doctorId } }),
+    getPackReviewStates(),
   ])
 
   const suggestedPackCode = resolvePackCode(specialization)
   const suggestedPack = getPack(suggestedPackCode)
   const hasInstalled = installs.some((i) => i.packCode === suggestedPackCode)
+  const effective = effectiveReview(
+    suggestedPackCode,
+    reviewStates.get(suggestedPackCode) ?? null
+  )
 
   return {
     installedPacks: installs.map((i) => ({
@@ -466,7 +477,8 @@ export async function packStatusForDoctor(doctorId: string, specialization: stri
           title: suggestedPack.meta.title,
           version: suggestedPack.meta.version,
           tier: suggestedPack.meta.tier,
-          reviewed: Boolean(suggestedPack.meta.reviewedBy),
+          reviewed: effective.reviewed,
+          reviewedBy: effective.reviewedBy,
           summary: `${packCounts(suggestedPack).complaints} complaints · ${packCounts(suggestedPack).medicines} medicines · ${packCounts(suggestedPack).questions} questions`,
           alreadyInstalled: hasInstalled,
         }

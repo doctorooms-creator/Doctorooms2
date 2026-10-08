@@ -56,6 +56,7 @@ interface LibraryPack {
   tier: 'BASE' | 'T1' | 'T2' | 'T3'
   version: string
   reviewed: boolean
+  reviewedBy: string | null
   summary: string
   counts: Record<string, number>
   totalRows: number
@@ -502,10 +503,15 @@ function PackCard({
               </div>
             ))}
           </dl>
-          {!pack.reviewed && (
+          {!pack.reviewed ? (
             <p className="mt-3 flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               Doses not yet medically reviewed
+            </p>
+          ) : (
+            <p className="mt-3 flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              {pack.reviewedBy ? `Doses reviewed by ${pack.reviewedBy}` : 'Doses medically reviewed'}
             </p>
           )}
         </CardContent>

@@ -42,6 +42,7 @@ interface PackStatus {
     version: string
     tier: string
     reviewed: boolean
+    reviewedBy?: string | null
     summary: string
     alreadyInstalled: boolean
   } | null
@@ -149,10 +150,15 @@ export function PackInstallBanner() {
             </span>
           )}
         </div>
-        {!pack.reviewed && (
+        {!pack.reviewed ? (
           <span className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
             <AlertTriangle className="h-3.5 w-3.5" />
             Doses not yet medically reviewed — verify before prescribing
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-400">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {pack.reviewedBy ? `Doses reviewed by ${pack.reviewedBy}` : 'Doses medically reviewed'}
           </span>
         )}
         <Link

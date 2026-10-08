@@ -57,6 +57,7 @@ const routeTitles: Record<string, string> = {
   '/dashboard/admin/inquiries': 'Inquiries',
   '/dashboard/admin/settings': 'Settings',
   '/dashboard/admin/audit-logs': 'Audit Logs',
+  '/dashboard/admin/pack-review': 'Pack Dose Reviews',
   '/dashboard/notifications/preferences': 'Notification Preferences',
   '/dashboard/doctor': 'Doctor Dashboard',
   '/dashboard/doctor/appointments': 'Appointments',
