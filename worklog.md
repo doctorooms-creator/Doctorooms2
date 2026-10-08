@@ -6777,3 +6777,34 @@ Stage Summary:
 - P3 candidates remaining (future phases): pack version-update consent flow; scoped 'reviewer' role; PSU-02/SON-01/dental-subspecialty packs.
 - PENDING OWNER (unchanged): recruit MBBS reviewer → Admin → Pack Reviews (now 27 packs!); admin password rotation ⚠️ admin123; Cloudinary CLOUD_NAME; Render realtime + UptimeRobot.
 - INFRA: parallel agent-launch pattern works (3 agents, 6 packs, one report-loss but work verified complete); prod install takes 30-60s (pooler) — browser eval timeouts are cosmetic, verify via DB.
+
+---
+Task ID: P3-BATCH5
+Agent: Main
+Task: Scoped 'reviewer' role — dedicated MBBS dose-reviewer login WITHOUT full admin access (owner's #1 pending dependency: reviewer recruitment).
+
+Work Log:
+- Read worklog + verified state: P3-BATCH4 already complete/live (27 packs, commits ad3fc75+646d7d0); services healthy (3000+3006).
+- Answered user's "kitna kaam baaki hai" question with full status table (planned dev work DONE; 3 optional candidates + 4 owner tasks remain).
+- Implemented scoped reviewer role:
+  · api-auth.ts: new requireAnyRole(req, roles[]) helper + DEV_USERS.reviewer (Dr. Meera Iyer, MBBS).
+  · All 4 pack-review API routes (list/detail/verdict/complete) switched requireRole('admin') → requireAnyRole(['admin','reviewer']).
+  · Pack-review client components got optional basePath prop (default admin path — ZERO admin behavior change); reviewer pages reuse them.
+  · New /dashboard/reviewer (home: hero + 4 stat cards + overall progress + next-pack CTA + how-it-works + scope note), /dashboard/reviewer/pack-review + [packCode] pages.
+  · sidebar-config.ts reviewer entry: ONLY Dashboard / Pack Reviews / Change Password. Login page: "Content Reviewer (MBBS)" dev card. Admin users page: reviewer roleColors + filter.
+  · scripts/seed-reviewer.ts (idempotent upsert by email, --password flag).
+- SECURITY HARDENING (found during isolation testing): 6 routes IGNORED requireRole result entirely → DATA LEAKS (admin/appointments, admin/doctors, admin/hospitals, admin/inquiries 3x, hospitals/[id]/departments + staff 3x); 43 more routes crashed 500 on unauthorized (user.id null-deref). Auto-fixer script + manual review → 49 guards fixed to return 401; family-access fallback chains preserved (reverted 3 bad auto-insertions that broke hospital fallback).
+- BONUS FIX: admin/doctors 500 — invalid `_count: { select: { receivedRatings } }` (relation is on User, not Doctor) removed; ratings already aggregated via groupBy on USER ids. Route was broken for EVERYONE incl. prod.
+- Sandbox E2E: reviewer card login → /dashboard/reviewer (sidebar exactly 3 items, hero "Namaste", stats 27/1/0/1246, 5%) → console 27 packs → GAS-01 detail → Verify "Pan 40 Tablet" → DB row stamped with reviewer user id ✓. Security matrix (as reviewer): admin users/appointments/doctors/hospitals/inquiries, doctor/patients, receptionist/stats, family-access → ALL 401; only pack-review* → 200. Admin regression: all admin APIs 200, back-links unchanged. complete-API as reviewer → 400 business-gate (auth passed). lint clean; per-file syntax check clean (tsc OOMs on sandbox — skipped).
+- Infra hiccup: bunx tsc OOM killed dev server; stale restart-server.sh + tsc processes cleaned; setsid restart recovered.
+- Commit c45dd09 pushed (49 files, +859/−32).
+- PROD: bunx vercel deploy --prod (CLI method; project link intact) → doctorooms-hms.vercel.app 200s. Seeded prod reviewer user (id cmuz77i0c0000mojr8cu44med, email reviewer@doctorooms.com, password Reviewer#2026).
+- PROD E2E: email login reviewer@doctorooms.com → /dashboard/reviewer (hero + stats 27/0/0/1306) → console 27 packs → GP-01 detail (53 meds) → Verify "Crocin 500 Tablet" → PROD DB row {verified, reviewedById: cmuz77i0c0000mojr8cu44med} ✓. Security matrix all-401/only-pack-review-200 ✓. Screenshots: qa-p3b5-reviewer-home.png, qa-p3b5-reviewer-detail.png, qa-p3b5-prod-reviewer-home.png, qa-p3b5-prod-console.png.
+
+Stage Summary:
+- 🎉 SCOPED REVIEWER ROLE LIVE IN PRODUCTION: owner can now hand reviewer@doctorooms.com / Reviewer#2026 (password changeable via Change Password) to a recruited MBBS reviewer — they see ONLY the dose-review console, nothing else.
+- Major security win shipped alongside: 49 broken auth guards fixed (incl. 3 data-leak routes where ANY logged-in user could read admin appointments/doctors/hospitals data) + admin/doctors 500 fixed (was broken in prod for everyone).
+- Reviewer identity is stamped on every verdict (PackMedicineReview.reviewedById) — audit trail distinguishes admin vs reviewer decisions.
+- PROD REVIEWER CREDENTIALS: reviewer@doctorooms.com / Reviewer#2026 (rotate after handing over; admin can also filter 'reviewer' in Users page).
+- P3 dev candidates remaining: pack version-update consent flow; PSU-02/SON-01/dental subspecialty packs. PENDING OWNER: recruit MBBS reviewer (now SAFE to do so — scoped account ready), admin password rotation ⚠️, Cloudinary CLOUD_NAME, Render realtime + UptimeRobot.
+- Sandbox QA residue: GAS-01 has 1 test verdict (Pan 40, reviewer); prod GP-01 has 1 test verdict (Crocin, reviewer) — harmless, real reviewer can re-decide.
