@@ -6660,3 +6660,29 @@ Stage Summary:
 - Remaining P3 candidates: favorites/pinning in RX wizard; dedicated lighter 'reviewer' role (currently admin-only — the recruited MBBS reviewer either reviews WITH the owner or gets temp admin; a scoped role is future hardening); T3 lite packs.
 - PENDING OWNER (now actionable): recruit the MBBS reviewer and hand them the console (Admin → Pack Reviews). Everything else unchanged: admin password rotation ⚠️ admin123; Cloudinary CLOUD_NAME; Render realtime + UptimeRobot.
 - INFRA: prod DB now has PackReview/PackMedicineReview (aws-0 pooler); deploy stable (3m); sandbox healthy; no OOM.
+
+---
+Task ID: P3-BATCH3
+Agent: Main (orchestrator, Z.ai)
+Task: P3 feature #3 — RX wizard favorites & pinning: pinned + "most prescribed" quick rows in steps 1 & 4 of the prescription wizard.
+
+Work Log:
+- Context: P3-BATCH2 (MBBS dose-review console) was already live in prod (commit db0d5ff) when this session resumed — verified via git log + worklog. User said "Go ahead further" → built the top remaining P3 candidate: RX wizard favorites/pinning.
+- SCHEMA (additive): RxFavorite { doctorId, kind ('complaint'|'medicine'), refId (CoMaster.id | DoctorMedicine.id) } with @@unique([doctorId, kind, refId]) + @@index([doctorId, kind]) + FK→Doctor cascade. Sandbox: prisma db push + generate (NOTE: shell exports a stale SQLite DATABASE_URL that overrides .env — always prefix prisma commands with the explicit postgres:// URL).
+- API /api/dashboard/doctor/rx-favorites: GET returns explicit pins (hydrated live: complaints w/ category, medicines w/ parsed doseArray) + mostUsed sections aggregated from prescription history — PCo.groupBy(coId) for complaints, PMedicine.groupBy(medicine name) matched against active DoctorMedicine master for full quick-add data (PMedicine stores only name strings, no refId). POST pins (ownership-checked, idempotent upsert), DELETE unpins. BUG FOUND+FIXED: Prisma groupBy rejects coId:{not:null} in where — filter null coIds in JS instead.
+- SHARED HOOK src/lib/use-rx-favorites.ts: react-query ['rx-favorites'] + pin/unpin mutations with cache invalidation; exports types + pinnedComplaintIds/pinnedMedicineIds Sets.
+- STEP-1 COMPLAINTS UI: "Pinned — aapke top complaints" amber card + "Most prescribed — aapki history se" teal card at top (hidden while searching); quick chips render same pill style + ×N count badges; star toggle on EVERY complaint chip (nested span role=button with stopPropagation — nested <button> in <button> is invalid HTML); tip line explaining the star; aria-pressed states.
+- STEP-4 MEDICINES UI: one-tap quick-add chip rows (Pinned "aapki go-to dawaiyan" + Most prescribed with ×N counts, Zap icon, full dose/days tooltip); star pin in every medicine search-dropdown row; star pin on each medicine row card (next to trash, disabled for manually-typed meds without medicineId).
+- SANDBOX E2E (dev Dr. Amit Shah + seeded history): seeded 3 synthetic prescriptions via scripts/seed-dev-rx-history.ts (complaint counts 3/2/1, med counts 3/2/1) → GET returns correct counts; POST invalid kind → 400, foreign refId → 404; browser: step 1 Most prescribed renders with counts, star click → Pinned section appears + aria-pressed=true, chip selection unaffected; step 4 quick-add chip → medicine row added with defaults, dropdown star pin → API persists, row-card star shows Unpin state. Screenshots qa-p3b3-step1-quickrows/pinned.png, qa-p3b3-step4-quickadd/full.png.
+- GOTCHA FIXED: dev server must be started detached (setsid bash restart-server.sh) — plain background invocation gets killed with the bash tool session (only next dev + realtime survived check; restart.log pattern).
+- Lint: fixed pre-existing require() error in push-pack-review-tables-prod.ts (ESM await import). bun run lint clean.
+- Commit a5cdf6c pushed. PROD DDL applied via scripts/push-rx-favorites-prod.ts (aws-0 pooler, idempotent, pkey drop-index dance, FK to Doctor cascade — verified 6 columns). Vercel deploy Ready (~2m, project link intact this time).
+- PROD E2E (agent-browser @ doctorooms-hms.vercel.app): login qa-prod-gas → seeded a Completed booking via scripts/seed-prod-qa-booking.ts → RX wizard step 1 renders 87 complaint chips w/ 85 star toggles → star click → "Pinned — aapke top complaints" + RxFavorite row in prod DB → advanced to step 4 → dropdown star pin (Amlong 5) → prod DB row + "Pinned — aapki go-to dawaiyan" quick-add row appears (pooler refetch takes a few seconds) → quick-add chip click → medicine row added with default dose/frequency. Zero page errors. Screenshots qa-p3b3-prod-step1-pinned.png, qa-p3b3-prod-step4-pinned.png, qa-p3b3-prod-final.png.
+- Cron watchdog had died again (exec limits) → recreated as job 443827 (15-min webDevReview).
+
+Stage Summary:
+- ⚡ P3 FEATURE #3 LIVE IN PRODUCTION: RX wizard favorites & pinning — the daily-driver speed feature. Doctors pin their go-to complaints/medicines (star on any chip/dropdown/row) and see one-tap quick rows; PLUS zero-config "most prescribed" sections auto-derived from their actual prescription history (counts shown). Turns a 90-item scroll into a 1-tap pick.
+- Prod DB now has RxFavorite table (aws-0 pooler); deploy stable; sandbox + prod E2E green; lint clean.
+- Remaining P3 candidates: T3 lite packs (PSU/NSU/CTV/RHE/GER/EME long-tail); dedicated scoped 'reviewer' role (admin-only console today); pack version-update consent flow.
+- PENDING OWNER (unchanged): recruit MBBS reviewer → Admin → Pack Reviews console (21 packs waiting); admin password rotation ⚠️ admin123; Cloudinary CLOUD_NAME; Render realtime + UptimeRobot.
+- INFRA NOTES: prisma CLI needs explicit DATABASE_URL prefix in this shell (stale SQLite export); dev server restarts must use setsid; cron watchdogs die on exec limits and need recreation (~1/session).
