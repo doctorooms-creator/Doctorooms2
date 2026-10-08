@@ -150,11 +150,18 @@ export function proxy(req: NextRequest) {
     if (isPublicApi(pathname)) {
       return withSecurityHeaders(NextResponse.next(), pathname)
     }
+    // P5-MOBILE: React Native patient app authenticates with the same JWT
+    // via `Authorization: Bearer <jwt>` (stored in expo-secure-store) instead
+    // of cookies. Edge check is decode-only (full signature + DB verification
+    // happens in each API route via getAuthUser). Cookie path unchanged.
     const sessionCookie = req.cookies.get('doctorooms_session')?.value
-    if (!sessionCookie) {
+    const authHeader = req.headers.get('authorization') || ''
+    const bearerJwt = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : ''
+    const apiCredential = sessionCookie || bearerJwt
+    if (!apiCredential) {
       return withSecurityHeaders(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }), pathname)
     }
-    const payload = decodeJwt(sessionCookie)
+    const payload = decodeJwt(apiCredential)
     if (!payload) {
       // Dev sandbox fallback: if JWT decode fails (e.g. NEXTAUTH_SECRET changed),
       // allow the request through in non-production environments.

@@ -39,9 +39,16 @@ export async function getAuthUser(req: NextRequest): Promise<AuthUser | null> {
   const sessionCookie = req.cookies.get('doctorooms_session')?.value
   const roleCookie = req.cookies.get('doctorooms_role')?.value
 
+  // P5-MOBILE: React Native app sends the same JWT via Authorization header
+  // (stored in expo-secure-store). Falls back ONLY when the cookie is absent,
+  // then runs the identical signature + DB-session verification path below.
+  const authHeader = req.headers.get('authorization') || ''
+  const bearerJwt = authHeader.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : ''
+  const credential = sessionCookie || bearerJwt
+
   // ─── Step 1: Verify JWT signature + extract session token ────────────────
-  if (sessionCookie) {
-    const jwtPayload = verifyJwt(sessionCookie) // verifies signature + exp
+  if (credential) {
+    const jwtPayload = verifyJwt(credential) // verifies signature + exp
     if (jwtPayload) {
       // ─── Step 2: Verify the session in DB (revocation + expiry + user.status) ─
       try {

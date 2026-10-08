@@ -119,6 +119,10 @@ export async function POST(req: NextRequest) {
         mobileNo: user.mobileNo,
       },
       sessionExpiresAt: expiresAt.toISOString(),
+      // P5-MOBILE: React Native app persists this JWT in expo-secure-store and
+      // sends it as `Authorization: Bearer <token>` (browsers keep using the
+      // httpOnly cookie below and simply ignore this field).
+      token: sessionJwt,
     });
 
     // Set session cookie = JWT (httpOnly — client reads user via /api/auth/me)
