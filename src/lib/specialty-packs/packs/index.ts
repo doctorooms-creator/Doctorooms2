@@ -23,6 +23,10 @@
  *   NEP-01 Nephrology
  * P2 batch 4 (T2 — COMPLETE):
  *   REP-01 IVF & Fertility      ONC-01 Oncology
+ * P3 batch 4 (T3 lite):
+ *   PSU-01 Plastic Surgery       NSU-01 Neurosurgery
+ *   CTV-01 Cardiothoracic Surg   EME-01 Emergency Medicine
+ *   RHE-01 Rheumatology          GER-01 Geriatrics
  */
 
 import type { SpecialtyPack } from '../types'
@@ -47,6 +51,12 @@ import { END01_PACK } from './end-01'
 import { NEP01_PACK } from './nep-01'
 import { REP01_PACK } from './rep-01'
 import { ONC01_PACK } from './onc-01'
+import { PSU01_PACK } from './psu-01'
+import { NSU01_PACK } from './nsu-01'
+import { CTV01_PACK } from './ctv-01'
+import { EME01_PACK } from './eme-01'
+import { RHE01_PACK } from './rhe-01'
+import { GER01_PACK } from './ger-01'
 
 export const PACKS: Record<string, SpecialtyPack> = {
   'GP-01': GP01_PACK,
@@ -70,6 +80,12 @@ export const PACKS: Record<string, SpecialtyPack> = {
   'NEP-01': NEP01_PACK,
   'REP-01': REP01_PACK,
   'ONC-01': ONC01_PACK,
+  'PSU-01': PSU01_PACK,
+  'NSU-01': NSU01_PACK,
+  'CTV-01': CTV01_PACK,
+  'EME-01': EME01_PACK,
+  'RHE-01': RHE01_PACK,
+  'GER-01': GER01_PACK,
 }
 
 export function getPack(code: string): SpecialtyPack | null {

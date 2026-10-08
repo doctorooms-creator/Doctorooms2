@@ -4,7 +4,7 @@
  * Content Packs — browsable library of all specialty starter packs.
  *
  * P3 "pack settings surface": doctors see their installed packs (receipt
- * counts + versions) and can install ANY of the 21 packs on demand —
+ * counts + versions) and can install ANY of the 27 packs on demand —
  * not just their own specialty's. Install is idempotent + append-only
  * (install.ts P3/P4), so this is always safe to click.
  *
@@ -81,6 +81,7 @@ const TIER_STYLES: Record<string, string> = {
   BASE: 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border-teal-200 dark:border-teal-800',
   T1: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
   T2: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+  T3: 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-200 dark:border-rose-800',
 }
 
 function formatDate(iso: string | null): string {
@@ -301,6 +302,7 @@ export default function ContentPacksPage() {
             <SelectItem value="BASE">BASE — General</SelectItem>
             <SelectItem value="T1">T1 — Core specialties</SelectItem>
             <SelectItem value="T2">T2 — Super specialties</SelectItem>
+            <SelectItem value="T3">T3 — Lite packs</SelectItem>
           </SelectContent>
         </Select>
       </section>
