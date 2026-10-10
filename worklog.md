@@ -7065,3 +7065,22 @@ Stage Summary:
 - Architecture decision logged: ONE backend (Next.js/Vercel/Supabase-Seoul/Cloudinary) + web (doctor/staff) + RN (patient). Same DB, same files, same sessions table.
 - Owner-side notes: app store costs (Play $25 one-time, Apple $99/yr) + EAS account will be needed at Phase 4; realtime service on Render still pending (app degrades to 30s queue polling meanwhile); push notifications will need a small backend endpoint later (expo push tokens).
 - Remaining P4 backlog unchanged: P4-E, P4-B, P4-C.
+Task ID: NAMING-1
+Agent: Main (orchestrator, Z.ai)
+Task: Product renaming — comprehensive 3-part name master-list file (NO development, pure naming phase per user instruction).
+
+Work Log:
+- Batch 1 domain pre-check via Google DNS NS method (~110 lookups: Part-1 mythology/premium names, Part-2 BharatPe-style families, Part-3 BharatX family, .com + .in).
+- Batch 2 pre-check (~21 lookups: remaining Part-1 standalones + premium TLDs .health/.care/.app for Jivaka/Atreya/Soma/Iaso/Dhanva/Shifa).
+- Created /home/z/my-project/NAMING.md — 100+ names in 3 parts exactly as user asked:
+  - PART 1 "Claude/Mythos/Aestra mindset": 37 names (A: mythological characters — Jivaka/Buddha's physician, Atreya, Dhanva/Dhanvantari, Ashwini twins, Sanjiv/Sanjeevani, Chyawan, Sushruta, Iaso, Eira, Chiron, Panacea, Hygieia; B: deep-root concepts — Shifa, Salamat, Aafiyat, Sukhayu, Shatayu, Sakhaa, Mitra, Bandhu, Ayutva, Jivi, Nidaan, etc.)
+  - PART 2 "BharatPe mindset": 22 names (ApnaDaktar, DaktarSaab, Pe-clone family, Setu/Seva/Mitra/Kendra govt-word families, JanSehat, AamSehat, SuSehat coined hybrid, SehatSarthi/Rath/Saathi, Nuskha; JeevanSaathi & Mohalla marked SKIP w/ conflicts)
+  - PART 3 "Bharat + 1 word": 36 names (7 DOUBLE-AVAILABLE .com+.in: BharatIlaaj, BharatSakha, BharatBandhu, BharatShifa, BharatPrana, BharatAmrit, BharatNirog; plus BharatAangan/Salamat/Sukhayu/Aafiyat/Humsafar/Kutumb/Aayu/Sanjiv/Ojas/Med/Nidaan .com free; 12 .in-only BharatX)
+- Added strategy note (two-sided product → relationship-words vs treatment-words axis), 5 naming filters (taxi-driver/WhatsApp/store/story/domain-TM), 10-second domain check method, Top-15 pre-checked shortlist, final verdict (BharatSakha > BharatIlaaj > SuSehat > ApnaDaktar > Jivaka.health), rebrand migration checklist.
+- Key data: ~29 .com available, 19 .in available, 4 premium TLDs (jivaka.health, jivaka.app, atreya.care, dhanva.care), 7 double-available. All Part-1 .com/.in taken (mythology words globally snatched).
+
+Stage Summary:
+- NAMING.md delivered (100+ names, 3 parts, ~130 domains pre-checked first-pass 2026-10-10) — user will shortlist one-by-one.
+- NO development performed (user's "do not start development" still active for naming phase).
+- Pending: user's final pick → domain purchase instructions + full rebrand migration plan + trademark Class 5/9/42 attorney check.
+- Rename window still CHEAP: no custom domain, no store listing, zero real users.
