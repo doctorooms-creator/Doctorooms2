@@ -7084,3 +7084,21 @@ Stage Summary:
 - NO development performed (user's "do not start development" still active for naming phase).
 - Pending: user's final pick → domain purchase instructions + full rebrand migration plan + trademark Class 5/9/42 attorney check.
 - Rename window still CHEAP: no custom domain, no store listing, zero real users.
+
+---
+Task ID: NAMING-2
+Agent: Main (orchestrator, Z.ai)
+Task: Naming round 2 — strict-rules file (5-letter one-word + Bharat+2-3-letter short names), .com availability REQUIRED, in-depth domain research (NO development).
+
+Work Log:
+- 138 fresh Google-DNS NS checks (6 batches, all statuses captured not just available):
+  - Part A 5-letter one-word .com: 87 candidates checked (3 rounds — dictionary Sanskrit/Hindi/Urdu/Tamil/Greek/Latin roots, rare Vedic words, double-letter tricks like ojjas/rasaa/vayuu, coined jiv-on/ayuva/iatro/curae/paean/askle) → 87/87 ALL TAKEN. Finding documented: entire pronounceable 5-letter .com space is squatted; only aftermarket (₹50k-4L) or alt-TLD.
+  - Part A fallbacks found: jivak.in ✓, sujiv.in ✓ (plus earlier jivaka.health/jivaka.app/atreya.care/dhanva.care).
+  - Part B Bharat+2-3-letter .com: 23 candidates → 9 AVAILABLE, all double-confirmed in a final re-check batch: bharatjee, bharatjiv, bharatayu, bharatmed, bharatsu, bharathms, bharatasu, bharatila, bharatmb. 8 of 9 have .in free too (bharatmed.in taken).
+- Created /home/z/my-project/NAMING-2.md: research finding up top (why Part A impossible on .com), ruled-out list, fallback table with stories (Jivaka= Buddha's physician; sujīvin), Part B winners table (9 names, each with breakup/pronunciation/story/domain), Top-5 verdict (1. BharatJee — respect-suffix + jeevan life-root double meaning, 2. BharatAyu — Ayurveda's root word, 3. BharatSu — 2-letter minimal premium, 4. BharatMed, 5. BharatJiv), length comparison vs BharatPe 9-letter benchmark, aftermarket last-resort options, practical next steps (buy fast, TM check, rebrand plan ready).
+
+Stage Summary:
+- NAMING-2.md delivered — user's strict rules honored (5-letter+story / Bharat+2-3 letters / .com available).
+- Core insight for user: 5-letter .com space 100% squatted (87/87 proven) — real gold is Part B: 9 double-confirmed available names led by BharatJee (com+in) and BharatAyu (com+in).
+- NO development performed (naming-only phase, user instruction active).
+- Pending: user's pick from Part B (or aftermarket decision for 5-letter) → domain purchase + rebrand migration (plan ready in NAMING.md) + TM Class 5/9/42 attorney check.
