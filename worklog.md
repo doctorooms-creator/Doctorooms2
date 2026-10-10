@@ -7102,3 +7102,21 @@ Stage Summary:
 - Core insight for user: 5-letter .com space 100% squatted (87/87 proven) — real gold is Part B: 9 double-confirmed available names led by BharatJee (com+in) and BharatAyu (com+in).
 - NO development performed (naming-only phase, user instruction active).
 - Pending: user's pick from Part B (or aftermarket decision for 5-letter) → domain purchase + rebrand migration (plan ready in NAMING.md) + TM Class 5/9/42 attorney check.
+
+---
+Task ID: NAMING-3
+Agent: Main (orchestrator, Z.ai)
+Task: BharatAyu FINALIZED by user — domain acquisition research ("free me kaun dega?"), live web research on registrar offers (NO development).
+
+Work Log:
+- User locked BharatAyu as final product name (bharatayu.com + bharatayu.in both double-confirmed available).
+- Live web research (web-search skill, 5 queries) on current registrar pricing/offers: GoDaddy India, Hostinger, Cloudflare, Namecheap, Spaceship, Porkbun, BigRock, GitHub Student Pack, Forbes/free-domain roundup.
+- Key findings: (1) Hostinger ₹1 = hosting-bundle trap — hosting ₹149/mo × 48mo = ₹7,152, useless for us since app is on FREE Vercel; (2) GoDaddy India ₹1/1st-yr .com = REAL but requires 3-year purchase (~₹1,500-2,500 total), hosting NOT required, UPI accepted — best "almost-free" India option; (3) Spaceship $8.88 1st yr + $9.98 flat renewal forever — cheapest long-term flat (needs international card); (4) Cloudflare Registrar $10.46/yr flat, zero markup/upsell, free transfer-in + 1-yr extension; (5) Namecheap $6.79 promo but heavy renewal (~$16-26); (6) GitHub Student Pack free 1-yr domain but NOT .com; (7) verified: NO registrar gives .com truly free (Verisign ~$10/yr wholesale).
+- Updated NAMING-2.md: added "WINNER ANNOUNCED: BharatAyu" + full DOMAIN ACQUISITION RESEARCH section (comparison table, action plan: UPI-only → GoDaddy India 3-yr both TLDs; card → Spaceship/Cloudflare; hybrid → GoDaddy now + Cloudflare transfer after 60-day lock; skip all checkout upsells; never buy hosting).
+- Recommended action: buy bharatayu.com + bharatayu.in FAST (availability is public knowledge).
+
+Stage Summary:
+- Name LOCKED: BharatAyu (10 letters, Ayurveda root-story: āyu = lifespan, āyurveda = "knowledge of āyu").
+- Domain research delivered — honest answer: free .com doesn't exist; best paths = GoDaddy India ₹1 3-yr deal (UPI) or Spaceship/Cloudflare flat (card).
+- NO development performed (naming/acquisition phase; user instruction active).
+- Next after domain purchase: Vercel DNS point + full rebrand migration (plan ready) + TM Class 5/9/42 check.

@@ -77,5 +77,37 @@
 3. **Rebrand migration** ready hai plan (NAMING.md me checklist) — bolo to execute karu: Vercel alias, app name, repo, QA emails, PATIENT-APP-PROMPT.md.
 4. **WhatsApp test / taxi-driver test** top-3 pe khud karo: BharatJee, BharatAyu, BharatSu — 5 logon ko phone pe bolo, agle din yaad hai kya?
 
+## 🏆 WINNER ANNOUNCED: **BharatAyu** — user final pick (2026-10-10)
+
 ---
-*File: NAMING-2.md • 2026-10-10 • 138 fresh DNS checks, winners double-confirmed • Naming phase only — NO development (user instruction active). Sources: Google DNS resolver (NS lookups), Sanskrit/Greek mythology etymology.*
+
+# 💰 DOMAIN ACQUISITION RESEARCH — "free me kaun dega?" (web-researched 2026-10-10)
+
+## Seedhi baat pehle: .com FREE me **koi bhi registrar nahi deta** — koi bhi
+Har .com pe registrar ko **Verisign ko ~$10/saal (wholesale)** dena padta hai. Jo "free" ya "₹1" dikhta hai, uske peeche sirf 3 models hain:
+1. **Hosting-bundle trap** — domain free/₹1, lekin hosting kharidni padti hai (Hostinger model)
+2. **Multi-year commitment** — pehla saal ₹1, lekin 3-saal package upfront (GoDaddy India model)
+3. **Free TLDs/subdomains** — .tk/.ml ya vercel.app (real domain nahi, trust zero)
+
+## Options ka honest comparison (BharatAyu context — Vercel pe FREE hosted hai, hosting ki ZERO zaroorat):
+
+| Registrar | Offer | Asli cost | Catch | Payment India | Verdict |
+|-----------|-------|-----------|-------|---------------|---------|
+| **Hostinger ₹1** | ₹1 domain | hosting ₹149/mo × 48 = **₹7,152** | Hosting LENI PADTI hai | UPI ✓ | ⛔ **TRAP for us** — humara app Vercel FREE pe hai, hosting bechne ka offer hai ye |
+| **GoDaddy India** | ₹1/1st yr | ~₹1,500-2,500 (3-saal purchase zaroori, yr 2-3 renewal ~₹290-1,100/yr) | 3-yr commitment + checkout upsells | **UPI ✓** | ✅ **Best "almost-free" India wala** — hosting NOT required |
+| **Spaceship** (Namecheap ka naya brand) | $8.88 1st yr | **$9.98 flat renewal forever** (~₹870/saal) | International card chahiye | Card only | ✅ Sabse sasta long-term flat |
+| **Namecheap** | $6.79 promo (new customers) | renewal ~$16-26/yr | Promo-only discount | Card only | 🆗 1st yr sasta, baad me mehenga |
+| **Cloudflare Registrar** | $10.46/yr | **$10.46 flat HAR SAAL, zero markup/upsell** | Card + account | Card only | ✅ Cleanest honest — best yr-2 home; transfer-in free + 1-yr extension |
+| **Porkbun** | $11.08/yr flat | ~₹970/saal | — | Card only | 🆗 Clean backup |
+| **BigRock (India)** | ₹99-199 1st yr | renewal ~₹1,300 | upsells | UPI ✓ | 🆗 Local backup option |
+| **GitHub Student Pack** | 1 yr free | ₹0 | **.com nahi milta** (.me/.tech type), student verification | — | ⚠️ BharatAyu.com ke liye useless, lekin agar student ho to side-asset |
+
+## 🎯 Action plan (meri recommendation):
+- **Agar UPI/netbanking hi hai (no international card)**: → **GoDaddy India** → bharatayu.com + bharatayu.in dono 3-yr deal pe (~₹3,000-4,000 total upfront dono). Checkout pe: website-builder/email/SSL-paid sab SKIP, Domain Privacy FREE wali ON rakhna.
+- **Agar international card hai**: → **Spaceship** (.com $8.88 + $9.98 flat) — 10 saal tak sabse sasta, ya **Cloudflare** seedha ($10.46 flat, sabse clean).
+- **Hybrid smart move**: GoDaddy ₹1 se 3-saal lock karo → 60-din lock khatam hote hi Cloudflare transfer (free + 1-yr extension milti hai).
+- Domain milte hi: DNS A/CNAME records Vercel pe point karna hai — hosting kabhi nahi kharidni (Vercel FREE unlimited for hobby tier).
+- **Jaldi karo** — bharatayu.com abhi available hai (double-confirmed), lekin ye research sabke radar pe hoti hai.
+
+---
+*File: NAMING-2.md • 2026-10-10 • 138 fresh DNS checks, winners double-confirmed • Naming phase only — NO development (user instruction active). Sources: Google DNS resolver (NS lookups), Sanskrit/Greek mythology etymology, live web research (GoDaddy/Hostinger/Cloudflare/Namecheap/Spaceship/Porkbun pricing pages via web-search, Oct 2026).*
