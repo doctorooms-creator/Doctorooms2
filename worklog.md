@@ -7300,3 +7300,41 @@ Stage Summary:
 - All AI calls server-side z-ai-web-dev-sdk; timing remains 100% deterministic (P1 engine untouched).
 - Next phases (user GO needed): P3 Sevika chat (context-grounded) + adaptive reschedule + empathetic nudges; P4 WhatsApp/voice.
 - Pending brand ops: logo concept pick, TM filing week, rebrand migration.
+
+---
+Task ID: sevika-p3
+Agent: Main
+Task: Sevika P3 — context-grounded chat + adaptive reschedule + empathetic nudges (patient side)
+
+Work Log:
+- Read worklog tail: P1+P2 were already COMPLETE and browser-verified; "Go ahead" = GO for P3.
+- NEW src/lib/sevika/nudge.ts — deterministic empathetic nudge engine (NO LLM by design):
+  - quickTone(userId): last 48h decided doses → 'celebrate' (last 3 Taken, 0 miss) | 'gentle' (≥2 miss/skip) | 'warm'
+  - reminderTitle/reminderMessage/missedMessage per tone — Hinglish, never guilt-trip, always signed "— Sevika 🩺"
+- MOD src/lib/sevika/schedule.ts — runSevikaTick now tone-adaptive (per-patient Map memo; 1 extra query per DISTINCT patient per tick). Exported nextOccurrence(hhmm) = next future IST wall-clock occurrence (today else tomorrow) for reschedule.
+- NEW src/lib/sevika/chat.ts — patient-side context firewall (mirrors Dr. Copilot L1/L2/L3):
+  - buildSevikaContext(userId): patient name + personalised slot times + active meds w/ days-left + today's doses w/ Hinglish statuses + adherence + recent 48h misses + CATCH-UP RULE line + next dose + diet summary
+  - buildSevikaSystemPrompt: Sevika persona HARD RULES — data-block-only, NEVER dose changes ("doctor se poochhna zaroori hai"), never diagnose, no guilt on misses, nurse-level diet, Hinglish, 2-4 lines, ≤1 emoji
+  - streamSevikaChat: SSE delta parser (same protocol as copilot/llm.ts)
+- NEW src/app/api/dashboard/patient/sevika/chat/route.ts — POST (requireRole patient; zod: message ≤1000, history ≤8 turns ≤1200 each). SSE stream: delta/done/error. Data block rebuilt fresh EVERY call (stays correct after dose actions). No chat table (P3: history echoed client-side).
+- MOD doses/[id]/route.ts — P3 adaptive actions:
+  - 'taken' on Missed/Skipped allowed within 2h CATCHUP_WINDOW_MS → lateTaken:true (beyond → 422 with kind Hinglish error)
+  - 'reschedule' (Pending/Reminded/Snoozed only) + toSlot → dueAt=nextOccurrence(patient slot time), slot moved, remindedAt cleared, status Pending
+- MOD today/route.ts — response adds catchup[] (Missed/Skipped within 2h window).
+- NEW patient/sevika/chat.tsx — SevikaChatButton: animated teal FAB (bottom-right, spring, online dot; "Poochhein" on mobile / "Sevika se poochhein" sm+) → right Sheet: gradient header w/ stethoscope avatar + AI Nurse badge, welcome msg, quick chips (3), streaming bubbles (user teal right / Sevika bordered left + 🩺 avatar), animated 3-dot typing, auto-grow textarea (Enter send/Shift+Enter newline), auto-scroll, doctor-disclaimer footer. SSE parsing identical to copilot panel.
+- MOD patient/sevika/client.tsx — CatchupBanner (amber, per-medicine "Abhi Le Li"), DoseCard: amber catchable styling + "Abhi Le Li" button + "Shift" dropdown (other 2 personalised slots w/ times+icons), doseAction mutation extended (toSlot; toasts: late-take "Der se li, le li ✅", reschedule w/ formatted target time).
+- MOD globals.css — .sevika-chat-scroll slim teal scrollbar.
+
+QA (agent-browser, Rahul Verma patient, dev server restarted after a crash unrelated to code):
+- Catch-up banner appeared for recent Missed dose (Azithromycin 250mg 09:08 PM) → "Abhi Le Li" → toast "Der se li, le li — note kar liya ✅ Koi baat nahi!" → dose now "Le Li ✓", banner gone (older Miss outside 2h window correctly NOT catchable)
+- Shift dropdown → "दोपहर — 14:00" → toast "Reminder shift ho gaya — 08:30 AM, 12 Oct 🔔" → dose regrouped from सुबह into दोपहर section (engine IST 14:00; display in browser TZ consistent with rest of app)
+- Chat: FAB → sheet → chip "Aaj ki dawaiyaan kaunsi hain?" → STREAMED grounded Hinglish reply listing Rahul's REAL meds by slot (Paracetamol/Propranolol/Azithro/Omeprazole) + acknowledged late takes ("3 doses complete kar chuke hain 😊")
+- Safety rail: "double le lun?" → refused, cited 2h catch-up, deferred to doctor, used patient's name
+- Mobile 375px: FAB shows compact label; screenshots qa-assets/{p3-sevika-catchup-banner,p3-sevika-chat,p3-sevika-mobile}.png
+- POST /api/cron/sevika-tick → 200 {reminded:0,missed:0,completedSchedules:0} (idempotent, tone engine wired)
+- dev.log: ZERO errors; all endpoints 200. lint CLEAN.
+
+Stage Summary:
+- Sevika P3 COMPLETE and browser-verified: context-grounded AI nurse chat (patient edition context firewall), adaptive reschedule (2h catch-up + next-slot shift), deterministic empathetic nudges wired into the tick.
+- Safety rails honored: LLM never sees beyond its scoped data block; dose changes always deferred to doctor; tone engine is pure code so reminder timing stays 100% deterministic.
+- Next candidates (need GO): P4 WhatsApp/voice channels; Sevika chat in doctor board; chat persistence + thread history (needs new Prisma model); nudge A/B copy variants.

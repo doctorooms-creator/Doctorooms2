@@ -8,6 +8,7 @@
 
 import { db } from '@/lib/db'
 import { nowIST, todayISTRange } from '@/lib/date-utils'
+import { quickTone, reminderTitle, reminderMessage, missedMessage, type NudgeTone } from '@/lib/sevika/nudge'
 
 // ─── Slot times ────────────────────────────────────────────────────────────
 
@@ -232,6 +233,22 @@ export async function computeAdherence(userId: string): Promise<AdherenceStats> 
 
 // ─── Ticker (called by /api/cron/sevika-tick every ~5 min) ────────────────
 
+/**
+ * P3 (adaptive): next future occurrence of an "HH:mm" IST wall-clock time —
+ * today if that time is still ahead, else tomorrow. Used by the reschedule
+ * action to shift a dose to the patient's personalised slot time.
+ */
+export function nextOccurrence(hhmm: string, from: Date = nowIST()): Date {
+  const [h, m] = hhmm.split(':').map((v) => parseInt(v, 10) || 0)
+  const day = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()))
+  let target = slotDateTime(day, `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+  if (target.getTime() <= from.getTime()) {
+    const tomorrow = new Date(day.getTime() + 24 * 60 * 60 * 1000)
+    target = slotDateTime(tomorrow, `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`)
+  }
+  return target
+}
+
 export interface TickResult {
   reminded: number
   missed: number
@@ -252,10 +269,23 @@ export type NotifyFn = (p: NotifyPayload) => Promise<void>
  *  1. due doses (Pending, dueAt ≤ now, within last 15 min) → notify + Reminded
  *  2. overdue doses past their grace window → one gentle follow-up + Missed
  *  3. schedules with no unfinished doses left → status Completed
+ *
+ * P3: reminder/missed messages are tone-adaptive (celebrate / gentle / warm)
+ * via the deterministic nudge engine — one extra lookup per DISTINCT patient
+ * per tick (memoised in a local Map).
  */
 export async function runSevikaTick(notify: NotifyFn): Promise<TickResult> {
   const now = new Date()
   const result: TickResult = { reminded: 0, missed: 0, completedSchedules: 0 }
+  const toneCache = new Map<string, NudgeTone>()
+  const toneFor = async (userId: string): Promise<NudgeTone> => {
+    let tone = toneCache.get(userId)
+    if (!tone) {
+      tone = await quickTone(userId)
+      toneCache.set(userId, tone)
+    }
+    return tone
+  }
 
   // 1) FIRE reminders: due within the last 15 minutes, still Pending
   const dueDoses = await db.sevikaDose.findMany({
@@ -267,19 +297,22 @@ export async function runSevikaTick(notify: NotifyFn): Promise<TickResult> {
     take: 200,
   })
   for (const dose of dueDoses) {
+    const tone = await toneFor(dose.userId)
     await db.sevikaDose.update({
       where: { id: dose.id },
       data: { status: 'Reminded', remindedAt: now },
     })
+    const med = {
+      medicine: dose.schedule.medicineName,
+      dose: dose.schedule.dose,
+      instructions: dose.schedule.instructions,
+      slotHi: SLOT_LABELS[dose.slot]?.hi || dose.slot,
+    }
     await notify({
       userId: dose.userId,
       event: 'med-reminder',
-      title: `💊 ${dose.schedule.medicineName} — ${SLOT_LABELS[dose.slot]?.hi || dose.slot}`,
-      message: sevikaReminderMessage(
-        dose.schedule.medicineName,
-        dose.schedule.dose,
-        dose.schedule.instructions
-      ),
+      title: reminderTitle(tone, med),
+      message: reminderMessage(tone, med),
       doseId: dose.id,
     })
     result.reminded++
@@ -296,6 +329,7 @@ export async function runSevikaTick(notify: NotifyFn): Promise<TickResult> {
     take: 200,
   })
   for (const dose of overdue) {
+    const tone = await toneFor(dose.userId)
     await db.sevikaDose.update({
       where: { id: dose.id },
       data: { status: 'Missed', actionAt: now },
@@ -304,7 +338,7 @@ export async function runSevikaTick(notify: NotifyFn): Promise<TickResult> {
       userId: dose.userId,
       event: 'dose-missed',
       title: `😔 ${dose.schedule.medicineName} miss ho gayi`,
-      message: `Koi baat nahi — jab yaad aaye le lijiye. Agli dose ka dhyan rakhenge. — Sevika`,
+      message: missedMessage(tone, dose.schedule.medicineName),
       doseId: dose.id,
     })
     result.missed++
@@ -327,11 +361,4 @@ export async function runSevikaTick(notify: NotifyFn): Promise<TickResult> {
   }
 
   return result
-}
-
-function sevikaReminderMessage(medicine: string, dose: string, instructions: string): string {
-  const parts = [`${medicine}${dose ? ` (${dose})` : ''} lena hai.`]
-  if (instructions) parts.push(instructions)
-  parts.push('— Sevika, aapki nurse 🩺')
-  return parts.join(' ')
 }

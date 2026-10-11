@@ -5,6 +5,8 @@
  * AI-NURSE-PLAN.md P1 MVP + P2: today's dose timeline + adherence stats +
  * add/import medicines + AI diet card + personalised slot times +
  * photo-RX VLM parse (P2) + weekly report card (P2).
+ * P3: empathetic catch-up banner (late-take within 2h), dose reschedule
+ * to the next personalised slot, and the Sevika chat panel (context-grounded).
  */
 
 import { useRef, useState } from 'react'
@@ -15,6 +17,7 @@ import {
   Activity,
   AlertCircle,
   BarChart3,
+  CalendarClock,
   Camera,
   Check,
   Clock,
@@ -46,11 +49,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
+
+import SevikaChatButton from './chat'
 
 // ============ TYPES ============
 
@@ -101,12 +112,22 @@ interface DietData {
   plan: { summary: string; disclaimer: string; days: DietDay[]; fallback?: boolean }
 }
 
+interface CatchupDose {
+  id: string
+  medicineName: string
+  dose: string
+  dueAt: string
+  slot: string
+  status: string
+}
+
 interface TodayResponse {
   doses: SevikaDose[]
   medicines: MedicineRow[]
   adherence: Adherence
   diet: DietData | null
   slotTimes: { morning: string; afternoon: string; evening: string }
+  catchup?: CatchupDose[]
 }
 
 interface PrescriptionRow {
@@ -191,19 +212,28 @@ export default function PatientSevikaClient() {
 
   // ── mutations ──
   const doseAction = useMutation({
-    mutationFn: ({ id, action }: { id: string; action: string }) =>
+    mutationFn: ({ id, action, toSlot }: { id: string; action: string; toSlot?: string }) =>
       fetch(`/api/dashboard/patient/sevika/doses/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action, toSlot }),
       }).then(async (r) => {
         if (!r.ok) throw new Error((await r.json()).error || 'Failed')
-        return r.json()
+        return r.json() as Promise<{ lateTaken?: boolean; rescheduledTo?: string; slotLabel?: string }>
       }),
-    onSuccess: (_d, v) => {
-      if (v.action === 'taken') toast.success('Bahut accha! Dawai note kar li ✅')
+    onSuccess: (d, v) => {
+      if (v.action === 'taken') {
+        if (d?.lateTaken) toast.success('Der se li, le li — note kar liya ✅ Koi baat nahi!')
+        else toast.success('Bahut accha! Dawai note kar li ✅')
+      }
       if (v.action === 'snooze') toast.info('Theek hai — 10 minute baad yaad dilayenge ⏰')
       if (v.action === 'skipped') toast.info('Skip note kar liya')
+      if (v.action === 'reschedule')
+        toast.info(
+          d?.rescheduledTo
+            ? `Reminder shift ho gaya — ${format(new Date(d.rescheduledTo), 'hh:mm a, d MMM')} 🔔`
+            : 'Reminder shift ho gaya 🔔'
+        )
       invalidate()
     },
     onError: (e: Error) => toast.error(e.message),
@@ -235,6 +265,9 @@ export default function PatientSevikaClient() {
   for (const d of todayDoses) {
     ;(bySlot[d.slot] = bySlot[d.slot] || []).push(d)
   }
+
+  // P3: missed-but-catchable doses (server already filters to the 2h window)
+  const catchup = data?.catchup || []
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 p-4 md:p-6">
@@ -316,6 +349,52 @@ export default function PatientSevikaClient() {
         )}
       </div>
 
+      {/* ── P3: catch-up banner (missed but still within 2h) ── */}
+      {!isLoading && catchup.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          role="alert"
+          className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900 dark:bg-amber-950/30"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+              <CalendarClock className="h-4 w-4" />
+              {catchup.length === 1
+                ? 'Ek dose reh gayi thi — abhi le sakte hain!'
+                : `${catchup.length} dose reh gayi thi — abhi le sakte hain!`}
+            </p>
+            <span className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
+              Der se lene me bhi faida hai 💛
+            </span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {catchup.map((c) => (
+              <div
+                key={c.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200/70 bg-white/70 px-3 py-2 dark:border-amber-900/60 dark:bg-transparent"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{c.medicineName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(c.dueAt), 'hh:mm a')} ka time tha
+                    {c.dose ? ` • ${c.dose}` : ''}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="h-8 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700"
+                  disabled={doseAction.isPending}
+                  onClick={() => doseAction.mutate({ id: c.id, action: 'taken' })}
+                >
+                  <Check className="mr-1 h-3.5 w-3.5" /> Abhi Le Li
+                </Button>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* ── LEFT: today's timeline ── */}
         <Card className="lg:col-span-2">
@@ -370,16 +449,23 @@ export default function PatientSevikaClient() {
                       </p>
                     ) : (
                       <div className="space-y-2">
-                        {doses.map((dose) => (
-                          <DoseCard
-                            key={dose.id}
-                            dose={dose}
-                            busy={doseAction.isPending}
-                            onAction={(action) =>
-                              doseAction.mutate({ id: dose.id, action })
-                            }
-                          />
-                        ))}
+                        {doses.map((dose) => {
+                          const catchable =
+                            (dose.status === 'Missed' || dose.status === 'Skipped') &&
+                            catchup.some((c) => c.id === dose.id)
+                          return (
+                            <DoseCard
+                              key={dose.id}
+                              dose={dose}
+                              busy={doseAction.isPending}
+                              catchable={catchable}
+                              slotTimes={slotTimes}
+                              onAction={(action, toSlot) =>
+                                doseAction.mutate({ id: dose.id, action, toSlot })
+                              }
+                            />
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -501,6 +587,9 @@ export default function PatientSevikaClient() {
         current={slotTimes}
         onDone={invalidate}
       />
+
+      {/* ── P3: Sevika chat (floating nurse button + sheet) ── */}
+      <SevikaChatButton />
     </div>
   )
 }
@@ -563,21 +652,28 @@ function statusBadge(status: string) {
 function DoseCard({
   dose,
   busy,
+  catchable = false,
+  slotTimes,
   onAction,
 }: {
   dose: SevikaDose
   busy: boolean
-  onAction: (action: string) => void
+  /** P3: Missed/Skipped but still within the 2h late-take window */
+  catchable?: boolean
+  slotTimes: { morning: string; afternoon: string; evening: string }
+  onAction: (action: string, toSlot?: string) => void
 }) {
   const done = dose.status === 'Taken'
   const gone = dose.status === 'Skipped' || dose.status === 'Missed'
+  const undecided = !done && !gone
   return (
     <motion.div
       layout
       className={cn(
         'rounded-xl border p-3 transition-all',
         done && 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20',
-        gone && 'opacity-60'
+        gone && !catchable && 'opacity-60',
+        catchable && 'border-amber-300 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20'
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -586,7 +682,7 @@ function DoseCard({
             <span
               className={cn(
                 'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white',
-                done ? 'bg-emerald-600' : gone ? 'bg-muted' : 'bg-teal-600'
+                done ? 'bg-emerald-600' : catchable ? 'bg-amber-500' : gone ? 'bg-muted' : 'bg-teal-600'
               )}
             >
               {done ? <Check className="h-3.5 w-3.5" /> : <Pill className="h-3.5 w-3.5" />}
@@ -606,7 +702,18 @@ function DoseCard({
         </div>
         <div className="flex items-center gap-2">
           {statusBadge(dose.status)}
-          {!done && !gone && (
+          {catchable && (
+            <Button
+              size="sm"
+              className="h-8 bg-emerald-600 px-3 text-xs text-white hover:bg-emerald-700"
+              disabled={busy}
+              title="Der ho gayi hai, lekin 2 ghante ke andar — abhi le lijiye"
+              onClick={() => onAction('taken')}
+            >
+              <Check className="mr-1 h-3.5 w-3.5" /> Abhi Le Li
+            </Button>
+          )}
+          {undecided && (
             <div className="flex gap-1">
               <Button
                 size="sm"
@@ -626,6 +733,34 @@ function DoseCard({
               >
                 <Timer className="mr-1 h-3.5 w-3.5" /> 10m
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 px-2 text-xs"
+                    disabled={busy}
+                    title="Reminder kisi aur slot me shift karein"
+                  >
+                    <CalendarClock className="mr-1 h-3.5 w-3.5" /> Shift
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-44">
+                  <p className="px-2 py-1.5 text-[10px] font-medium text-muted-foreground">
+                    Kahan shift karein?
+                  </p>
+                  {SLOT_ORDER.filter((s) => s !== dose.slot).map((s) => (
+                    <DropdownMenuItem
+                      key={s}
+                      className="cursor-pointer text-xs"
+                      onClick={() => onAction('reschedule', s)}
+                    >
+                      <span className="mr-2">{SLOT_META[s].icon}</span>
+                      {SLOT_META[s].hi} — {slotTimes[SLOT_META[s].timeKey]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 size="sm"
                 variant="ghost"
