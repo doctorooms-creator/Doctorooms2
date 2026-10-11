@@ -7139,3 +7139,21 @@ Stage Summary:
 - Research caught a live govt-scheme conflict (Jan Sehat Setu) — proving the dual-filter process works.
 - NO development performed (naming phase; user instruction active).
 - Pending: user pick → DIY TM registry check → domain + TM filing same week → rebrand migration (plan ready).
+
+---
+Task ID: NAMING-5
+Agent: Main (orchestrator, Z.ai)
+Task: 100+ name master-list (user demand: min 100 names, Bharat-concept included, GoI-mindset, .com available + TM-flags) — NAMING-4.md (NO development).
+
+Work Log:
+- DNS batch 1: 107 one-word GoI-pattern candidates (.com) → 53 available (jiv-family, aayur-family, blessing-family, renewal, amrit, nirog, health-state, welfare/kshema, prana, medicine, desi/Tamil/coined).
+- DNS batch 2: 31 new Bharat-concept + 36 previous winners re-confirmed → 28 new Bharat available + all 36 previous still available.
+- DNS batch 3: 20 top-pick .in checks → 18 available (deerghaayu.in, punarjeev.in taken).
+- TM web-scans (20 targeted searches): KILLS — Nirogaya (Nirogaya Pharmaceuticals Pvt Ltd, Jalandhar), BharatNirmaya (Ayushman Bharat Nirmaya govt package), BharatAayur (BharatAyu phonetic-clone retire); high-risk flags — BharatAyushya (Ministry of AYUSH + Ayushman Bharat adjacency), BharatJeevika (Bihar JEEViKA mission), Jivandayi/Jivandaya (Maharashtra RGJAY "Jeevandayee Arogya Yojana" echo — from knowledge, scan didn't surface); clean scans — Pranavaha (only Ayurveda textbook concept, zero brands), Amritvah, Punarjeev, Sudhayu, Kshemakari (only a devotional song), Jivashraya, Vaidyodaya, Sanjeevya, BharatSadaayu, BharatPranavah.
+- Created NAMING-4.md — 118 names total: Champions (6 prev finalists) + PART A one-word 52 (11 sub-families with stories) + PART B Bharat-short 11 (2-4 letter suffixes) + PART C Bharat-meaningful 39 (26 new + 16 re-confirmed, with retired entries documented) + PART D BharatPe-style bonus 10. Every name: story + .in status (where known) + TM flag (🟢/🟡/🔴). Top-10 verdict: Sadaayu > BharatSadaayu > Pranavaha > Amritvah > BharatJeev > Kshemakari > Jivandayi > Sudhayu > BharatDhanvan > Sanjeevya. Retired-transparency section + TM DIY + domain purchase guide ref.
+
+Stage Summary:
+- NAMING-4.md delivered: 118 names, all .com DNS-verified today, TM-flagged, GoI-mindset organized — exceeds user's 100+ requirement.
+- New GoI-hybrid champion found: BharatSadaayu (nation-word × blessing-grammar, com+in, scanned clean).
+- NO development performed (naming phase; user instruction active).
+- Pending: user's shortlist → DIY TM registry phonetic check → domain + TM filing same week → rebrand migration (plan ready).
