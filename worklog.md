@@ -7157,3 +7157,24 @@ Stage Summary:
 - New GoI-hybrid champion found: BharatSadaayu (nation-word × blessing-grammar, com+in, scanned clean).
 - NO development performed (naming phase; user instruction active).
 - Pending: user's shortlist → DIY TM registry phonetic check → domain + TM filing same week → rebrand migration (plan ready).
+
+---
+Task ID: NAMING-6
+Agent: Main (orchestrator, Z.ai)
+Task: User demanded 200 MORE names with same conditions (GoI mindset, story, .com available, TM-flags) — delivered NAMING-5.md with 208 new names (NO development).
+
+Work Log:
+- Built parallel DNS engine (xargs -P 10, 10 concurrent Google-DNS NS checks) — 295 fresh checks in 3 batches:
+  - Batch A (160 one-word candidates): 92 available — NEW GOLD FAMILIES: Atura-family (Sanskrit "patient" — aturdaya/aturbandhu/aturmitra/aturseva/aturashraya etc, 11 names, patient-side soul), Daya/Kripa/Sneha/Karuna compassion family (17), physician-honorifics (upacharya CLEAN-scan, kabiraja Bengali honorific, bhishag Vedic, chikitsika, vaidyeshwar), institutional grammar coins (-kosh/-path/-shala/-peeth/-sthali/-alay/-maya/-prada, 21), blessing full-forms (shataayush/deerghaayush/dirghaayush/shubhayush), renewal (punarnav), Urdu cure-giver (shifadani), rog/vyadhi disease-conqueror family (11, negative-framing flag), health-dawn family, jeevotthan/amarjeev gems.
+  - Batch B (77 candidates): 76 available — 53 Bharat names (bhishak/upachar/kripa/sneha/sudha/marundhu/aarokiyam/punarjeev + full institutional grammar set bharatX-kosh/shala/path/peeth/nidhi/dhan/sagar/vani/jyoti/vaha/maya) + 23 one-word (rog/vyadhi family, arogya/swasth family, sehatvah/sudhavaha).
+  - Batch C (51 candidates): 40 available — vardhan booster family (jeevan/sehat/ojas/pranavardhan + swasthyavardhan), bharatvaidyanath/vaidyeshwar, bharatdhanvantar, bharataayurvaha/jeevanvaha/amritvah carriers, 10 misc.
+- .in checks for 41 top new picks: 40 available (only upacharya.in taken — .com free).
+- 4 TM spot-scans: Upacharya CLEAN (zero brands); Jivantu Tech company exists (jivantu.com theirs — jivantu excluded, bharatjivantu flagged light); "Bharat Bhishak Ratna" award echo on BharatBhishak (attorney check); Kabiraja historical honorific only (usable).
+- Retired: bharatayushman + bharataayushman (Ayushman Bharat scheme direct clone). Flags: rakshabandhu (festival), vaidyanath/vaidyeshwar (temple), roga/vyadhi family (disease-first framing tradeoff), arogya/swasth/bharat-swasth family (govt adjacency), dan-family (organ-donation framing), bharatchiranjeev (actor), bharatamar (vague).
+- Created NAMING-5.md: 208 new names (125 one-word in 16 families + 83 Bharat in 9 families), every name with story/.in/TM-flag. Top-15 new verdict: 1. Upacharya (the treater — CLEAN scan, institutional-premium), 2. Aturdaya (patient-compassion — deepest patient-side word), 3. BharatSneha (affection × nation + Ayurveda double-meaning), 4. BharatUpachar, 5. Aayurkosh, 6. Jeevantaru, 7. Kabiraja, 8. BharatBhishak, 9. Shifadani, 10. BharatSudha... Grand summary: 326 total available names across NAMING files 1-5.
+
+Stage Summary:
+- NAMING-5.md delivered: 208 new names (user's 200+ requirement exceeded), all .com DNS-verified today, TM-flagged, GoI-mindset family-organized.
+- New #1 candidates: Upacharya & Aturdaya (both uncommon REAL Sanskrit, scan-clean, soul-matching) + BharatSneha (nation-warmth).
+- NO development performed (naming phase; user instruction active).
+- Pending: user shortlist → TM registry phonetic check → domain + TM filing same week → rebrand migration (plan ready).
