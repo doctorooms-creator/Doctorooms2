@@ -7178,3 +7178,29 @@ Stage Summary:
 - New #1 candidates: Upacharya & Aturdaya (both uncommon REAL Sanskrit, scan-clean, soul-matching) + BharatSneha (nation-warmth).
 - NO development performed (naming phase; user instruction active).
 - Pending: user shortlist → TM registry phonetic check → domain + TM filing same week → rebrand migration (plan ready).
+
+---
+Task ID: BRANDING-1
+Agent: Main (orchestrator, Z.ai)
+Task: User LOCKED "AturSeva" as final brand name and asked for detailed Gemini logo prompts (act as logo designer) — delivered LOGO-PROMPTS.md + 5 generated sample assets (NO app development).
+
+Work Log:
+- Confirmed AturSeva in NAMING-5.md A1 ATURA-family (story: atura = patient + seva = selfless service, .in ✅, TM 🟢).
+- Designed full logo brief as designer: brand decode (trust × warmth paradox → "Teal structure + Saffron soul" formula), 4-piece logo system (icon / full lockup / horizontal / dark), 3 color palettes (recommended Teal #0F766E + Saffron #F59E0B + Ink #1F2937; alt green+gold; alt terracotta), typography spec (Poppins/Sora camelCase).
+- Created LOGO-PROMPTS.md with 5 concept prompts (1 Seva-Hasta palm+pulse = designer's pick, 2 Diya-Pulse, 3 Devanagari अ monogram, 4 Lotus-Cross, 5 Chakra-Ring) + lockup prompts (icon-only/horizontal/dark) + Gemini step-by-step workflow + retry tips + post-production checklist + 5 tagline options.
+- Generated 5 sample images via z-ai image CLI into public/brand/:
+  - aturseva-concept1-sevahasta.png (full lockup) — VLM QA: spelling ✓, style 5/10 (gradients/busy)
+  - aturseva-concept2-diyapulse.png (full lockup) — VLM QA: spelling ✓, 4/10 (shadows/arrow clutter)
+  - aturseva-concept3-monogram.png — VLM QA: TEXT FAIL ("A & S Health Care" — AI-text bug proof)
+  - aturseva-icon-sevahasta-clean.png (icon-only refined) — 4/10 (busy)
+  - aturseva-icon-diya-clean.png (icon-only refined) — 7/10 STRONG (bold silhouette, readable, mostly flat)
+- VLM QA loop proved the warned AI-text failure mode live; refined icon-only prompts scored diya 7/10.
+- Fixed dev server: node_modules was broken (MODULE_NOT_FOUND next) → bun install (961 pkgs) → .zscripts/dev.sh restart → HOME:200 + /brand/*.png:200 verified.
+- Committed LOGO-PROMPTS.md + public/brand/ + worklog; pushed origin main.
+
+Stage Summary:
+- Brand name LOCKED: AturSeva (अतुरसेवा). LOGO-PROMPTS.md = master deliverable with copy-paste Gemini prompts.
+- 5 sample concepts at /brand/*.png (preview-panel accessible); Diya icon = best current draft (7/10).
+- Key learning documented: AI text rendering unreliable → generate icon-only + add wordmark manually in Figma (Poppins SemiBold).
+- Next: user picks concept in Gemini → vectorize (vectorizer.ai) → favicon/app-icon exports → TM device-mark filing with wordmark, same week as domain.
+- Still NO app development (naming/branding phase; user instruction active). Rebrand migration plan ready when user says go.
