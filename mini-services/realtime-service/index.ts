@@ -149,6 +149,8 @@ const VALID_EVENTS = [
   'queue-paused',
   'referral-reward',
   'celebration',
+  'med-reminder',
+  'dose-missed',
 ] as const
 type ValidEvent = (typeof VALID_EVENTS)[number]
 
@@ -498,6 +500,39 @@ setTimeout(() => void runReferralDailyCron(), 45_000)
 setInterval(() => {
   if (Date.now() - lastCronRun > 20 * 60 * 60 * 1000) void runReferralDailyCron()
 }, 6 * 60 * 60 * 1000)
+
+// ═══════════════════════════════════════════════════════════════════════
+// Sevika medication-reminder ticker (AI-NURSE-PLAN.md §2.3)
+// Every 5 min: POST /api/cron/sevika-tick on the app. The endpoint does all
+// the work (idempotent) — this loop is just the nurse's quartz heartbeat.
+// ═══════════════════════════════════════════════════════════════════════
+const SEVIKA_TICK_URL =
+  process.env.SEVIKA_TICK_URL || 'http://localhost:3000/api/cron/sevika-tick'
+
+async function runSevikaTick() {
+  try {
+    const r = await fetch(SEVIKA_TICK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(CRON_SECRET ? { 'x-cron-secret': CRON_SECRET } : {}),
+      },
+    })
+    const data = (await r.json().catch(() => ({}))) as Record<string, unknown>
+    const reminded = (data.reminded as number) || 0
+    const missed = (data.missed as number) || 0
+    // Only log when something actually happened (keeps logs clean)
+    if (reminded || missed) {
+      console.log(`[Sevika] tick → ${reminded} reminded, ${missed} missed`)
+    }
+  } catch {
+    // App restarting / not up yet — non-fatal, next tick retries.
+  }
+}
+
+setTimeout(() => void runSevikaTick(), 60_000) // first tick 1 min after boot
+setInterval(() => void runSevikaTick(), 5 * 60 * 1000) // then every 5 min
+console.log(`[Sevika] med-reminder ticker enabled — ${SEVIKA_TICK_URL} every 5m`)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Self keep-alive ping (Render free-tier spin-down protection)

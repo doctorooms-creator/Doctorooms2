@@ -96,6 +96,7 @@ export const sidebarConfig: RoleSidebarMap = {
   patient: [
     { label: 'Dashboard', href: '/dashboard/patient', icon: LayoutDashboard },
     { label: 'Appointments', href: '/dashboard/patient/appointments', icon: CalendarDays },
+    { label: 'Sevika — Dawai Reminders', href: '/dashboard/patient/sevika', icon: Pill },
     { label: 'Health Records', href: '/dashboard/patient/health-records', icon: Heart },
     { label: 'My Lab Reports', href: '/dashboard/patient/reports', icon: FileText },
     { label: 'Medical History', href: '/dashboard/patient/medical-history', icon: History },

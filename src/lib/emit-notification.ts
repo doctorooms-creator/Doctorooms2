@@ -50,6 +50,9 @@ type EventType =
   // Celebration moments (roadmap) — full-screen confetti overlay for BIG wins:
   // milestone unlocks, champion badge, redeem success, Rx #50, patient #100.
   | 'celebration'
+  // Sevika — AI Nurse (AI-NURSE-PLAN.md): medication reminders + miss follow-ups.
+  | 'med-reminder'
+  | 'dose-missed'
 
 const VALID_EVENTS: EventType[] = [
   'new-admission',
@@ -80,6 +83,8 @@ const VALID_EVENTS: EventType[] = [
   'queue-paused',
   'referral-reward',
   'celebration',
+  'med-reminder',
+  'dose-missed',
 ]
 
 const EMIT_URL = `${process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006'}/emit`
@@ -295,6 +300,14 @@ const EVENT_TITLES: Record<EventType, { title: string; messageFn: (p: Record<str
   'celebration': {
     title: 'Celebration',
     messageFn: (p) => `${p.message || p.title || 'A big milestone unlocked!'}`,
+  },
+  'med-reminder': {
+    title: 'Medicine Reminder',
+    messageFn: (p) => `${p.message || 'Dawai ka samay ho gaya hai.'}`,
+  },
+  'dose-missed': {
+    title: 'Dose Missed',
+    messageFn: (p) => `${p.message || 'Ek dose miss ho gayi — jab yaad aaye le lijiye.'}`,
   },
 }
 

@@ -7225,3 +7225,44 @@ Stage Summary:
 - No code/schema/API touched. Development awaits user GO.
 - Feature can reuse all in-house skills (LLM/VLM/TTS/ASR); zero new vendor for MVP.
 - Next pending decisions from user: logo concept pick (Gemini), AI-nurse GO signal, TM filing week.
+
+---
+Task ID: SEVIKA-1 (P1 MVP)
+Agent: Main (orchestrator, Z.ai)
+Task: User gave GO for AI Nurse (Sevika) P1 MVP from AI-NURSE-PLAN.md — built the full medication-reminder feature (deterministic scheduler + AI diet card). This session resumed from a dropped write (src/lib/sevika/schedule.ts had never been written; schema/models were already committed by reviewer as eff09c7).
+
+Work Log:
+- Recovered environment: bun install (realtime-service deps), fixed nothing in schema (already had SevikaSchedule/SevikaDose/SevikaDietPlan + User relations), reseeded DB earlier (27 users), started all services via start-all.sh (Next.js :3000 + realtime-service :3006).
+- Built lib layer:
+  - src/lib/sevika/schedule.ts — slot times (User.settingsJson.sevika, defaults 08:00/14:00/21:00 IST), generateDoses (pre-generates up to 90 days of dose instances, skips past slots), computeAdherence (today/week/streak/score), runSevikaTick (remind due ≤15min → Reminded + notify; overdue >50min → Missed + one gentle follow-up; complete finished schedules). Zero AI in timing — quartz clock, per plan safety rail.
+  - src/lib/sevika/diet.ts — one LLM call (z-ai-web-dev-sdk, thinking disabled) → 7-day Indian diet JSON grounded in active medicines; strict-JSON extraction with brace-slicing; deterministic FALLBACK_PLAN if AI unavailable; disclaimer always attached; SevikaDietPlan row stored.
+- Events: added 'med-reminder' + 'dose-missed' to emit-notification.ts (EventType, VALID_EVENTS, EVENT_TITLES) AND realtime-service VALID_EVENTS.
+- API routes (all requireRole(req,'patient') unless noted):
+  - GET /api/dashboard/patient/sevika/today — doses+medicines+adherence+diet+slotTimes in one call
+  - GET/POST /api/dashboard/patient/sevika/schedules — list with progress / create (zod v4, ≥1 slot required)
+  - PATCH/DELETE /api/dashboard/patient/sevika/schedules/[id] — stop (deletes future pending doses) / resume (regenerates remaining days)
+  - PATCH /api/dashboard/patient/sevika/doses/[id] — taken/skipped/snooze(+10min, back to Pending)
+  - GET/POST /api/dashboard/patient/sevika/diet — latest / regenerate (maxDuration 60)
+  - POST /api/dashboard/patient/sevika/import — Rx import (ownership via booking.userId; PMedicine morning/afternoon/evening → slots)
+  - GET/PUT /api/dashboard/patient/sevika/times — HH:MM slot times
+  - POST/GET /api/cron/sevika-tick — ticker heartbeat (x-cron-secret/Bearer; DEV_MODE=1 allows without secret)
+- FIX (QA-caught): src/proxy.ts PUBLIC_API_PATTERNS was 401-blocking /api/cron/sevika-tick before the route ran — added it beside referral-daily.
+- Realtime-service: added 5-min Sevika ticker (first tick 60s after boot) POSTing the cron endpoint; logs only when reminded/missed > 0.
+- Frontend: src/app/dashboard/patient/sevika/{page,client}.tsx — header w/ nurse branding, 4 stat cards (today, streak, 7-day score, active meds), today timeline grouped सुबह/दोपहर/रात with dose cards (Le Li ✓ / 10m snooze / Skip), Meri Dawaiya list, AI Diet Plan card (Din 1-7 tabs, meals, disclaimer), Add-Medicine dialog, Rx-Import dialog (duration 3/5/7/10 din, medicine chips), Slot-Times dialog. Sidebar entry "Sevika — Dawai Reminders" (Pill icon) added to patient config. TanStack Query + sonner toasts + framer-motion + teal theme + dark-mode classes + mobile responsive.
+- QA (agent-browser, logged in as Rahul Verma patient):
+  - today endpoint: empty state ✓ → added Paracetamol (1-0-1, 2 din) → 4 doses generated, 2 today ✓
+  - dose taken via button → status Taken + toast ✓
+  - ticker: moved evening dose dueAt to past → manual /api/cron/sevika-tick → {"reminded":1}, Notification row "💊 Paracetamol 500mg — रात | … — Sevika, aapki nurse 🩺", dose → Reminded ✓
+  - diet POST → real LLM output (usedFallback:false): "Rahul ji, simple Indian food with medicines…" 7 days, meals rendered, Din tabs switch ✓
+  - Add Medicine dialog → "Azithromycin 250mg add ho gayi — 15 reminders set! 💊" ✓
+  - Import: finalized Rahul's seeded Rx in DB (Draft→Completed) → dialog lists it → Import → "1 medicines import ho gayi — 5 reminders set! 💊", Propranolol appears in timeline + meds list ✓
+  - snooze API → Pending + dueAt+10min ✓; times PUT → 07:30/14:00/21:30 saved ✓
+  - mobile 375px snapshot ✓, dev.log zero errors, lint clean (exit 0)
+- Known notes: browser shows dose times in local tz (IST users see IST correctly); realtime auto-tick fires every 5 min (proven via manual tick); NOTIFICATION_SERVICE_URL still points at legacy :3005 in .env but emit-notification falls back to :3006 default only when unset — left as-is (pre-existing).
+
+Stage Summary:
+- Sevika P1 MVP COMPLETE and browser-verified: prescription/manual medicine add → dose pre-generation → 5-min ticker → in-app notifications → take/snooze/skip + adherence stats + AI diet card + Rx import.
+- Architecture honors AI-NURSE-PLAN.md: AI only for diet/nudges; timing 100% deterministic; one-follow-up spam cap; doctor-consult disclaimer on diet.
+- Test data in DB: Rahul has Paracetamol + Azithromycin + imported Propranolol schedules + AI diet plan (useful for reviewer QA).
+- Next phases (user GO needed): P2 photo-RX VLM parse + doctor adherence dashboard alerts; P3 Sevika chat + adaptive reschedule; P4 WhatsApp/voice.
+- Pending brand ops: logo concept pick, TM filing week, rebrand migration.

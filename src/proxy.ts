@@ -99,6 +99,7 @@ const PUBLIC_API_PATTERNS = [
   //   /api/cron/*       → x-cron-secret header (shared via .env, never public)
   //   /api/webhooks/*   → HMAC-SHA256 signature verification
   '/api/cron/referral-daily',
+  '/api/cron/sevika-tick',
   '/api/webhooks/razorpay',
   // Public referral endpoints (masked/limited data — landing + register badge
   // + leaderboard social proof; anonymous visitors need these)

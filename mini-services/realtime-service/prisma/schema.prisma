@@ -7,7 +7,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  // Dev sandbox: SQLite (DATABASE_URL=file:...db/custom.db).
+  // Prod (Supabase/Render): flip provider to "postgresql" — schema has zero
+  // Json fields / @db.* attrs / arrays, so it is fully portable both ways.
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -45,6 +48,9 @@ model User {
   labTechnicianProfile       LabTechnician?              @relation("LabTechUser")
   medicalDocuments           MedicalDocument[]
   notifications              Notification[]
+  sevikaSchedules            SevikaSchedule[]
+  sevikaDoses                SevikaDose[]
+  sevikaDietPlans            SevikaDietPlan[]
   opdBills                   OpdBill[]
   posts                      Post[]
   assistedPrescriptions      Prescription[]              @relation("PrescriptionAssistant")
@@ -120,6 +126,7 @@ model Doctor {
   recallCampaigns          RecallCampaign[]
   tableTemplates           TableTemplateMaster[]
   packInstalls             DoctorPackInstall[]
+  rxFavorites              RxFavorite[]
 
   // SECURITY (P4.7): Add indexes for doctor search/filter queries.
   @@index([specialization])
@@ -143,6 +150,61 @@ model DoctorPackInstall {
   doctor        Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 
   @@unique([doctorId, packCode])
+  @@index([packCode])
+}
+
+// ── RX wizard favorites/pinning (P3) ────────────────────────────────────────
+// Doctor explicitly pins their most-used complaints & medicines so the RX
+// wizard shows a one-tap quick row at the top of steps 1 & 4. "Most
+// prescribed" sections are derived live from PCo/PMedicine history — this
+// table only stores the explicit pins.
+model RxFavorite {
+  id        String   @id @default(cuid())
+  doctorId  String
+  kind      String // 'complaint' | 'medicine'
+  refId     String // CoMaster.id (complaint) | DoctorMedicine.id (medicine)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, kind, refId])
+  @@index([doctorId, kind])
+}
+
+// ── Specialty pack dose-review workflow (P3) ──────────────────────────────
+// An MBBS reviewer works through every pack medicine and records a verdict.
+// When ALL medicines of a pack are verified, the pack is marked reviewed
+// (PackReview.status='reviewed') — doctor-facing amber "unverified dose"
+// badges flip to green, and installed DoctorMedicine rows get the
+// ' · UNVERIFIED DOSE' description note stripped.
+
+model PackReview {
+  id             String    @id @default(cuid())
+  packCode       String    @unique
+  status         String    @default("pending") // pending | in_progress | needs_changes | reviewed
+  reviewedByName String? // MBBS reviewer name stamped on completion
+  reviewedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  medicines      PackMedicineReview[]
+}
+
+model PackMedicineReview {
+  id           String    @id @default(cuid())
+  packCode     String
+  medicineName String
+  verdict      String    @default("pending") // pending | verified | needs_change
+  notes        String? // reviewer's correction note (required for needs_change)
+  reviewedById String? // admin/reviewer User id
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  packReview   PackReview @relation(fields: [packCode], references: [packCode], onDelete: Cascade)
+
+  @@unique([packCode, medicineName])
   @@index([packCode])
 }
 
@@ -2406,4 +2468,70 @@ model RecallCampaignRecipient {
 
   @@index([campaignId])
   @@index([patientId])
+}
+
+// ─── Sevika — AI Nurse (AturSeva rebrand, AI-NURSE-PLAN.md) ────────────────
+// Deterministic medication-reminder core: patient adds a medicine schedule
+// (manually or imported from a doctor's Rx) → dose instances are pre-generated
+// → a ticker (realtime-service, every 5 min) fires in-app notifications at due
+// time. AI is used ONLY for the diet card (one LLM call) — never for dose
+// timing (safety rail from AI-NURSE-PLAN.md).
+
+model SevikaSchedule {
+  id             String   @id @default(cuid())
+  userId         String
+  medicineName   String
+  dose           String   @default("") // e.g. "1 tablet (500mg)"
+  instructions   String   @default("") // e.g. "khane ke baad", water intake notes
+  morning        Int      @default(0) // 1 = dose in morning slot
+  afternoon      Int      @default(0)
+  evening        Int      @default(0)
+  durationDays   Int      @default(1)
+  startDate      DateTime @default(now())
+  status         String   @default("Active") // Active | Completed | Stopped
+  source         String   @default("Manual") // Manual | Prescription
+  prescriptionId String? // optional link when imported from a doctor's Rx
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  doses  SevikaDose[]
+
+  @@index([userId, status])
+  @@index([startDate])
+}
+
+model SevikaDose {
+  id            String         @id @default(cuid())
+  scheduleId    String
+  userId        String
+  slot          String // morning | afternoon | evening
+  dueAt         DateTime
+  windowMinutes Int            @default(45) // grace window before auto-miss
+  status        String         @default("Pending") // Pending | Reminded | Taken | Skipped | Snoozed | Missed
+  remindedAt    DateTime?
+  actionAt      DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  schedule SevikaSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dueAt])
+  @@index([status, dueAt])
+  @@index([scheduleId, status])
+}
+
+model SevikaDietPlan {
+  id               String   @id @default(cuid())
+  userId           String
+  medicinesSummary String   @default("") // input snapshot (medicine list the plan was generated from)
+  planJson         String   @default("{}") // structured LLM output: day-wise meals + notes
+  aiGenerated      Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
