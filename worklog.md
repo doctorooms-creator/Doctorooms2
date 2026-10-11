@@ -7204,3 +7204,24 @@ Stage Summary:
 - Key learning documented: AI text rendering unreliable → generate icon-only + add wordmark manually in Figma (Poppins SemiBold).
 - Next: user picks concept in Gemini → vectorize (vectorizer.ai) → favicon/app-icon exports → TM device-mark filing with wordmark, same week as domain.
 - Still NO app development (naming/branding phase; user instruction active). Rebrand migration plan ready when user says go.
+
+---
+Task ID: ARCH-1
+Agent: Main (orchestrator, Z.ai)
+Task: User proposed "AI Personal Nurse" concept (prescription → auto medication reminders morning/afternoon/night + AI diet recommendations + nurse-like behavior; asked if agent or another approach) — delivered AI-NURSE-PLAN.md feasibility/architecture doc. NO development (explicit user instruction).
+
+Work Log:
+- Analyzed feasibility: YES possible; core insight documented — "AI for understanding (parse/diet/chat), cron for timing (reminders)" — pure autonomous agent REJECTED for reminder core (cost/latency/hallucination = medical risk), hybrid architecture chosen.
+- Designed end-to-end flow: (1) doctor prescribes (structured form OR paper RX photo), (2) AI parse layer (VLM+LLM, one-time, doctor-confirm human-in-loop), (3) deterministic schedule engine (frequency→dose instances on patient wake/lunch/sleep times, beforeFood=30min prior, duration pre-generation), (4) reminder ticker (cron every 5min, mini-service or Vercel cron, ₹0 LLM-free), (5) patient actions (taken/snooze/skip → adherence events), (6) AI Dil layer (empathetic skip-nudges, weekly LLM report, context-grounded nurse chat).
+- Documented 4 AI touchpoints (RX parse, diet plan, nudges, nurse chat) all mapped to available skills (LLM/VLM/TTS/ASR via z-ai-web-dev-sdk backend-only).
+- Prisma data model sketch: Prescription/PrescriptionItem/DoseInstance/AdherenceEvent/DietPlan/NurseChatSession/PatientProfile (7 models, design only — NOT pushed to schema).
+- Safety rails: LLM never changes dose/timing; diet plan doctor-approve flow; 3-consecutive-miss rule-based doctor alert; spam caps.
+- Phased rollout: P1 MVP reminders+diet card (~2-3 sessions) → P2 photo-RX+adherence → P3 Sevika chat+adaptive reschedule → P4 WhatsApp+voice. Competitive edge vs Medisafe/Practo documented.
+- Working title for feature: "Sevika" (sub-brand "Sevika by AturSeva" — NAMING-5 family-consistent).
+- Created AI-NURSE-PLAN.md; committed + pushed.
+
+Stage Summary:
+- AI-NURSE-PLAN.md = complete design blueprint for user's AI-nurse idea; architecture locked conceptually (hybrid: deterministic scheduler core + AI edges).
+- No code/schema/API touched. Development awaits user GO.
+- Feature can reuse all in-house skills (LLM/VLM/TTS/ASR); zero new vendor for MVP.
+- Next pending decisions from user: logo concept pick (Gemini), AI-nurse GO signal, TM filing week.
