@@ -7266,3 +7266,37 @@ Stage Summary:
 - Test data in DB: Rahul has Paracetamol + Azithromycin + imported Propranolol schedules + AI diet plan (useful for reviewer QA).
 - Next phases (user GO needed): P2 photo-RX VLM parse + doctor adherence dashboard alerts; P3 Sevika chat + adaptive reschedule; P4 WhatsApp/voice.
 - Pending brand ops: logo concept pick, TM filing week, rebrand migration.
+
+---
+Task ID: SEVIKA-2 (P2 "Samajhne wali nurse")
+Agent: Main (orchestrator, Z.ai)
+Task: User GO ("Go ahead") for AI-NURSE-PLAN.md P2 — built photo-RX VLM parse + weekly report card + doctor adherence board on top of the completed P1 MVP.
+
+Work Log:
+- Lib layer:
+  - src/lib/sevika/rx-parse.ts — ONE createVision call (thinking disabled) reads paper-Rx / medicine-strip photos → strict-JSON draft list (name, dose, 1/0 slot flags, durationDays ≤30, instructions, isSos). Defensive normalisation: drops unreadable rows, frequency-string fallback decode (TDS/BD/OD), caps 12 meds. NEVER writes DB — patient confirms first (plan safety rail §2.1). Graceful Hinglish failure reasons, never fake data.
+  - src/lib/sevika/weekly-report.ts — deterministic IST day-wise bucketing (pure SQL, zero AI) + ONE LLM call → 3-line warm Hinglish nurse narrative; in-memory per-user cache 12h; deterministic fallback narratives by score band; streak/best/worst day computed in code.
+- Patient API routes (requireRole 'patient'):
+  - POST /api/dashboard/patient/sevika/parse-photo (zod: imageBase64 + mimeType enum; maxDuration 60)
+  - GET /api/dashboard/patient/sevika/weekly-report[?refresh=1] (maxDuration 60; refresh bypasses 12h narrative cache)
+- Doctor API route (requireRole 'doctor'):
+  - GET /api/dashboard/doctor/sevika/adherence — patients via bookings (ownership rail) + grouped Sevika stats. Escalation flags (plan §2.5): critical = ≥3 Missed in 48h; attention = week score <50% w/ ≥4 decided doses. Worst-first sort (critical → attention → score asc; Sevika-inactive patients to tail). Summary block (totalPatients/onSevika/critical/attention/avgScore).
+- Frontend:
+  - Patient sevika/client.tsx (+554 lines): "Photo se Add" header button + EmptyTimeline CTA; PhotoRxDialog — file picker (capture=environment) → client-side canvas downscale to ≤1600px JPEG → preview → "Padhna Shuru Karein" → editable draft rows (name/dose/duration/slot chips/SOS info rows/remove) → confirm creates schedules sequentially → toast "3 dawaiyaan add ho gayi — 26 reminders set!". WeeklyReportCard — score + streak + best/worst day, 7 animated day bars (emerald→rose by pct), 🩺 narrative panel w/ AI badge + doctor-consult line, "Nayi Report" refresh button.
+  - Doctor /dashboard/doctor/sevika (page + client, 443 lines) — summary stats (Total/On Sevika/Critical/Avg Score), search + filter chips (Sab/Critical/Attention/Pill on), patient cards: avatar, 3+miss/low-adherence badges, score bar, expandable detail grid (48h missed, week missed, skipped, streak-risk), auto-expanded red "Rule-based alert … call karke doses confirm karna" panel for critical, active-medicine chips, last-dose relative time.
+  - Sidebar: "Patient Adherence (Sevika)" (Activity icon) added to doctor config after Patients.
+- FIX (QA-caught, CSP): preview <img> silently failed — app CSP img-src lacks blob:. Rewrote pickFile to FileReader.readAsDataURL + canvas (all data: URLs). Also fixed "Dr. Dr. …" double-prefix in parse note.
+- QA (agent-browser, Rahul patient + Dr. Rajesh Sharma doctor):
+  - Photo flow END-TO-END with a generated handwritten-Rx test image (qa-assets/test-rx.png): upload → preview → VLM parse → extracted EXACTLY the 3 meds printed on the Rx (Azithromycin 500mg 1-0-1×5, Paracetamol 650mg 1-1-1×3, Omeprazole 20mg 0-0-1×7) → Confirm → "3 dawaiyaan add ho gayi — 26 reminders set! 💊" → meds appear in timeline + meds list ✓
+  - Hafta Report renders w/ real AI narrative (narrativeAI:true), day bars, streak; ?refresh=1 regenerates fresh narrative ✓
+  - Doctor board: 4 patients, Rahul 6 active meds 67%→33% (after sim), On Sevika 1; simulated 3 missed doses in 48h → API flag critical + summary critical:1 → UI "🔴 Critical (1)" chip + badge + auto-expanded alert panel ✓
+  - Mobile 375px screenshots (qa-assets/{doctor-mobile,patient-sevika-mobile,doctor-critical,doctor-adherence}.png) ✓
+  - Dev server crashed mid-QA (process died, no error in log) — restarted, all re-verified. lint CLEAN (0 errors, 0 warnings), dev.log zero app errors.
+- Test data note: Rahul has 4 extra simulated Missed doses (QA escalation test) — realistic-looking adherence history for reviewer QA.
+
+Stage Summary:
+- Sevika P2 COMPLETE and browser-verified: photo-RX VLM parse (confirm-first) + weekly AI report card + doctor adherence board with 3-miss escalation flags.
+- Safety rails honored: VLM never invents (unreadable rows dropped, SOS excluded from scheduling), patient confirms before any schedule is created, doctor-consult disclaimer on report card, deterministic flags.
+- All AI calls server-side z-ai-web-dev-sdk; timing remains 100% deterministic (P1 engine untouched).
+- Next phases (user GO needed): P3 Sevika chat (context-grounded) + adaptive reschedule + empathetic nudges; P4 WhatsApp/voice.
+- Pending brand ops: logo concept pick, TM filing week, rebrand migration.

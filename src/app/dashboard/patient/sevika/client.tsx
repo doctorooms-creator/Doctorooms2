@@ -2,17 +2,20 @@
 
 /**
  * Sevika — AI Nurse home screen (patient side).
- * AI-NURSE-PLAN.md P1 MVP: today's dose timeline + adherence stats +
- * add/import medicines + AI diet card + personalised slot times.
+ * AI-NURSE-PLAN.md P1 MVP + P2: today's dose timeline + adherence stats +
+ * add/import medicines + AI diet card + personalised slot times +
+ * photo-RX VLM parse (P2) + weekly report card (P2).
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { format } from 'date-fns'
 import {
   Activity,
   AlertCircle,
+  BarChart3,
+  Camera,
   Check,
   Clock,
   Flame,
@@ -115,6 +118,45 @@ interface PrescriptionRow {
   medicines: { id: string; medicine: string; morning: number; afternoon: number; evening: number }[]
 }
 
+// P2: photo-RX parse draft (VLM extracted, patient confirms before saving)
+interface DraftMedicine {
+  name: string
+  dose: string
+  morning: number
+  afternoon: number
+  evening: number
+  durationDays: number
+  instructions: string
+  isSos: boolean
+}
+
+// P2: weekly report card
+interface WeekDayRow {
+  date: string
+  dateISO: string
+  total: number
+  taken: number
+  missed: number
+  skipped: number
+  pct: number
+}
+
+interface WeeklyReportData {
+  generatedAt: string
+  weekTotal: number
+  weekTaken: number
+  weekMissed: number
+  weekSkipped: number
+  scorePct: number
+  streakDays: number
+  bestDay: string | null
+  worstDay: string | null
+  days: WeekDayRow[]
+  medicines: string[]
+  narrative: string
+  narrativeAI: boolean
+}
+
 const SLOT_META: Record<string, { hi: string; icon: string; timeKey: 'morning' | 'afternoon' | 'evening' }> = {
   morning: { hi: 'सुबह', icon: '🌅', timeKey: 'morning' },
   afternoon: { hi: 'दोपहर', icon: '☀️', timeKey: 'afternoon' },
@@ -129,6 +171,7 @@ export default function PatientSevikaClient() {
   const [addOpen, setAddOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [timesOpen, setTimesOpen] = useState(false)
+  const [photoOpen, setPhotoOpen] = useState(false)
 
   const {
     data,
@@ -222,6 +265,9 @@ export default function PatientSevikaClient() {
           <Button variant="outline" size="sm" onClick={() => setTimesOpen(true)}>
             <Settings2 className="mr-1 h-4 w-4" /> Time Settings
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setPhotoOpen(true)}>
+            <Camera className="mr-1 h-4 w-4" /> Photo se Add
+          </Button>
           <Button
             size="sm"
             className="bg-teal-600 text-white hover:bg-teal-700"
@@ -294,7 +340,11 @@ export default function PatientSevikaClient() {
                 <Skeleton key={i} className="h-24 rounded-xl" />
               ))
             ) : todayDoses.length === 0 ? (
-              <EmptyTimeline onAdd={() => setAddOpen(true)} onImport={() => setImportOpen(true)} />
+              <EmptyTimeline
+                onAdd={() => setAddOpen(true)}
+                onImport={() => setImportOpen(true)}
+                onPhoto={() => setPhotoOpen(true)}
+              />
             ) : (
               SLOT_ORDER.map((slot) => {
                 const doses = bySlot[slot] || []
@@ -385,6 +435,9 @@ export default function PatientSevikaClient() {
             </CardContent>
           </Card>
 
+          {/* P2: weekly report card */}
+          <WeeklyReportCard />
+
           {/* AI Diet plan */}
           <Card>
             <CardHeader className="pb-3">
@@ -436,6 +489,7 @@ export default function PatientSevikaClient() {
 
       {/* ── Dialogs ── */}
       <AddMedicineDialog open={addOpen} onOpenChange={setAddOpen} onDone={invalidate} />
+      <PhotoRxDialog open={photoOpen} onOpenChange={setPhotoOpen} onDone={invalidate} />
       <ImportPrescriptionDialog
         open={importOpen}
         onOpenChange={setImportOpen}
@@ -589,7 +643,15 @@ function DoseCard({
   )
 }
 
-function EmptyTimeline({ onAdd, onImport }: { onAdd: () => void; onImport: () => void }) {
+function EmptyTimeline({
+  onAdd,
+  onImport,
+  onPhoto,
+}: {
+  onAdd: () => void
+  onImport: () => void
+  onPhoto: () => void
+}) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed py-10 text-center">
       <span className="text-4xl">🩺</span>
@@ -600,9 +662,12 @@ function EmptyTimeline({ onAdd, onImport }: { onAdd: () => void; onImport: () =>
           Sevika time pe yaad dilayegi.
         </p>
       </div>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap justify-center gap-2">
         <Button size="sm" className="bg-teal-600 text-white hover:bg-teal-700" onClick={onAdd}>
           <Plus className="mr-1 h-4 w-4" /> Dawai Add Karein
+        </Button>
+        <Button size="sm" variant="outline" onClick={onPhoto}>
+          <Camera className="mr-1 h-4 w-4" /> Rx ki Photo
         </Button>
         <Button size="sm" variant="outline" onClick={onImport}>
           <Upload className="mr-1 h-4 w-4" /> Rx Import
@@ -1009,5 +1074,500 @@ function SlotTimesDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ============ P2: PHOTO-RX DIALOG (VLM parse → patient confirms) ============
+
+function PhotoRxDialog({
+  open,
+  onOpenChange,
+  onDone,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  onDone: () => void
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [preview, setPreview] = useState<string | null>(null) // dataURL (display)
+  const [imageBase64, setImageBase64] = useState<string | null>(null)
+  const [mimeType, setMimeType] = useState('image/jpeg')
+  const [parsing, setParsing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [note, setNote] = useState('')
+  const [drafts, setDrafts] = useState<DraftMedicine[] | null>(null)
+
+  const reset = () => {
+    setPreview(null)
+    setImageBase64(null)
+    setDrafts(null)
+    setNote('')
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  const pickFile = (f: File | null) => {
+    if (!f) return
+    if (!f.type.startsWith('image/')) {
+      toast.error('Sirf photo upload karein (JPG / PNG)')
+      return
+    }
+    // CSP note: the app's img-src allows data: but NOT blob:, so we read the
+    // file via FileReader (data URL) and downscale through a canvas — every
+    // image in this flow stays a data: URL.
+    const reader = new FileReader()
+    reader.onerror = () => toast.error('Photo load nahi hui — dusri try karein')
+    reader.onload = () => {
+      const raw = typeof reader.result === 'string' ? reader.result : null
+      if (!raw) {
+        toast.error('Photo load nahi hui — dusri try karein')
+        return
+      }
+      const img = document.createElement('img')
+      img.onload = () => {
+        try {
+          const max = 1600
+          const scale = Math.min(1, max / Math.max(img.width, img.height))
+          const canvas = document.createElement('canvas')
+          canvas.width = Math.max(1, Math.round(img.width * scale))
+          canvas.height = Math.max(1, Math.round(img.height * scale))
+          const ctx = canvas.getContext('2d')
+          if (!ctx) throw new Error('canvas')
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+          setPreview(dataUrl)
+          setImageBase64(dataUrl.split(',')[1] || '')
+          setMimeType('image/jpeg')
+          setDrafts(null)
+          setNote('')
+        } catch {
+          toast.error('Photo process nahi hui — dusri photo try karein')
+        }
+      }
+      img.onerror = () => toast.error('Photo load nahi hui — dusri try karein')
+      img.src = raw
+    }
+    reader.readAsDataURL(f)
+  }
+
+  const parse = async () => {
+    if (!imageBase64) return
+    setParsing(true)
+    try {
+      const r = await fetch('/api/dashboard/patient/sevika/parse-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, mimeType }),
+      })
+      const res = await r.json()
+      if (!r.ok) throw new Error(res.error || 'Parse fail ho gaya')
+      setDrafts(res.medicines as DraftMedicine[])
+      const dn = String(res.doctorName || '').replace(/^dr\.?\s*/i, '')
+      const head = dn ? `Dr. ${dn}` : ''
+      setNote([head, res.patientNote].filter(Boolean).join(' — '))
+      toast.success(`${res.medicines.length} dawaiyaan padh li — check karke confirm karein 📋`)
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  const updateDraft = (i: number, patch: Partial<DraftMedicine>) => {
+    setDrafts((p) => (p ? p.map((d, idx) => (idx === i ? { ...d, ...patch } : d)) : p))
+  }
+
+  const toggleSlot = (i: number, slot: 'morning' | 'afternoon' | 'evening') => {
+    setDrafts((p) =>
+      p
+        ? p.map((d, idx) =>
+            idx === i ? { ...d, [slot]: d[slot] === 1 ? 0 : 1, isSos: false } : d
+          )
+        : p
+    )
+  }
+
+  const removeDraft = (i: number) => {
+    setDrafts((p) => (p ? p.filter((_, idx) => idx !== i) : p))
+  }
+
+  const confirm = async () => {
+    if (!drafts) return
+    const schedulable = drafts.filter((d) => d.morning + d.afternoon + d.evening > 0)
+    if (schedulable.length === 0) {
+      toast.error('Kam se kam ek dawai ka slot chuniye (सुबह / दोपहर / रात)')
+      return
+    }
+    setSaving(true)
+    let ok = 0
+    let doses = 0
+    try {
+      for (const d of schedulable) {
+        const r = await fetch('/api/dashboard/patient/sevika/schedules', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            medicineName: d.name,
+            dose: d.dose,
+            instructions: d.instructions,
+            morning: d.morning,
+            afternoon: d.afternoon,
+            evening: d.evening,
+            durationDays: d.durationDays,
+          }),
+        })
+        if (r.ok) {
+          const res = await r.json()
+          ok++
+          doses += res.doses || 0
+        }
+      }
+      if (ok === 0) throw new Error('Koi dawai add nahi ho payi — phir try karein')
+      toast.success(`${ok} dawaiyaan add ho gayi — ${doses} reminders set! 💊`)
+      onOpenChange(false)
+      reset()
+      onDone()
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) reset()
+        onOpenChange(v)
+      }}
+    >
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Camera className="h-4 w-4 text-teal-600" /> Photo se Dawai Add Karein
+          </DialogTitle>
+          <DialogDescription>
+            Prescription ya dawai ke packet ki photo upload karein — AI padh kar
+            draft bana dega, aap confirm kareinge.
+          </DialogDescription>
+        </DialogHeader>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => pickFile(e.target.files?.[0] || null)}
+        />
+
+        {/* STEP 1: pick photo */}
+        {!preview && (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-teal-300 bg-teal-50/50 px-4 py-10 text-center transition-colors hover:bg-teal-50 dark:border-teal-800 dark:bg-teal-950/20 dark:hover:bg-teal-950/40"
+          >
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-teal-600 text-white">
+              <Camera className="h-6 w-6" />
+            </span>
+            <p className="text-sm font-semibold">Photo lein ya choose karein</p>
+            <p className="text-xs text-muted-foreground">
+              Paper prescription / medicine strip — saaf aur seedhi photo behtar padhi jaati hai
+            </p>
+          </button>
+        )}
+
+        {/* STEP 2: preview + parse */}
+        {preview && !drafts && (
+          <div className="space-y-3">
+            <img
+              src={preview}
+              alt="Uploaded prescription preview"
+              className="max-h-64 w-full rounded-xl border object-contain"
+            />
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 bg-teal-600 text-white hover:bg-teal-700"
+                disabled={parsing}
+                onClick={parse}
+              >
+                {parsing ? (
+                  <>
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" /> Padh rahe hain…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-1 h-4 w-4" /> Padhna Shuru Karein
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" disabled={parsing} onClick={() => fileRef.current?.click()}>
+                <RefreshCw className="mr-1 h-4 w-4" /> Badalna
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: review drafts */}
+        {drafts && (
+          <div className="space-y-3">
+            {note && (
+              <p className="rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                📋 {note}
+              </p>
+            )}
+            <p className="flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              AI ne photo se padha hai — galat kuch ho to sudhaar ke hi confirm karein.
+              Reminder sirf aapke confirm karne ke baad set hoga.
+            </p>
+
+            <div className="max-h-[45vh] space-y-3 overflow-y-auto pr-1">
+              {drafts.map((d, i) => (
+                <div key={i} className="rounded-xl border p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <Input
+                      value={d.name}
+                      onChange={(e) => updateDraft(i, { name: e.target.value })}
+                      className="h-8 flex-1 text-sm font-semibold"
+                      aria-label="Medicine name"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeDraft(i)}
+                      className="mt-1 shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
+                      title="Hataayein"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <Input
+                      value={d.dose}
+                      onChange={(e) => updateDraft(i, { dose: e.target.value })}
+                      placeholder="Dose (e.g. 1 tablet)"
+                      className="h-8 text-xs"
+                      aria-label="Dose"
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={d.durationDays}
+                      onChange={(e) =>
+                        updateDraft(i, { durationDays: parseInt(e.target.value) || 1 })
+                      }
+                      placeholder="Din"
+                      className="h-8 text-xs"
+                      aria-label="Duration in days"
+                    />
+                  </div>
+                  {d.isSos ? (
+                    <p className="mt-2 rounded-lg bg-muted/60 px-2 py-1.5 text-[11px] text-muted-foreground">
+                      🆘 SOS dawai — reminder set nahi hoga (zaroorat padne pe leni hai)
+                    </p>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {(['morning', 'afternoon', 'evening'] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => toggleSlot(i, s)}
+                          className={cn(
+                            'rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors',
+                            d[s] === 1
+                              ? 'bg-teal-600 text-white'
+                              : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                          )}
+                        >
+                          {SLOT_META[s].icon} {SLOT_META[s].hi}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <Input
+                    value={d.instructions}
+                    onChange={(e) => updateDraft(i, { instructions: e.target.value })}
+                    placeholder="Instructions (optional) — e.g. khane ke baad"
+                    className="mt-2 h-8 text-xs"
+                    aria-label="Instructions"
+                  />
+                </div>
+              ))}
+              {drafts.length === 0 && (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  Koi dawai draft me nahi bachi.
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 bg-teal-600 text-white hover:bg-teal-700"
+                disabled={saving || drafts.filter((d) => d.morning + d.afternoon + d.evening > 0).length === 0}
+                onClick={confirm}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-1 h-4 w-4 animate-spin" /> Add ho rahi hain…
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-1 h-4 w-4" /> Confirm kar Add Karein
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" disabled={saving} onClick={reset}>
+                <Camera className="mr-1 h-4 w-4" /> Nayi Photo
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ============ P2: WEEKLY REPORT CARD ============
+
+function WeeklyReportCard() {
+  const queryClient = useQueryClient()
+  const [refreshing, setRefreshing] = useState(false)
+
+  const { data, isLoading } = useQuery<WeeklyReportData>({
+    queryKey: ['sevika-weekly'],
+    queryFn: () =>
+      fetch('/api/dashboard/patient/sevika/weekly-report').then(async (r) => {
+        if (!r.ok) throw new Error((await r.json()).error || 'Failed')
+        return r.json()
+      }),
+    staleTime: 10 * 60_000,
+    retry: 1,
+  })
+
+  const refresh = async () => {
+    setRefreshing(true)
+    try {
+      const r = await fetch('/api/dashboard/patient/sevika/weekly-report?refresh=1')
+      if (!r.ok) throw new Error('Report banane me dikkat aayi')
+      await queryClient.invalidateQueries({ queryKey: ['sevika-weekly'] })
+      toast.success('Nayi hafta report taiyar hai 📝')
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const score = data?.scorePct ?? 0
+  const scoreTone =
+    score >= 90
+      ? 'text-emerald-600 dark:text-emerald-400'
+      : score >= 70
+        ? 'text-teal-600 dark:text-teal-400'
+        : score >= 50
+          ? 'text-amber-600 dark:text-amber-400'
+          : 'text-rose-600 dark:text-rose-400'
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center justify-between text-base">
+          <span className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-teal-600" /> Hafta Report
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8"
+            disabled={refreshing || isLoading}
+            onClick={refresh}
+            title="AI se nayi report banwaein"
+          >
+            {refreshing ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1 h-4 w-4" />
+            )}
+            Nayi Report
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-48 rounded-xl" />
+        ) : !data || data.weekTotal === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Is hafte koi dose record nahi hui. Dawai add karein — agli hafte
+            yahan aapka scorecard aayega. 📊
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {/* Score + streak */}
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className={cn('text-3xl font-bold tracking-tight', scoreTone)}>{score}%</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {data.weekTaken}/{data.weekTotal} doses time pe
+                </p>
+              </div>
+              <div className="flex flex-col items-end gap-1 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Flame className="h-3.5 w-3.5 text-amber-500" /> {data.streakDays} din streak
+                </span>
+                {data.bestDay && <span>🏅 Best: {data.bestDay}</span>}
+                {data.worstDay && data.worstDay !== data.bestDay && <span>📉 Kam: {data.worstDay}</span>}
+              </div>
+            </div>
+
+            {/* Day-wise bars */}
+            <div className="flex items-end justify-between gap-1">
+              {data.days.map((d) => {
+                const inactive = d.total === 0
+                const barTone = inactive
+                  ? 'bg-muted'
+                  : d.pct >= 90
+                    ? 'bg-emerald-500'
+                    : d.pct >= 60
+                      ? 'bg-teal-500'
+                      : d.pct >= 30
+                        ? 'bg-amber-500'
+                        : 'bg-rose-500'
+                return (
+                  <div key={d.dateISO} className="flex flex-1 flex-col items-center gap-1">
+                    <span className="text-[9px] font-medium text-muted-foreground">
+                      {d.total > 0 ? `${d.taken}/${d.total}` : '—'}
+                    </span>
+                    <div className="flex h-16 w-full items-end justify-center rounded-md bg-muted/60 dark:bg-muted/30">
+                      <motion.div
+                        initial={{ height: 4 }}
+                        animate={{ height: `${Math.max(6, d.pct)}%` }}
+                        transition={{ duration: 0.5, ease: 'easeOut' }}
+                        className={cn('w-full rounded-md', barTone)}
+                        style={{ maxHeight: '100%' }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground">{d.date}</span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Nurse narrative */}
+            <div className="rounded-xl border border-teal-100 bg-teal-50/60 p-3 dark:border-teal-900 dark:bg-teal-950/30">
+              <p className="text-xs leading-relaxed text-foreground/90">
+                <span className="mr-1" aria-hidden>🩺</span>
+                {data.narrative}
+              </p>
+              <p className="mt-1.5 text-[10px] text-muted-foreground">
+                {data.narrativeAI ? 'Sevika ki taraf se — AI summary' : 'Sevika ki taraf se'} •
+                Koi bhi dawai change karne se pehle doctor se salah lein.
+              </p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
