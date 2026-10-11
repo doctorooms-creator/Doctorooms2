@@ -7120,3 +7120,22 @@ Stage Summary:
 - Domain research delivered — honest answer: free .com doesn't exist; best paths = GoDaddy India ₹1 3-yr deal (UPI) or Spaceship/Cloudflare flat (card).
 - NO development performed (naming/acquisition phase; user instruction active).
 - Next after domain purchase: Vercel DNS point + full rebrand migration (plan ready) + TM Class 5/9/42 check.
+
+---
+Task ID: NAMING-4
+Agent: Main (orchestrator, Z.ai)
+Task: BharatAyu TM-conflict reject ke baad — Govt-of-India-mindset deep naming research with DUAL filter (.com available + trademark clean scan), new file NAMING-3.md (NO development).
+
+Work Log:
+- Accepted user's BharatAyu TM-conflict finding; pivoted to "think like Govt of India" naming with dual filters.
+- Decoded GoI naming patterns into 5 families with TM-risk ratings: blessing-grammar (Ayushman, HIGH risk), Jan- prefix (Jan Dhan, HIGH — govt active), backronyms (BHIM/UMANG/DIKSHA, LOW), mission-words (MEDIUM), uncommon-real Sanskrit (Tejas/NavIC, LOW — sweet spot). Master insight: famous words = conflicted (BharatAyu proof); uncommon-real = trust + ownable.
+- DNS batch: 36 GoI-pattern candidates (.com) → 8 available (jansehat, jivatva, sadaayu, aayuk, saatmya, pranvah, navjiv, chikits).
+- TM web-scans (13 targeted searches via web-search skill): CRITICAL KILLS — JanSehat taken out by "Jan Sehat Setu" govt scheme (Ministry of Labour, Mandaviya, Apr 2026 Pune launch) + Jan Sehat Healthcare company. Jivatva only a Wikipedia philosophy concept (no company); Aayuk only a Canadian place name; Sadaayu/Saatmya/Pranvah no Indian health brand found; Navjiv medium (UK charity + Navjivan Trust echo); Chikits weak-TM (descriptive).
+- Final double-confirm: 7 survivors have .com AND .in ALL AVAILABLE. Variant-leak flags: sadayu.com, satmya.com, pranava.com, jeevatva.com all taken (squatters) — minor typing-leak risk documented.
+- Created NAMING-3.md: Part 0 GoI-pattern decode table + master insight; Part 1 transparent research process; Part 2 seven finalists with deep stories (Sadaayu = "sadā āyu" always-alive Vedic compound with Ayushman grammar; Saatmya = Ayurveda personalization root; Jivatva = state-of-being-alive; Pranvah = prana-carrier bridge story; Aayuk = 5-letter long-lived; Navjiv; Chikits) + backronym bonuses (SADAAYU = Smart Access to Doctors... UMANG-style); verdict Top-3 (Sadaayu > Saatmya > Jivatva); Part 3 trademark DIY steps (tmrsearch.ipindia.gov.in wordmark search, 3 match modes, Classes 5/9/42/44, first-to-file tip — domain + TM same week).
+
+Stage Summary:
+- NAMING-3.md delivered: 7 dual-filter-passed names, all .com+.in free, led by Sadaayu (GoI blessing-grammar × uncommon-real sweet spot) and Saatmya (personalization ka Sanskrit root).
+- Research caught a live govt-scheme conflict (Jan Sehat Setu) — proving the dual-filter process works.
+- NO development performed (naming phase; user instruction active).
+- Pending: user pick → DIY TM registry check → domain + TM filing same week → rebrand migration (plan ready).
