@@ -7358,3 +7358,23 @@ Stage Summary:
 - Deliverable: honest capability report to user (5 questions answered, NOT VERIFIED marked where untested)
 - No files changed except this worklog append; no packages installed; development NOT started per user instruction
 - Recommended (when user says GO): separate sibling folder for landing page with own package.json/port + branch-based promotion into / route
+
+---
+Task ID: preview-solution-investigation
+Agent: Main
+Task: Read-only investigation of user-visible preview solution for separate landing-page workspace (NO development, NO file creation in projects, NO installs)
+
+Work Log:
+- Ran live gateway tests via curl (read-only GETs):
+  - /test-asset.js WITHOUT param -> HTTP 502 (routed to port 3000, currently down) => any relative URL lacking ?XTransformPort lands on port 3000. THE BLOCKER IS LIVE-VERIFIED.
+  - /test-asset.js?XTransformPort=19001 -> HTTP 404 (answered by 19001) => query-param routing to arbitrary ports WORKS live.
+  - Root with param to 19001/19006 -> full responses pass through gateway. VERIFIED.
+- CRITICAL discovery: live caddy runs as root with --config /app/Caddyfile (mode 600, unreadable/unwritable by user z). /home/z/my-project/Caddyfile is only a reference copy. Port 12600 probed — NOT the caddy admin API. => Caddy path-prefix / gateway-config options are INFEASIBLE without platform/root support (NOT VERIFIED any reload/sync mechanism; likely none).
+- Checked cron jobs: BOTH webDevReview jobs (452553 Sevika, 452703 Doctorooms) already platform-disabled ("Disabled due to exec limits exceeded") => no autonomous agent will modify Aturseva during user freeze. Safe, no action taken.
+- Dev server (port 3000) found DOWN (sandbox restarted ~09:01, background bun process did not survive). NOT restarted per user's freeze instruction (starting is runtime ops, not a code change) — reported to user with offer to restart on request.
+- bun 1.3.14 confirmed available (single-file bundling tooling exists for future preview pipeline).
+- Ranked solution report delivered: #1 self-contained single-file preview on separate port via ?XTransformPort (zero workspace changes), #2 public/ folder preview (violates untouched constraint, needs user relaxation), #3 Caddy edit (killed — root-only), #4 port swap (rejected).
+
+Stage Summary:
+- Blocker verified live; Caddy-based fix ruled out by permissions; recommended Option 1 (single-file preview artifact + separate workspace) pending user GO
+- Aturseva untouched (git status 0), no files created, no installs, development NOT started
