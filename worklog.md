@@ -7338,3 +7338,23 @@ Stage Summary:
 - Sevika P3 COMPLETE and browser-verified: context-grounded AI nurse chat (patient edition context firewall), adaptive reschedule (2h catch-up + next-slot shift), deterministic empathetic nudges wired into the tick.
 - Safety rails honored: LLM never sees beyond its scoped data block; dose changes always deferred to doctor; tone engine is pure code so reminder timing stays 100% deterministic.
 - Next candidates (need GO): P4 WhatsApp/voice channels; Sevika chat in doctor board; chat persistence + thread history (needs new Prisma model); nudge A/B copy variants.
+
+---
+Task ID: skills-audit-read-only
+Agent: Main
+Task: Status audit of 3 cloned skill repos in /tmp/skill-test (NO development, NO installs, NO project changes)
+
+Work Log:
+- Verified /tmp/skill-test contains 3 clean clones (0 modified files in each): taste-skill (Leonxlnx/taste-skill @ d237dd3, 13MB), impeccable (pbakaus/impeccable @ c63b8dd, 94MB), awesome-design-md (VoltAgent/awesome-design-md @ 13be5c0, 3.7MB)
+- taste-skill: 13 SKILL.md prompt-instruction skills in skills/ + skill.sh registry (has syntax bug: minimalist-skill entry missing opening bracket) + install.sh (symlinks to ~/.claude/skills — Claude Code convention, not applicable to this agent)
+- impeccable: real skill at .claude/skills/impeccable/ (SKILL.md 12.5KB + 42 reference md + scripts incl. launcher binary); also Claude Code plugin manifests, 4 sub-agents, multi-harness dirs (.cursor/.codex/.gemini etc.); launcher binary NOT executed — NOT VERIFIED
+- awesome-design-md: 74 brand DESIGN.md analysis files (pure reference, zero executables)
+- Confirmed my agent Skill-tool registry does NOT include any of these (no auto-trigger); manual Read+follow IS possible — VERIFIED by reading during this audit
+- Confirmed ~/.claude/skills does not exist in this environment; nothing installed anywhere
+- Confirmed Aturseva project untouched (git status: 0 modified files)
+- Analyzed Caddyfile: XTransformPort query routing exists, but full-page preview of a second port-based app has an asset-routing caveat (relative asset URLs drop query param) — NOT VERIFIED end-to-end
+
+Stage Summary:
+- Deliverable: honest capability report to user (5 questions answered, NOT VERIFIED marked where untested)
+- No files changed except this worklog append; no packages installed; development NOT started per user instruction
+- Recommended (when user says GO): separate sibling folder for landing page with own package.json/port + branch-based promotion into / route
