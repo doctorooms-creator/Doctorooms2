@@ -7378,3 +7378,20 @@ Work Log:
 Stage Summary:
 - Blocker verified live; Caddy-based fix ruled out by permissions; recommended Option 1 (single-file preview artifact + separate workspace) pending user GO
 - Aturseva untouched (git status 0), no files created, no installs, development NOT started
+
+---
+Task ID: file01-brief-and-boundaries
+Agent: Main
+Task: Execute uploaded File 01 prompt — project brief & boundaries for separate Aturseva marketing website (documentation + safe workspace prep ONLY, no website implementation)
+
+Work Log:
+- Read and analyzed /home/z/my-project/upload/01_PROJECT_BRIEF_AND_BOUNDARIES_PROMPT_ZAI.md (staged multi-file workflow; this = File 01)
+- Pre-flight read-only checks: /home/z/landing-v2 did NOT exist (safe, no conflict); product repo identity confirmed via git remote (doctorooms-creator/Doctorooms2); upload folder contains finalized logo asset Aturseva_Primary_With_Tagline (1).svg (valid SVG, header peeked)
+- Created ONLY: /home/z/landing-v2/docs/ directory + /home/z/landing-v2/docs/01_PROJECT_BRIEF_AND_BOUNDARIES.md (169 lines, ~14.7KB) containing all 10 required sections (purpose/scope, in/out-of-scope, separation, brand philosophy + 9 creative-direction rules, audiences + owner-reported product context with VERIFY-BEFORE-CLAIMS marking + prohibited claims, provisional stack, design resources table with NOT INSTALLED/NOT ACTIVATED + NOT VERIFIED engine notes, preview risks with live-VERIFIED vs NOT VERIFIED facts, assumptions/unknowns/pending decisions, sequential working agreement)
+- Post-verification: Aturseva git status = 0 modified files; no package.json, no node_modules, no ~/.claude, no .next, no server on 3000/3005, no skills installed/activated, no gateway changes, no images/videos generated, no website code
+- Stopped for review per File 01 instruction
+
+Stage Summary:
+- New artifact: /home/z/landing-v2/docs/01_PROJECT_BRIEF_AND_BOUNDARIES.md (the ONLY file created outside worklog)
+- Aturseva product: completely untouched (verified 0 modified files)
+- Next step: WAIT for owner review + File 02 — do not scaffold, install, or implement anything
