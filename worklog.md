@@ -7521,3 +7521,20 @@ Stage Summary:
 - QA-EVIDENCE PASS COMPLETE AND LIVE: File 12 now carries the measured contrast record (10 PASS pairs 7.47–18:1; 8 B10-adjacent misses awaiting the owner's §23 Q1 call) and the lab performance record (LCP 316/172ms, CLS 0.0, click 48ms, 60fps, 321KB — all targets PASS at lab). Commit 3118652 deployed and verified.
 - All three servers healthy post-recovery: :3000 (Doctorooms product), :3005 (Aturseva dev), :3006 (Aturseva preview).
 - Backlog state unchanged: every B-ID closed or dispositioned; remaining opens exclusively owner-directed (imagery, logo rework, brand/gold naming, OG image/cards, analytics, subpath-permanence, contrast/perf threshold acceptance — the last now backed by measured data).
+
+---
+Task ID: aturseva-3d-hero-plan
+Agent: Main (Z.ai Code)
+Task: Aturseva File 14 — detailed plan for using the img2threejs skill on a monochrome 3D diya hero (Option A, owner-approved for planning; inspiration from Google Stitch/Antigravity). Development NOT started per owner instruction.
+
+Work Log:
+- Read worklog tail; verified sandbox wiped again → re-cloned /home/z/landing-v2 @ 3118652, push credential recovered read-only from product repo remote (re-pointed correctly to aturseva-landing.git after catching an initial mis-point; secret never displayed).
+- Research-only img2threejs verification (README/SKILL.md/npm) + sandbox probe: forge/next.py and forge/state.py run clean on Python 3.12 (manual pinned-clone route selected; installer CLI doesn't detect this host). Probe clone discarded.
+- Inspiration facts fetched (antigravity.google, stitch.withgoogle.com — titles/descriptions): adopted motif-restraint + truth-first patterns; rejected their themes (File 05 monochrome stands).
+- Created /home/z/landing-v2/docs/14_3D_HERO_AND_IMG2THREEJS_PLAN.md (18 sections: owner decision record, concept, skill pipeline commands, integration architecture, token compliance, motion/B12, fallback ladder, perf budget vs File 12 §15 baseline, T-3D-01…13 QA catalogue, Batches A–D with Batch-C owner gate, risks, rollback, non-goals, DoD).
+- Annotated File 08 §9 (Route 4 planning record) + File 13 §10 (register accuracy) with labeled notes; appended landing worklog Task 20.
+- Committing + pushing the docs-only change → GitHub Actions deploy → live verification (owner's standing git+live rule). Zero rendering delta; no source/style/asset/config/workflow files touched; no cron/automation created; product repo untouched (read-only reference paths).
+
+Stage Summary:
+- Aturseva now has a complete, executable plan of record (File 14) for the 3D hero track; next executable steps are Batch A (skill run, dev-only) and Batch B (flag-gated integration), with default enablement explicitly owner-gated at Batch C.
+- Environment state this session: landing repo clean on main (docs-only change pending push); live Pages healthy (200, canonical title, sitemap 200); dev/preview servers (:3005/:3006) intentionally not started (docs-only work); product app :3000 not started.
