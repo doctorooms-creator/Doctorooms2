@@ -7395,3 +7395,33 @@ Stage Summary:
 - New artifact: /home/z/landing-v2/docs/01_PROJECT_BRIEF_AND_BOUNDARIES.md (the ONLY file created outside worklog)
 - Aturseva product: completely untouched (verified 0 modified files)
 - Next step: WAIT for owner review + File 02 — do not scaffold, install, or implement anything
+
+---
+Task ID: files-08-09
+Agent: Main
+Task: Files 08+09 batch — Visual Asset Plan + Page/Component Specifications for the Aturseva landing repo (planning-only, two cross-linked docs, nothing implemented)
+
+Work Log:
+- Analysed upload/08-09_COMPREHENSIVE_ASSET_AND_COMPONENT_SPEC_PROMPT.md (372 lines); confirmed repo baseline e30dcc8 (Files 06+07 merge), clean tree, main branch
+- Read File 06 (472 lines) and File 07 (429 lines) completely; re-verified File 04 §10 (18-row CTA matrix), §16 (backlog items 1–8), §17 (phases); File 05 §10 (logo rules), §12 (imagery rules), §19 (B9 + design backlog)
+- Full source audit at e30dcc8: page.tsx, layout.tsx, globals.css, all 10 components, aturseva-anim.js (454 lines), AnimationProvider.tsx, package.json, next.config.ts, deploy workflow; verified source identical to f407e78 (empty diff)
+- Asset inventory: public/fonts (3 WOFF2: 24,836/36,620/45,656 B), public/assets/logo-primary.svg (10,460 B, md5-identical to owner upload, deployed live at /assets/logo-primary.svg but referenced by NO component), src/app/icon.svg favicon (1,844 B), CSS data-URI grain; zero photos/videos anywhere; qa/*.png = 45 repo QA artifacts (not site assets); @fontsource devDeps unused by app code
+- NEW FINDING B15 (P1, verified live): @font-face root-absolute url(/fonts/…) 404s under basePath Pages deploy — live CSS chunk still references /fonts/…, live font fetch 200 only under /aturseva-landing/fonts/…; browser check on live: document.fonts.check('16px Manrope'|'16px Fraunces') both FALSE, zero loaded faces → live site renders fallback fonts (Georgia/system); dev :3005 healthy (3 faces loaded)
+- NEW FINDING B16 (P3): public/assets/logo-primary.svg deployed-but-unreferenced; also corrects File 06 §1's "public/ (fonts + favicon only)" imprecision (recorded in File 08 §2, File 06 not edited)
+- NEW FINDING B17 (P3): ProductReveal "Doctor-approved reminders" is a <label> with cursor-pointer and no form control (implies non-existent interactivity)
+- NEW FINDING B18 (P3 latent): footer mt-auto computes to 0px (body is display:block, not flex) — sticky-footer intent (File 04 §17-5) not actually implemented; browser-verified; no visible defect today (page 7458px ≫ viewport)
+- Status correction recorded: File 07 §18 Phase-1 "double-boot guard" already satisfied in source (anim.js:26–27 window.__atursevaAnimBooted)
+- Wrote docs/08_VISUAL_ASSET_PLAN.md (20 sections, 354 lines): evidence-backed inventory table; sourcing options A–D (owner decision); VS-01…VS-08 scene system mapped to all File 06 frame IDs incl. C-01m/C-01r and explicit no-asset zones (Connection/ProductReveal/Footer/Nav); shot list; hero media decision matrix (3 routes, current = valid permanent fallback); delivery spec with B15 both-deploy-targets rule; consent/licensing register schema; generated-imagery conditional appendix; B5/B16 logo rules; unchecked QA gates; 4-batch plan
+- Wrote docs/09_PAGE_AND_COMPONENT_SPECIFICATIONS.md (27 sections, 538 lines): route inventory (only / verified; all others PROPOSED/NOT LIVE); render order table; per-component contracts for Nav/Hero/Journeys/Connection/ProductReveal/Sevika/Paths/Footer with exact verified copy, B2/B10 label-outside-animation placement contracts, B3 illustrative-label contract, B17/B18; 18-row CTA matrix reconciled 1:1 with File 04 §10; §26 consolidated backlog B1–B18 with legacy crosswalk (File 04 item 7→B8, item 8→B7 — IDs never renumbered, B7 stays docs-reconciliation, tagline stays canonical); 5 implementation batches for File 11
+- Validation: 22 tables 0 column mismatches (fixed 1 in §24); all File 06 frame IDs + File 07 motion relations covered; VS IDs reciprocal F08↔F09; prohibited-contradiction searches all clean (no tagline-pending, no zero-wait recommendation, no false approval of generated imagery, no live-route claims, no QA-passed claims); git diff --check clean
+- Committed 7c3fbb6 (exactly 2 new docs, 892 insertions), pushed to main; Actions run completed success; both files verified on GitHub (raw 200)
+- Live-site integrity: HTML byte-hash changed ONLY due to Turbopack chunk-name churn (all chunk filenames rotate between CI builds); verified full-scroll rendered text live vs dev byte-identical (4,704 chars, hash 701892290 both) — zero content change from docs-only deploy; old hashed chunk URLs 404 because deploy replaced _next/static tree (normal)
+- Dev :3005 and preview :3006 both healthy (200); agent-browser exercised page load, eval, scroll on both live and dev
+- Created replacement 15-min webDevReview cron job #455655 (previous jobs #454168/#452703 exist but are platform-disabled "exec limits exceeded")
+
+Stage Summary:
+- deliverables: docs/08_VISUAL_ASSET_PLAN.md + docs/09_PAGE_AND_COMPONENT_SPECIFICATIONS.md @ commit 7c3fbb6 (pushed, deployed, verified)
+- key decisions: new findings take B15+ in materiality order; B7/B8 legacy ordering resolved via explicit crosswalk (no renumbering); explicit no-asset zones protect Connection diagram comprehension, ProductReveal evidence honesty, footer quiet close
+- CRITICAL for next phase: B15 live-font-404 is the top-priority authorized-fix candidate (File 11 Batch 3) — every future asset reference must be proven against BOTH deploy targets (root + basePath) by live fetch
+- owner decisions still open: B4 CTA destinations, B5+B16 logo asset strategy, B6 imagery sourcing/hero route/generated-acceptability
+- planning set now complete: Files 02–09; File 10 (architecture), 11 (implementation), 12 (QA) not started — await owner instruction
