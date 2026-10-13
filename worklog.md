@@ -7478,3 +7478,24 @@ Stage Summary:
 - Aturseva B9 closed — last non-owner-gated debt; components now 100% token-driven with zero visual change (proven 3 ways). All B-IDs now closed or dispositioned; remaining work is exclusively owner-directed (imagery via File 08 gates, logo asset rework, brand/gold semantic renaming).
 - Product app: healthy (:3000, 0 errors, untouched).
 - Per the platform's standing webDevReview mandate, a fresh 15-minute webDevReview cron job was created this session (previous three are platform-disabled).
+
+---
+Task ID: aturseva-seo-hygiene
+Agent: Main (Z.ai Code)
+Task: Aturseva landing SEO hygiene micro-batch — File 12 §16 T-SEO-02/03/04 (canonical + robots meta + one-URL sitemap) under the owner's standing "Go ahead further" delegation + full stability QA sweep
+
+Work Log:
+- PREFLIGHT: continuation summary was stale (predates Task 17) — verified actual state: landing repo clean at 4cc3347 (File 11 roadmap fully complete, Batches 0–6, B9 closed), servers :3000 (product) / :3005 (landing dev) / :3006 (landing preview) all 200, all 4 webDevReview cron jobs platform-disabled.
+- QA SWEEP (agent-browser, live Pages + dev + preview, desktop + mobile 390): ALL GREEN — canonical tagline title, B15 font gate holding (Manrope/Fraunces/italic loaded, h1=Fraunces), B18 flex shell, B5 footer tagline pairing, mobile no overflow, 0 console/page errors. Confirmed live the File 12 §16 documented gaps: canonical / robots-meta / og:url all absent. (One innerText false-negative on Journeys copy = GSAP-reveal hiding; textContent confirms content — not a defect.)
+- WORK SELECTION: everything left on the roadmap is owner-gated; the single item with an explicit documented minimal proposal executable under the Task 16/17 delegation precedent = T-SEO-02/03/04 ("propose minimal robots + sitemap for a one-page site" + File 04 §15 canonical framework). Still gated and untouched: brand/gold rename (File 05 §19-1 owner blessing), imagery/logo (File 08), OG image / twitter cards / analytics (File 12 §16 rows).
+- IMPLEMENTED (commit 9325a5d, 7 files +119/−10): src/lib/site.ts (origin constants = the one-pass origin-update point), layout.tsx (metadataBase + canonical + og:url + robots meta "index, follow" — permissive default made explicit, zero behavioural change), src/app/sitemap.ts (one-URL sitemap, force-static for the export, no indexing hints). Deliberately NOT added, with documented reasons: physical robots.txt (ineffective on a Pages subpath — only honoured at host root; meta tag is the effective channel), og:image / twitter cards / analytics / structured data (all owner-gated).
+- DOCS (labeled annotations, convention-consistent): File 12 §16 rows → IMPLEMENTED + §16 addendum + §23 Q3 narrowed; File 10 §2 row + §16 update note; File 13 §10 register-accuracy note (B4/B5+B16/B1+B11/B18 no longer open; imagery/hero remain) + §23 update.
+- DEFECT FOUND & FIXED: first pages build failed — Next static export requires `export const dynamic = "force-static"` on metadata routes; added to sitemap.ts. Dev :3005 was reaped mid-session during the concurrent build (no log error); restarted via nohup, preview :3006 rebuilt (self-containment OK).
+- VERIFIED: tsc 0 errors; dev + preview render all three tags; pages export emits sitemap.xml + tags with fix-pages-fonts assertions green; DEPLOYED → Actions run 38388749888 SUCCESS; LIVE: canonical/robots/og:url present (forced reload — first post-deploy eval hit a cached pre-deploy copy), sitemap.xml 200 with the single URL, B15 font gate holding, mobile 390 no overflow, console + page errors 0. Evidence qa/140–142.
+- TIDY: committed Task 17's three untracked evidence screenshots (qa/137–139).
+- Product app /home/z/my-project: untouched (only :3000 health-checked, 200).
+
+Stage Summary:
+- T-SEO-02/03/04 CLOSED owner-delegated: live site now declares canonical URL, permissive robots meta and a one-URL sitemap, all from src/lib/site.ts (single origin-update point). Metadata-only, zero rendering delta, font gate re-verified.
+- Landing roadmap remains complete; open items are exclusively owner-directed: imagery (File 08 gates), logo asset rework, brand/gold semantic naming (needs owner blessing on names), OG image / twitter cards / analytics, subpath-permanent vs custom-domain confirmation.
+- A fresh 15-minute webDevReview cron job was created this session per the platform mandate (all 4 pre-existing jobs are platform-disabled).
