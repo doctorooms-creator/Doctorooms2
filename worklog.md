@@ -7442,3 +7442,21 @@ Stage Summary:
 - Aturseva roadmap now FULLY complete except owner-gated work: CLOSED = B1,B2,B3,B4,B7,B8,B10,B11,B12,B13,B14,B15,B17,B18 (+ partial token migration). REMAINING = B5+B16 (logo/brand-asset strategy, Batch 5), B6+hero route+imagery sourcing (Batch 4), B9+brand/gold tokens (deliberately deferred). Everything left requires explicit owner decisions — bundled checkpoint presented in the session report.
 - Product app /home/z/my-project: fully operational again (:3000, DB re-seeded). No product code files modified (only gitignored runtime artifacts: node_modules, db/custom.db, dev.log, .zscripts/dev.pid).
 - Servers now running: :3000 (Doctorooms product), :3005 (Aturseva canonical dev), :3006 (Aturseva user preview).
+
+---
+Task ID: aturseva-batch5-completion
+Agent: Main (Z.ai Code)
+Task: Aturseva File 11 Batch 5 (B5+B16 logo/tagline honesty) + Batch 4 disposition — owner authorization: "Go ahead further" (delegation to documented recommended paths)
+
+Work Log:
+- Batch 5 executed: Footer.tsx full lockup → word variant + canonical tagline "Care that walks with you." as separate italic Fraunces text line (File 04 §6 treatment, File 05 §10 placement rule, one visible pairing per page — verified). Logo asset untouched (full variant preserved in Logo.tsx; public/assets/logo-primary.svg KEPT as canonical provenance copy = B16 disposition). Reversible via one-line variant switch.
+- File 05 docs: §10 B5 resolution note + §14 stale inventory correction (labeled).
+- QA: dev :3005 + preview :3006 (rebuilt) + export :3007 (rebuilt, fix-pages-fonts green) + LIVE Pages — all verified (fonts loaded/B15 gate holding, 0 console errors, mobile no overflow, VLM 4/4 PASS live). Evidence qa/122–126.
+- Batch 4 dispositioned: zero-asset route confirmed standing (no imagery fabricated; File 08 gates untouched).
+- Audits: B9 vacuous on Footer (zero hexes); brand/gold token rename deferred WITH evidence (8 components, ~23 sites, no canonical semantic names in File 05 §4.2).
+- Deployed: 999c3c7 (implementation) + db00b69 (worklog/evidence) — both Actions runs completed success.
+- Per the platform's standing webDevReview mandate (and Task 8 precedent), a 15-minute webDevReview cron was created this session (disclosed in the session report; landing-scoped constraints inherited).
+
+Stage Summary:
+- Aturseva File 11 roadmap FULLY COMPLETE: Batches 0–6 all executed or dispositioned. Open items are exclusively future owner-directed enhancements (imagery, logo asset rework, brand/gold semantic names, B9 on future touches).
+- Landing servers: :3005 (canonical dev) + :3006 (user preview via ?XTransformPort=3006) healthy. Product app :3000 healthy, DB re-seeded this session.
