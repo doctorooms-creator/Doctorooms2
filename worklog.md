@@ -7538,3 +7538,18 @@ Work Log:
 Stage Summary:
 - Aturseva now has a complete, executable plan of record (File 14) for the 3D hero track; next executable steps are Batch A (skill run, dev-only) and Batch B (flag-gated integration), with default enablement explicitly owner-gated at Batch C.
 - Environment state this session: landing repo clean on main (docs-only change pending push); live Pages healthy (200, canonical title, sitemap 200); dev/preview servers (:3005/:3006) intentionally not started (docs-only work); product app :3000 not started.
+
+---
+Task ID: aturseva-productui-plan
+Agent: Main (Z.ai Code)
+Task: Aturseva File 15 — product-UI-first landing redesign plan after owner rejected the diya-3D direction (references deep-scrolled: launchfar.com, antigravity.google, stitch.withgoogle.com). Development NOT started per owner instruction.
+
+Work Log:
+- Deep research via agent-browser + VLM: launchfar.com full 6880px journey (UI-as-content pattern, 6-card numbered simulated-product-UI system), antigravity.google (IDE mockups, vision→utility rhythm), stitch.withgoogle.com (hero IS the product input box). Common pattern: show the product's real interface as primary content.
+- Product grounding: 3 real product QA screenshots VLM-analyzed (prescription wizard, medicines grid, booking modal) so all planned landing mockups derive from real capability (File 02 honesty).
+- Created /home/z/landing-v2/docs/15_PRODUCT_UI_FIRST_LANDING_REDESIGN_PLAN.md (14 sections: diagnosis, section-by-section map — hero prescription-assembly, pinned 8-step stepper, live queue simulation, Sevika chat moment, 01/06…06/06 bento, Rx print moment; B12-safe choreography; T-UI-01…10 QA family; Batches R1–R5 gated on owner direction approval).
+- File 14 archived (OWNER REJECTED DIRECTION) with annotations in File 08 §9 + File 13 §10 recording the full decision sequence.
+- Committed bfab719 + pushed → Actions deploy → live (docs-only, zero rendering delta). No cron/automation created. Product repo untouched (read-only screenshots).
+
+Stage Summary:
+- Aturseva landing now has the successor plan of record (File 15) after the diya rejection; awaiting owner approval of the direction to start Batch R1. img2threejs skill remains available but unused.
