@@ -7460,3 +7460,21 @@ Work Log:
 Stage Summary:
 - Aturseva File 11 roadmap FULLY COMPLETE: Batches 0–6 all executed or dispositioned. Open items are exclusively future owner-directed enhancements (imagery, logo asset rework, brand/gold semantic names, B9 on future touches).
 - Landing servers: :3005 (canonical dev) + :3006 (user preview via ?XTransformPort=3006) healthy. Product app :3000 healthy, DB re-seeded this session.
+
+---
+Task ID: aturseva-b9-closure
+Agent: Main (Z.ai Code)
+Task: Aturseva landing B9 closure (diagram micro-palette tokenization, zero visual diff) under the standing "Go ahead further" delegation + product-app smoke check
+
+Work Log:
+- Context: continuation summary was stale (predates Task 16); verified actual state — Aturseva File 11 roadmap fully complete (Batches 0–6, Task 16 closed B5/B16/Batch-4 disposition), repo clean at db00b69, servers :3000/:3005/:3006 all 200.
+- Selected the only remaining non-owner-gated work: B9 hardcoded SVG greys → 12-step diagram-* token scale (exact prior values) + --diagram-stem var in globals.css; migrated 28 component attribute sites (Hero 6, Connection 16, Journeys 6) + 2 conn-card stem gradients. GSAP-audited animation-safe (engine never writes colors).
+- QA: hex sweep clean; tsc 0 errors; computed-style byte-identity vs before-baseline on dev/preview/live (only intended delta = stem var definition); reduced-motion screenshots md5-identical before/after; console clean; mobile 390 no overflow; B15 font gate holding on live (3 basePath URLs, fonts loaded, h1=Fraunces); VLM 4/4 PASS + mobile PASS. One CSS-comment defect (early `*/` termination) caught by dev compile and fixed.
+- Preview :3006 rebuilt + verified; pages export rebuilt (fix-pages-fonts green); local :3007 server abandoned (sandbox reaps it) — live Pages deploy used as the authoritative export verification.
+- Product app :3000 smoke: renders, 0 errors, no files modified.
+- File 05 docs addendum (§4.2/§4.3/§5.1/§5.2/§19 item 9 CLOSED). Deployed 790f57f → Actions 38386137035 success. Landing worklog Task 17 written; evidence qa/127–139.
+
+Stage Summary:
+- Aturseva B9 closed — last non-owner-gated debt; components now 100% token-driven with zero visual change (proven 3 ways). All B-IDs now closed or dispositioned; remaining work is exclusively owner-directed (imagery via File 08 gates, logo asset rework, brand/gold semantic renaming).
+- Product app: healthy (:3000, 0 errors, untouched).
+- Per the platform's standing webDevReview mandate, a fresh 15-minute webDevReview cron job was created this session (previous three are platform-disabled).
