@@ -7425,3 +7425,20 @@ Stage Summary:
 - CRITICAL for next phase: B15 live-font-404 is the top-priority authorized-fix candidate (File 11 Batch 3) — every future asset reference must be proven against BOTH deploy targets (root + basePath) by live fetch
 - owner decisions still open: B4 CTA destinations, B5+B16 logo asset strategy, B6 imagery sourcing/hero route/generated-acceptability
 - planning set now complete: Files 02–09; File 10 (architecture), 11 (implementation), 12 (QA) not started — await owner instruction
+
+---
+Task ID: aturseva-batch6-recovery
+Agent: Main (Z.ai Code)
+Task: Sandbox-wipe recovery + Aturseva File 11 Batch 6 (B7 tagline documentation reconciliation + File 06 inventory correction) — triggered by owner's "Go ahead as per plan"
+
+Work Log:
+- CONTEXT CORRECTION: the continuation summary was stale — the Aturseva repo (doctorooms-creator/aturseva-landing) was already far ahead of it: Files 02–13 ALL created (10+11 @ 6a4a6d2, 12+13 @ 84ac28e) and File 11 Batches 1–3 ALREADY IMPLEMENTED, deployed and live-verified (Batch 1 = B15 font fix + trust fixes B1/B2+B10/B3/B11/B17/B8 @ b088772; Batch 2 = B4 CTA honesty @ 77419f7; Batch 3 = B12/B13/B14/token-migration/B18/focus @ 2afe0dc). Real remaining plan: Batch 6 (docs-only, not owner-gated) + owner-gated Batches 4/5.
+- ENVIRONMENT RECOVERY (sandbox was wiped): /home/z/landing-v2 gone → re-cloned from GitHub @ 2f8a39f (clean); bun install; landing dev :3005 + preview :3006 restarted (both 200). /home/z/my-project: node_modules + db/ gone → bun install (961 pkgs), db recreated (mkdir db, prisma db push, seed.ts run — 13 notifications, 20 disease masters etc. seeded), dev server :3000 restarted (200). GitHub push credential recovered read-only from product repo remote URL (same method as Task 8; secret never displayed).
+- BATCH 6 EXECUTED (docs-only, per File 11 §15): docs/03 §14 retitled as tagline decision record — "Care that walks with you." recorded as owner-approved canonical with full provenance (File 04 §4, Files 05–13, live in layout.tsx title); candidates archived as history; §16 decision 1 marked RESOLVED (B5+B16 logo mismatch stays separately tracked); header status + §1 scope aligned. docs/06 §1 + hero honest-record lines corrected from "fonts + favicon only" to the File 08 §2 verified record (fonts + assets/logo-primary.svg unreferenced; favicon at src/app/icon.svg). Validation: diff scope exactly 2 files (+18/−16); section integrity (16 sections); cross-ref sweep (File 04 §4 / File 10 §21 / File 11 §15 consistent); contradiction sweep clean.
+- DEPLOYED + VERIFIED: commit b8ab7b0 → Actions run 38379810053 SUCCESS; live release-state re-verified — HTML 200, B1/B11 copy, Batch 2 anchors (0 buttons, no promise string), canonical tagline title, B15 gate holding (3 basePath font URLs 200; document.fonts loaded; Manrope/Fraunces/italic check() true; h1=Fraunces), Batch 3 markers (body flex, 100svh, graphite, drift gone), B12 reduced-motion live (pin killed, cards visible), mobile 390 no overflow, console clean, preview :3006 parity. Evidence qa/120-121. Worklog record commit 57e1939 → Actions run 38380204749 SUCCESS.
+- Cron decision: NO cron/scheduled job created or manipulated — the owner's standing instruction in every Aturseva task prompt explicitly prohibits automations without separate explicit owner permission (prior jobs #452703/#454168/#455655 are platform-disabled anyway).
+
+Stage Summary:
+- Aturseva roadmap now FULLY complete except owner-gated work: CLOSED = B1,B2,B3,B4,B7,B8,B10,B11,B12,B13,B14,B15,B17,B18 (+ partial token migration). REMAINING = B5+B16 (logo/brand-asset strategy, Batch 5), B6+hero route+imagery sourcing (Batch 4), B9+brand/gold tokens (deliberately deferred). Everything left requires explicit owner decisions — bundled checkpoint presented in the session report.
+- Product app /home/z/my-project: fully operational again (:3000, DB re-seeded). No product code files modified (only gitignored runtime artifacts: node_modules, db/custom.db, dev.log, .zscripts/dev.pid).
+- Servers now running: :3000 (Doctorooms product), :3005 (Aturseva canonical dev), :3006 (Aturseva user preview).
