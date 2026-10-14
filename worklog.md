@@ -7588,3 +7588,19 @@ Work Log:
 Stage Summary:
 - Naming exercise now carries both lenses: §4 Grok-pattern (personality-first, lead: Baari) + §4A GoI-pattern (story-first, lead: Saathi with tagline-lock). Owner's "story kya hoti" questioning pattern signals story-first weighing — the pick remains the owner's between Baari/Saari and the wider catalogue.
 - No development performed (owner instruction honored); all gates unchanged.
+
+---
+Task ID: aturseva-orb-endorsement
+Agent: Main (Z.ai Code)
+Task: Owner endorsed the "Living State Orb" 3D element concept and flagged the two-name advertising problem; recorded + single-name principle made binding (no development)
+
+Work Log:
+- Sandbox wiped again mid-session — re-cloned /home/z/landing-v2 @ 6f8358c (credential recovered read-only from product repo remote; secret never displayed).
+- Interpreted owner feedback: (a) orb concept ENDORSED (owner quoted its core properties back — faceless monochrome, live core state, 5 motion states, hero 5-second comprehension); (b) "2 name se advertising krna" = advertising with two names is a problem → ONE name everywhere.
+- File 17 updates (commit 716d2de): §6A added (endorsement record + the owner's structural reason: the 3D element IS the character's body, not a second brand asset needing its own name; name-agnostic visual identity); three binding principles (single-name rule across product/landing/ads/store/notifications; orb = character's body; live-state principle — 3D never mere decoration); §4's two-register pairing note (Baari+Noor coexistence) WITHDRAWN with strikethrough + reason; change-log row added.
+- Gate unchanged and explicitly noted: orb implementation batch still waits on the name pick (§7 step 1); the orb direction itself no longer needs separate approval.
+- DEPLOYED: 716d2de → Pages live 200 (docs-only, zero rendering delta). No source/style/asset/config touched; product repo untouched.
+
+Stage Summary:
+- Decision state now: 3D element direction = OWNER-ENDORSED (Living State Orb); personality blueprint = ready; name = the ONLY remaining open decision (Baari USP-first vs Saathi story-first vs wider 106-name catalogue). The moment a name is picked, the pipeline is: TM quick-check → File 02/File 16/File 13 updates → product rename plan → orb implementation batch (hero + chat launcher) → deploy.
+- No development performed (owner gating honored).
