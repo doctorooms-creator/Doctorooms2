@@ -7553,3 +7553,23 @@ Work Log:
 
 Stage Summary:
 - Aturseva landing now has the successor plan of record (File 15) after the diya rejection; awaiting owner approval of the direction to start Batch R1. img2threejs skill remains available but unused.
+
+---
+Task ID: aturseva-character-naming
+Agent: Main (Z.ai Code)
+Task: Owner rejected the "Sevika" name; requested a 100-name list for the AI bot character (Grok-pattern personality), plus a 3D element concept. Development NOT started.
+
+Work Log:
+- Sandbox wiped again mid-session (/home/z/landing-v2 gone between turns) — re-cloned from GitHub @ 0a5af06; verified File 16 present.
+- Read naming lineage (NAMING.md…NAMING-5.md: 326 available company names, A1 ATURA-family, AturSeva pick) to derive DIFFERENT rules for character naming (no domain need; verb-able, culture-rooted, 2-3 syllables, no human pretense, no deity, no doctor-coding, 3D-mascot synergy).
+- Built the 100-name catalogue in 18 families (A brand-DNA coinages…R hope/calm) with 1-line stories + 🟡 conflict flags (Setu fintech, Metta/Meta visual, Daya CID-meme, Mitthu repeater, deity/caste flags on Ushas/Tulsi/Anusuya/Shabari, Chirag diya-proximity, Zara human-name check).
+- Applied the Grok-pattern lens (verb-able + culture-root + short + personality-first + zero human pretense) → top-10: Baari ⭐⭐ (queue-native "MY TURN" — encodes the owner's own USP insight), Yaad (self-punning reminder), Dastak, Bulbul, Dor, Noor, Atu (brand Pikachu), Zara, Mudita, Boond (dose-drop).
+- Wrote personality blueprint: warm-witty Hinglish (Grok's mold, Aturseva soul), state-aware confidence, anti-anxiety humor, binding AI-not-doctor boundary lines, File 02-gated signature chat lines.
+- Wrote the 3D element concept: faceless monochrome "Living State Orb" (graphite body, paper rim, live core showing queue token / dose countdown), 5 motion states (idle breathe, listening tilt, speaking ripples, alert hop, night dim), three.js/R3F lane, reduced-motion compliant, File 08 gates NOT triggered (code-only).
+- ANNOTATED: File 16 name-amendment note (positioning stands, "Sevika ka din" → "[Character] ka din"); File 13 §10 item 7 (decision register; fixed one typing artifact before commit).
+- DEPLOYED: commit a0fc010 pushed → Pages live 200, canonical title verified (docs-only, zero rendering delta). No source/style/asset/config touched. Product repo read-only (renaming gated on owner pick, File 17 §7).
+
+Stage Summary:
+- File 17 = the character-naming decision file: 100 candidates structured, top-10 with reasoning, single recommendation "Baari" (queue-native + Grok-filters + honesty), personality + 3D orb concept ready for implementation once named.
+- Next executable step is owner-gated: pick a name (or request round-2 on any family) → then TM quick-check → File 02/File 16 updates → product rename plan (/home/z/my-project Sevika routes/copy) → File 15 R-series narrative + orb implementation batch.
+- No development performed (owner instruction honored).
