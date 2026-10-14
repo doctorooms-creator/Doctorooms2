@@ -7573,3 +7573,18 @@ Stage Summary:
 - File 17 = the character-naming decision file: 100 candidates structured, top-10 with reasoning, single recommendation "Baari" (queue-native + Grok-filters + honesty), personality + 3D orb concept ready for implementation once named.
 - Next executable step is owner-gated: pick a name (or request round-2 on any family) → then TM quick-check → File 02/File 16 updates → product rename plan (/home/z/my-project Sevika routes/copy) → File 15 R-series narrative + orb implementation batch.
 - No development performed (owner instruction honored).
+
+---
+Task ID: aturseva-goi-naming-lens
+Agent: Main (Z.ai Code)
+Task: Owner asked the thought experiment: "if the Indian government launched this bot, what name would they pick and what's the story behind it?" — story-first naming lens for the character (no development)
+
+Work Log:
+- Answered in chat with full reasoning from real GoI naming precedents (Aarogya Setu, UMANG, NITI, Bhashini, KIRAN helpline, e-Mitra, Ayushman Mitra, e-Sanjeevani): the GoI pick = **SAATHI / "Aarogya Saathi / AI SAATHI"** with the Setu→Saathi press-note story ("Setu ne jod diya tha. Saathi ab saath dega.") + backronym (Smart AI Assistant for Treatment, Health & Inclusion); mythic alternate Sanjeevani (Hanuman's whole-mountain story) rejected for real use (e-Sanjeevani conflict + doctor-coded).
+- Key insight surfaced: **Saathi = the Hindi translation of Aturseva's canonical tagline "Care that walks with you."** — naam/tagline lock, same pattern as Aarogya Setu (naam hi kaam).
+- Recorded in File 17 as new §4A (GoI playbook decoded; 6 story-first round-2 additions: Saathi⭐, Kiran, Madad, Sampark, Jagriti, Sanjeevani🟡; Sevini/Arogyini skipped with reason; claim-gate R3 reminder) + change-log row. Updated dual recommendation: Baari (USP-first) vs Saathi (story-first, tagline-locked) — pick owner-gated.
+- DEPLOYED: commit 6f8358c → Pages live 200, canonical title verified (docs-only, zero rendering delta). No source/style/asset/config touched; product repo untouched.
+
+Stage Summary:
+- Naming exercise now carries both lenses: §4 Grok-pattern (personality-first, lead: Baari) + §4A GoI-pattern (story-first, lead: Saathi with tagline-lock). Owner's "story kya hoti" questioning pattern signals story-first weighing — the pick remains the owner's between Baari/Saari and the wider catalogue.
+- No development performed (owner instruction honored); all gates unchanged.
