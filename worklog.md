@@ -7604,3 +7604,19 @@ Work Log:
 Stage Summary:
 - Decision state now: 3D element direction = OWNER-ENDORSED (Living State Orb); personality blueprint = ready; name = the ONLY remaining open decision (Baari USP-first vs Saathi story-first vs wider 106-name catalogue). The moment a name is picked, the pipeline is: TM quick-check → File 02/File 16/File 13 updates → product rename plan → orb implementation batch (hero + chat launcher) → deploy.
 - No development performed (owner gating honored).
+
+---
+Task ID: aturseva-name-lock-plan
+Agent: Main (Z.ai Code)
+Task: Owner locked the AI character name to ATURSEVA itself ("Name atur seva hi rakhte hai") and asked for the design plan, re-confirming the Antigravity/Stitch reference understanding. Plan designed; development NOT started (execution awaits owner GO).
+
+Work Log:
+- Sandbox intact this turn (716d2de). Read File 15 §3 (reference decode: launchfar 6-card UI-as-content, antigravity agent-as-protagonist + vision→utility rhythm + pinned panels, stitch hero-IS-the-product) + File 16 §8 spine for accurate merging.
+- Wrote docs/18_ATURSEVA_CHARACTER_IS_BRAND_LANDING_PLAN.md (File 18, 11 sections): §1 name-lock record (Alexa/Siri pattern — brand = character = campaign; single-name rule satisfied at deepest level; honest 4-syllable trade-off recorded with Alexa precedent; no new TM search needed); §2 reference decode table (take/don't-take per reference — answering the owner's "samjha?" directly); §3 design-system compliance (monochrome, B12, File 02 honesty); §4 architecture "Aturseva ka din" — hero = orb with live #12 token core + glass chat replay ("Meri baari kab hai?" → canned product-true reply) + 3 tappable suggestion chips (Stitch pattern), 6 beats (subah dose/Rx-photo/booking/BAARI pinned countdown/clinic+shaam/boundary+doctor-side) with bento rail folded in (LaunchFar), CTA "Aturseva ke saath shuru karein"; §5 orb final spec (R3F single canvas hero-only, CSS/SVG derivatives elsewhere, reduced-motion); §6 voice system (greeting now "Namaste! Main Aturseva hoon…"); §7 batches N1 orb+hero / N2 beats / N3 QA+perf / N4 ship / P1 product rename (Sevika→Aturseva, separate owner go, recommended before campaign); §8 QA catalogue; §9 risks R1–R5 (incl. hero-demo honesty guard: chips replay canned answers, no free-text on landing); §10 non-goals; §11 DoD (owner accepts 5-second comprehension test on live).
+- ANNOTATED: File 13 §10 item 8 (name lock decision record); File 16 name-resolved amendment (spine definitively "Aturseva ka din"); File 17 §7 step-1 DONE marker + changelog (Baari/Saathi shortlist overridden by owner decision).
+- DEPLOYED: commit 814b9fc → Pages live 200 (docs-only, zero rendering delta). No source/style/asset/config touched; product repo untouched (P1 planned only).
+
+Stage Summary:
+- DECISION STATE COMPLETE: positioning (File 16) + character name (Aturseva — File 18 §1) + 3D direction (owner-endorsed orb) + design vehicle (File 15) + execution plan (File 18) — every strategic decision is now locked. The single remaining gate = owner's "GO" to start Batch N1 (orb + hero, dev :3005).
+- Pipeline on GO: N1 → N2 → N3 → N4 (landing) and P1 (product rename, separate go). All docs cross-referenced and consistent.
+- No development performed (owner instruction honored).
