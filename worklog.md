@@ -7636,3 +7636,35 @@ Stage Summary:
 - The complete spec suite now exists: owner can say "phase 0 karo" → "phase 1 karo" … and each phase has a fully specified, gate-checked scope (nothing hand-waved; every element has an ID, timing, trigger, tech, reduced-motion fallback, phase mapping).
 - Next executable step: PHASE 0 (foundations & primitives — orb component, chat primitives, dot-grid, cursor engine, typed-text util) on owner go.
 - No development performed (owner instruction honored).
+
+---
+Task ID: aturseva-phase-0-1-execution
+Agent: Main (Z.ai Code)
+Task: Owner GO ("Go ahead, hope you know my end goal") — execute File 19 phase plan. Phase 0 (foundations) + Phase 1 (hero v2) built, QA'd, deployed live.
+
+Work Log:
+- Repo recovered at b9cfd26; read full codebase architecture (AnimationProvider lazy-loads GSAP + vanilla aturseva-anim.js; preview artifact strips React and inlines the vanilla engine → hero interactions MUST be vanilla-enhanced server markup; discovered via build-preview.ts).
+- PHASE 0 (primitives): Orb.tsx — Living State Orb as layered CSS/SVG (decision recorded: no WebGL — zero deps, export/preview-safe, states as classes); 5 states implemented (idle breathe 4s keyframe / listening tilt via GSAP quickTo / speaking ripple rings reusing pulse-ring / alert hop+core-flash / night dim); globals.css +230 lines all token-driven (orb layers, dot-grid + spotlight mask via CSS vars, chat bubbles, chips 44px, cursor badge).
+- PHASE 1 (hero): HeroCharacter.tsx server component — left promise stack (eyebrow/H1 tagline-locked/one-liner/2 CTAs) + right Aturseva-at-work cluster (orb with live #12 token core + glass chat replay + 3 tappable chips + caption); markup ships FINAL state (no-JS/SEO/reduce see the full story); page.tsx flag switch NEXT_PUBLIC_HERO_V2 default-on (=0 instant rollback, legacy Hero retained).
+- ENGINE (aturseva-anim.js +300 lines): buildHeroV2 — entrance choreography M-E-01..06 (≤2.2s), chat replay timeline (user bubble → typing dots → word-stagger bot reply → orb alert at "#12") + replay button, chip tap handlers (canned product-true replies from File 16 #1/#3/#6; trim history to 2 pairs; instant mode under reduced-motion), orb state machine + orbAlert hop, cursor layer (I-C-03 spotlight rAF-throttled CSS vars + is-hover class toggle, I-C-04 magnetic CTA drift≤10px + elastic return, I-C-05 orb tilt ±8° with listening state), parallax M-P-01 scrub; wireHero2Chips outside mm context (interaction works in all media states); full dispose integration (hero2Listeners).
+- BUGS FOUND & FIXED during QA: (1) orb sizing chicken-and-egg — .orb-tilt-perspective had no intrinsic size → orb-body 0×0 (VLM caught it: "no sphere visible"); fixed with width:100% + aspect-ratio:1 chain; (2) spotlight :hover dead — zone is pointer-events:none; replaced CSS :hover with engine-toggled .is-hover class; (3) GSAP "target not found" warnings — buildHero guarded for absent legacy hero; (4) wireHero2Chips orb ref fixed to self-contained query.
+- QA PASSED: desktop 1440×900 VLM 6/6 (orb #12 core, frosted chat both bubbles, 3 chips, serif headline+CTAs, strictly monochrome, no defects); mobile 390 (overflowX=0, conversation-first order, orb 220px, chips readable); chips functional on dev AND static preview artifact (canned replies + orb states); replay works; cursor layer verified via matchMedia patch init-script (headless has hover:none — real desktop gets it: spotlight vars set + 0.85 highlight, magnetic drift matrix + spring return, tilt matrix3d + listening state); parallax fade on scroll; console clean; tsc 0 errors; preview rebuilt (203KB css inline, engine 32KB, self-containment OK).
+- DEPLOYED: commit f718ab1 → Pages live 200 → LIVE VERIFIED: data-hero2/data-orb/hero2-chip in served HTML, orb body 388px, core #12, breathe animation running, 0 console errors, canonical title intact. Evidence: qa/phase1-hero-desktop.png, phase1-hero-mobile.png, phase1-fullpage.png, phase1-preview-hero.png.
+- VLM noted hero→Journeys "hard cut" — assessed as DESIGNED (File 05 §5 strict dark/light alternation; old hero had the same boundary; not a regression).
+
+Stage Summary:
+- Phase 0 + Phase 1 COMPLETE AND LIVE: the landing now opens with the owner-endorsed Living State Orb + the Aturseva conversation (Stitch pattern) — 5-second comprehension achieved (orb + #12 + one chip tap). Rollback = one env var.
+- Next phases per File 19: Phase 2 (Beat 1 Subah + Beat 2 Rx-photo), Phase 3 (Beat 3 Booking + Beat 4 BAARI pinned countdown), Phase 4 (Beats 5–6 + bento rail + paths/footer), Phase 5 (global cursor polish + typed rotation), Phase 6 (QA+perf), Phase 7 (ship + docs closure). Product rename P1 still separately owner-gated.
+- Dev :3005 + preview :3006 both healthy and in sync.
+
+---
+Task ID: aturseva-phase-0-1-hardening
+Agent: Main (Z.ai Code)
+Task: Post-deploy hardening pass — GSAP warning guard + syntax fix + live re-verification
+
+Work Log:
+- dev.log sweep caught a GSAP "target not found" warning at aturseva-anim.js:676 — root cause: playReplay's word-stagger .to(words) runs with an EMPTY array on every replay AFTER the first (splitWords returns [] once data-split=1 is set). Fix restructured the replay timeline as tl2 with a words.length guard — and the restructure initially left an orphaned .call() chain (SyntaxError caught by node -c), fixed and re-verified.
+- Re-verified on dev (replay works, 12 word spans split, console clean) + preview rebuilt (self-containment OK) + redeployed (commit 63992d6) + LIVE re-verified: hero v2 elements in served HTML (data-hero2-fade ×12, data-orb-tilt, hero2-chip, orb-core-num), live chip tap returns the canned reply, 0 console errors.
+
+Stage Summary:
+- Phase 0+1 now fully hardened: zero GSAP warnings, zero console errors, chip interactions verified LIVE on GitHub Pages. Servers: dev :3005 + preview :3006 healthy and in sync. Next: Phase 2 (Beat 1 Subah + Beat 2 Rx-photo) per File 21 §1–§2 on owner go / webDevReview continuation.
