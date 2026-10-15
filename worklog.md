@@ -7824,3 +7824,17 @@ Stage Summary:
 - NAMING: 3 brands in one patient journey — Aturseva (landing only) → Doctorooms (auth/chrome/emails/SMS/manifest/sidebar-footer) → Sevika (in-app AI nurse: sidebar label, page H1, chat welcome, notification signatures). Renaming decision pending with owner
 - LANDING HONESTY GAPS (landing claims vs product reality): "Book a home visit"/"doctor at your door" = MISSING in product (biggest gap — bookingMode is InPerson/VideoCall only); vitals check-in by patient = MISSING; night-mode monitoring = MISSING; scheduled 7PM diet nudge = MISSING (diet plan is on-demand only); patient-side QR check-in = PARTIAL (kiosk infra exists but orphaned, token has no QR); family access claim = PARTIAL (IPD-only portal, not OPD queue as implied)
 - NO development performed this session. Full audit report delivered to owner with prioritized decision points.
+
+---
+Task ID: audit-aturseva-user-side-2
+Agent: Main
+Task: OWNER VISION CAPTURE (discussion phase, development NOT started) — owner described the Aturseva hero vision: a ChatGPT-style AI window/agent through which ALL services flow.
+
+Work Log:
+- Owner's vision decoded into 5 pillars: (1) AI window as PRIMARY interface — nearby doctor discovery + booking via conversation; (2) AI gives booking-status reminders ("approve hua ki nai") proactively; (3) AI tells queue/token number; (4) AI holds the patient's prescriptions and guides davai per prescription + surfaces all doctor-completed tasks; (5) full normal conversation with EVERYTHING saved in history — "ek bot hai, ek agent hai". Aturseva = system hero.
+- Main agent performed independent full patient-journey analysis and extracted ~49 use cases across 7 journey stages (discovery/triage, booking, pre-visit, at-clinic, post-visit, long-term care, cross-cutting agent capabilities).
+- Gap mapping vs current implementation (from audit-aturseva-user-side-1 evidence): booking/agentic tools ❌, nearby/geo search ❌ (no location search exists at all), status-in-chat ⚠️ (notifications exist but chat context has NO appointments/queue data), prescription+medicine guidance ✅ (P1-P3 strong), chat history ❌ (ephemeral, no persistence model).
+
+Stage Summary:
+- KEY ARCHITECTURAL INSIGHT recorded: current product = FORM-FIRST (pages/forms as primary, AI chat as side Sheet with info-only context); owner vision = AI-FIRST (agent with tool-calling + persistent memory as the primary interface). The backend data/APIs needed for the agent tools largely EXIST (booking, queue, doctors, prescriptions APIs) — the missing layer is the AGENT architecture (function/tool-calling, chat persistence models, proactive status-watcher, expanded context) + AI-first chat UI + geolocation.
+- Discussion ongoing; awaiting owner decisions before any development. No files/code modified.
