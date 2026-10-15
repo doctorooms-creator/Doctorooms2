@@ -11,8 +11,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, Loader2, MessageCircle, Send, Sparkles, Stethoscope } from 'lucide-react'
+import { ArrowUpRight, Check, CheckCircle2, Loader2, MessageCircle, Send, Sparkles, Stethoscope, X } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 
@@ -20,6 +21,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
+
+import {
+  findLaterBookingCreated,
+  modeLabel,
+  useConfirmBooking,
+  type CardRenderCtx,
+} from '@/app/dashboard/patient/aturseva/cards'
 
 interface ActionCard {
   type: string
@@ -41,8 +49,104 @@ const QUICK_CHIPS = [
   'Achhe doctor dikhao',
 ]
 
-function ActionCardBody({ action }: { action: ActionCard }) {
-  if (action.type === 'doctor-search') {
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
+/**
+ * Compact CONFIRM card (prepare_booking) — same Confirm-button rail as the
+ * full window (useConfirmBooking from aturseva/cards), dismissed state local.
+ * `booked` comes from the host's look-ahead scan of the message list.
+ */
+function CompactConfirmCard({
+  data,
+  booked,
+}: {
+  data: Record<string, unknown>
+  booked: boolean
+}) {
+  const { confirm, pending } = useConfirmBooking()
+  const [confirmed, setConfirmed] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+
+  const doctorId = str(data.doctorId)
+  const doctor = str(data.doctor)
+  const date = str(data.date)
+  const dateLabel = str(data.dateLabel) || date
+  const timeSlot = str(data.timeSlot)
+  const mode = data.mode === 'VideoCall' ? ('VideoCall' as const) : ('InPerson' as const)
+  const disease = str(data.disease)
+  const fees = Number(data.fees) || 0
+  const isBooked = booked || confirmed
+
+  const handleConfirm = async () => {
+    const ok = await confirm({ doctorId, date, timeSlot, mode, disease })
+    if (ok) setConfirmed(true)
+  }
+
+  return (
+    <div
+      className={cn(
+        'space-y-1.5 rounded-lg border bg-background px-3 py-2.5',
+        !isBooked && dismissed && 'opacity-60'
+      )}
+    >
+      <p className="truncate text-xs font-semibold">{doctor}</p>
+      <p className="truncate text-[11px] text-muted-foreground">
+        {dateLabel} · {timeSlot} · {modeLabel(mode)} · ₹{fees}
+      </p>
+      {disease && <p className="truncate text-[11px] text-muted-foreground">Reason: {disease}</p>}
+      {isBooked ? (
+        <p
+          role="status"
+          className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Booked ✓
+        </p>
+      ) : dismissed ? (
+        <p role="status" className="text-[11px] italic text-muted-foreground">
+          Aapne cancel kar diya
+        </p>
+      ) : (
+        <div className="flex gap-1.5 pt-0.5">
+          <Button
+            type="button"
+            size="sm"
+            disabled={pending}
+            onClick={() => void handleConfirm()}
+            aria-label="Booking confirm karein"
+            className="h-9 flex-1 rounded-lg bg-teal-600 text-[11px] font-semibold text-white hover:bg-teal-700"
+          >
+            {pending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Check className="h-3.5 w-3.5" aria-hidden />
+            )}
+            Confirm &amp; Book
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => setDismissed(true)}
+            aria-label="Booking cancel karein, kuch badalna hai"
+            className="h-9 rounded-lg px-2.5 text-[11px] font-medium text-muted-foreground hover:bg-muted"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden />
+            Nahi
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ActionCardBody({ action, ctx }: { action: ActionCard; ctx: CardRenderCtx }) {
+  // Live SSE + history rows carry the TOOL names; hyphenated aliases kept
+  // defensively (same convention as the full chat window's normalizeAction).
+  if (action.type === 'doctor-search' || action.type === 'search_doctors') {
     const doctors = (action.data.doctors as { id: string; name: string; specialization: string; city: string; fees: number }[]) || []
     return (
       <div className="space-y-2">
@@ -68,7 +172,7 @@ function ActionCardBody({ action }: { action: ActionCard }) {
     )
   }
 
-  if (action.type === 'bookings-status') {
+  if (action.type === 'bookings-status' || action.type === 'get_my_bookings') {
     const bookings = (action.data.bookings as { id: string; doctor: string; dateIST: string; timeSlot: string; status: string; statusHi: string }[]) || []
     return (
       <div className="space-y-1.5">
@@ -96,7 +200,7 @@ function ActionCardBody({ action }: { action: ActionCard }) {
     )
   }
 
-  if (action.type === 'queue-position') {
+  if (action.type === 'queue-position' || action.type === 'get_queue_position') {
     const d = action.data
     const token = d.tokenNumber as string | undefined
     return (
@@ -121,10 +225,123 @@ function ActionCardBody({ action }: { action: ActionCard }) {
     )
   }
 
+  // ── Phase 2 compact cards ──
+
+  if (action.type === 'get_doctor_slots' || action.type === 'doctor-slots') {
+    const doctor = str(action.data.doctor)
+    const dateLabel = str(action.data.dateLabel) || str(action.data.date)
+    const slots = Array.isArray(action.data.slots)
+      ? (action.data.slots as { time?: string; status?: string }[])
+      : []
+    const free = slots.filter((s) => s.status !== 'taken' && s.status !== 'past')
+    const shown = free.slice(0, 6)
+    const more = free.length - shown.length
+
+    if (free.length === 0) {
+      const note = str(action.data.note) || 'Free slots khatam — doosri date try karein.'
+      return <p className="text-[11px] text-muted-foreground">{note}</p>
+    }
+
+    return (
+      <div className="space-y-1.5">
+        <p className="truncate text-xs font-semibold">{doctor}</p>
+        {dateLabel && <p className="text-[10px] text-muted-foreground">{dateLabel}</p>}
+        <div className="flex flex-wrap gap-1.5">
+          {shown.map((s) => {
+            const t = str(s.time)
+            if (!t) return null
+            return (
+              <button
+                key={t}
+                type="button"
+                onClick={() => ctx.onSend?.(`${dateLabel} ko ${t} ka slot final karo`)}
+                aria-label={`${dateLabel} ko ${t} baje ka slot chunein`}
+                className="min-h-[36px] rounded-full border border-teal-300 bg-teal-50/60 px-2.5 text-[11px] font-semibold text-teal-700 transition-colors hover:bg-teal-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:border-teal-700 dark:bg-teal-950/40 dark:text-teal-400 dark:hover:bg-teal-600 dark:hover:text-white"
+              >
+                {t}
+              </button>
+            )
+          })}
+          {more > 0 && (
+            <span className="self-center text-[10px] text-muted-foreground">+{more} more</span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  if (action.type === 'find_nearby_doctors' || action.type === 'nearby-doctors') {
+    const doctors =
+      (action.data.doctors as
+        | { id: string; name: string; specialization?: string; city?: string; fees: number; distanceKm?: number }[]
+        | undefined) || []
+    return (
+      <div className="space-y-2">
+        {doctors.slice(0, 4).map((d) => (
+          <Link
+            key={d.id}
+            href={`/dashboard/patient/book/${d.id}`}
+            className="flex items-center justify-between rounded-lg border bg-background px-3 py-2 text-left transition-colors hover:border-teal-400 hover:bg-teal-50/50 dark:hover:bg-teal-950/30"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-semibold">{d.name}</span>
+              <span className="block truncate text-[11px] text-muted-foreground">
+                {d.specialization}
+                {d.city ? ` · ${d.city}` : ''}
+                {typeof d.distanceKm === 'number' ? ` · 📍 ${d.distanceKm} km` : ''}
+              </span>
+            </span>
+            <span className="ml-2 shrink-0 text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+              ₹{d.fees}
+            </span>
+          </Link>
+        ))}
+      </div>
+    )
+  }
+
+  if (action.type === 'prepare_booking' || action.type === 'booking-confirm') {
+    const booked =
+      findLaterBookingCreated(ctx.messages, ctx.messageIndex, {
+        doctorId: str(action.data.doctorId),
+        doctor: str(action.data.doctor),
+        date: str(action.data.date),
+        timeSlot: str(action.data.timeSlot),
+      }) !== null
+    return <CompactConfirmCard data={action.data} booked={booked} />
+  }
+
+  if (action.type === 'booking_created' || action.type === 'booking-created') {
+    const doctor = str(action.data.doctor)
+    const dateLabel = str(action.data.dateLabel) || str(action.data.date)
+    const timeSlot = str(action.data.timeSlot)
+    return (
+      <div className="space-y-1.5 rounded-lg border border-emerald-300 bg-emerald-50/70 px-3 py-2.5 dark:border-emerald-800 dark:bg-emerald-950/40">
+        <p className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Booking ho gayi!{timeSlot ? ` · ${timeSlot}` : ''}
+        </p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {doctor}
+          {dateLabel ? ` · ${dateLabel}` : ''}
+        </p>
+        <Link
+          href="/dashboard/patient/appointments"
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 underline-offset-2 hover:underline dark:text-teal-400"
+          aria-label="Appointments page kholein"
+        >
+          Appointments page dekhein
+          <ArrowUpRight className="h-3 w-3" aria-hidden />
+        </Link>
+      </div>
+    )
+  }
+
   return <p className="text-[11px] text-muted-foreground">{action.title}</p>
 }
 
 export default function SevikaChatButton() {
+  const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [loaded, setLoaded] = useState(false)
@@ -133,12 +350,13 @@ export default function SevikaChatButton() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Load the shared persisted history once, when the sheet is first opened.
+  // markRead=1 stamps the thread SEEN → sidebar unread badge resets right after.
   useEffect(() => {
     if (!open || loaded) return
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch('/api/dashboard/patient/aturseva/chat')
+        const res = await fetch('/api/dashboard/patient/aturseva/chat?markRead=1')
         if (!res.ok) return
         const data = (await res.json()) as {
           greeting?: string | null
@@ -157,6 +375,8 @@ export default function SevikaChatButton() {
           history.push({ id: 'greeting', role: 'aturseva', content: data.greeting })
         }
         setMessages(history)
+        // Thread just SEEN — refresh the sidebar unread badge.
+        void queryClient.invalidateQueries({ queryKey: ['aturseva-unread'] })
       } finally {
         if (!cancelled) setLoaded(true)
       }
@@ -164,7 +384,7 @@ export default function SevikaChatButton() {
     return () => {
       cancelled = true
     }
-  }, [open, loaded])
+  }, [open, loaded, queryClient])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -346,7 +566,7 @@ export default function SevikaChatButton() {
             role="log"
             aria-live="polite"
           >
-            {messages.map((m) =>
+            {messages.map((m, i) =>
               m.role === 'action' && m.action ? (
                 <motion.div
                   key={m.id}
@@ -358,7 +578,10 @@ export default function SevikaChatButton() {
                     <p className="mb-1.5 text-[11px] font-semibold text-teal-800 dark:text-teal-300">
                       {m.action.title}
                     </p>
-                    <ActionCardBody action={m.action} />
+                    <ActionCardBody
+                      action={m.action}
+                      ctx={{ onSend: (text) => void send(text), messages, messageIndex: i }}
+                    />
                   </div>
                 </motion.div>
               ) : (

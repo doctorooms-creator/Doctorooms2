@@ -2543,10 +2543,14 @@ model SevikaDietPlan {
 //   role 'aturseva'→ assistant text (streamed once, then persisted)
 //   role 'action'  → a TOOL result rendered as a rich card (actions-as-messages)
 model AtursevaConversation {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  // Phase 2: unread-badge support — last time the patient SAW the thread
+  // (full chat window load or FAB sheet open). Messages from Aturseva
+  // (roles 'aturseva'/'action') newer than this count as unread.
+  lastReadAt DateTime?
 
   user     User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages AtursevaMessage[]

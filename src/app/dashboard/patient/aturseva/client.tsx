@@ -8,13 +8,17 @@
  * sheet — this page and the sheet read/write the same thread.
  *
  * API contract (/api/dashboard/patient/aturseva/chat):
- *   GET    → { success, sessionExists, greeting, messages[] } (oldest→newest)
+ *   GET ?markRead=1 → { success, sessionExists, greeting, messages[] } (oldest→
+ *            newest) — markRead stamps the thread SEEN (sidebar badge reset)
  *   POST   → SSE stream: delta {text} · action {id,type,title,data} · done · error
+ *            body { message, location?: {lat,lng} } — location comes from the
+ *            composer 📍 GPS chip (feeds the find_nearby_doctors tool)
  *   DELETE → clears the thread (AlertDialog-confirmed, then refetch)
  *
  * Quirks handled here:
  *   - Action `type` is the TOOL name (`search_doctors` | `get_my_bookings` |
- *     `get_queue_position`); hyphenated aliases are accepted defensively.
+ *     `get_queue_position` | `get_doctor_slots` | `find_nearby_doctors` |
+ *     `prepare_booking` | `booking_created`); hyphenated aliases too.
  *   - History action rows serialize `title` empty with the real
  *     `{ title, data }` payload nested inside `data` — normalizeAction unwraps.
  *   - The narrated reply streams with a leading "\n" — display trims it.
@@ -29,8 +33,11 @@ import {
   ArrowDown,
   ArrowRight,
   CalendarDays,
+  CalendarCheck,
+  CheckCircle2,
   Clock,
   Loader2,
+  MapPin,
   MessageCircle,
   Pill,
   RefreshCw,
@@ -61,10 +68,18 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { getAvatarDisplayUrl } from '@/lib/avatar-url'
 import { cn } from '@/lib/utils'
 
+import {
+  BookingCreatedCardBody,
+  NearbyDoctorsCardBody,
+  PrepareBookingCardBody,
+  SlotsCardBody,
+  type CardRenderCtx,
+} from './cards'
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type Role = 'user' | 'aturseva' | 'action'
-type ActionKind = 'doctors' | 'bookings' | 'queue' | 'other'
+type ActionKind = 'doctors' | 'bookings' | 'queue' | 'slots' | 'nearby' | 'confirm' | 'created' | 'other'
 
 interface ActionCard {
   kind: ActionKind
@@ -124,6 +139,28 @@ const QUICK_CHIPS = [
   'Mera queue number?',
 ]
 
+/** localStorage key persisting ONLY the GPS "Nearby" enabled flag. */
+const GPS_STORAGE_KEY = 'aturseva-gps-enabled'
+
+/** Action `type` → renderer kind. Tool names AND hyphenated aliases. */
+const KIND_BY_TYPE: Record<string, ActionKind> = {
+  search_doctors: 'doctors',
+  'doctor-search': 'doctors',
+  get_my_bookings: 'bookings',
+  'bookings-status': 'bookings',
+  get_queue_position: 'queue',
+  'queue-position': 'queue',
+  // Phase 2
+  get_doctor_slots: 'slots',
+  'doctor-slots': 'slots',
+  find_nearby_doctors: 'nearby',
+  'nearby-doctors': 'nearby',
+  prepare_booking: 'confirm',
+  'booking-confirm': 'confirm',
+  booking_created: 'created',
+  'booking-created': 'created',
+}
+
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** "2026-10-15" → "15 Oct 2026" (no TZ math — the string IS the IST date). */
@@ -164,14 +201,7 @@ function normalizeAction(raw: {
     data = data.data as Record<string, unknown>
   }
 
-  const kind: ActionKind =
-    type === 'search_doctors' || type === 'doctor-search'
-      ? 'doctors'
-      : type === 'get_my_bookings' || type === 'bookings-status'
-        ? 'bookings'
-        : type === 'get_queue_position' || type === 'queue-position'
-          ? 'queue'
-          : 'other'
+  const kind: ActionKind = KIND_BY_TYPE[type] || 'other'
 
   return { kind, title, data }
 }
@@ -337,7 +367,7 @@ function QueueHero({ data, title }: { data: Record<string, unknown>; title: stri
   )
 }
 
-function ActionCardBody({ action }: { action: ActionCard }) {
+function ActionCardBody({ action, ctx }: { action: ActionCard; ctx?: CardRenderCtx }) {
   switch (action.kind) {
     case 'doctors': {
       const doctors = asArray<DoctorHit>(action.data.doctors)
@@ -378,6 +408,14 @@ function ActionCardBody({ action }: { action: ActionCard }) {
     }
     case 'queue':
       return <QueueHero data={action.data} title={action.title} />
+    case 'slots':
+      return <SlotsCardBody data={action.data} ctx={ctx} />
+    case 'nearby':
+      return <NearbyDoctorsCardBody data={action.data} ctx={ctx} />
+    case 'confirm':
+      return <PrepareBookingCardBody data={action.data} ctx={ctx} />
+    case 'created':
+      return <BookingCreatedCardBody data={action.data} ctx={ctx} />
     default:
       return (
         <p className="rounded-xl border bg-background px-3 py-2.5 text-xs text-muted-foreground">
@@ -387,7 +425,9 @@ function ActionCardBody({ action }: { action: ActionCard }) {
   }
 }
 
-function ActionCardShell({ action }: { action: ActionCard }) {
+function ActionCardShell({ action, ctx }: { action: ActionCard; ctx?: CardRenderCtx }) {
+  // booking_created gets an emerald success shell; everything else stays teal.
+  const isCreated = action.kind === 'created'
   const icon =
     action.kind === 'doctors' ? (
       <Stethoscope className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -395,16 +435,38 @@ function ActionCardShell({ action }: { action: ActionCard }) {
       <CalendarDays className="h-3.5 w-3.5 shrink-0" aria-hidden />
     ) : action.kind === 'queue' ? (
       <Ticket className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    ) : action.kind === 'slots' ? (
+      <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    ) : action.kind === 'nearby' ? (
+      <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    ) : action.kind === 'confirm' ? (
+      <CalendarCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    ) : action.kind === 'created' ? (
+      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
     ) : (
       <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden />
     )
   return (
-    <div className="w-full rounded-2xl rounded-tl-md border border-teal-200/80 bg-teal-50/60 p-3 shadow-sm dark:border-teal-900 dark:bg-teal-950/30">
-      <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-teal-800 dark:text-teal-300">
+    <div
+      className={cn(
+        'w-full rounded-2xl rounded-tl-md border p-3 shadow-sm',
+        isCreated
+          ? 'border-emerald-300/80 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30'
+          : 'border-teal-200/80 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/30'
+      )}
+    >
+      <p
+        className={cn(
+          'mb-2 flex items-center gap-1.5 text-xs font-semibold',
+          isCreated
+            ? 'text-emerald-800 dark:text-emerald-300'
+            : 'text-teal-800 dark:text-teal-300'
+        )}
+      >
         {icon}
         <span className="truncate">{action.title || 'Aturseva card'}</span>
       </p>
-      <ActionCardBody action={action} />
+      <ActionCardBody action={action} ctx={ctx} />
     </div>
   )
 }
@@ -471,7 +533,8 @@ export default function AtursevaChatClient() {
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['aturseva-chat'],
     queryFn: async (): Promise<HistoryResponse> => {
-      const res = await fetch('/api/dashboard/patient/aturseva/chat')
+      // markRead=1 stamps the thread SEEN — resets the sidebar unread badge.
+      const res = await fetch('/api/dashboard/patient/aturseva/chat?markRead=1')
       if (!res.ok) {
         if (res.status === 401) throw new Error('Session expired — dobara login kariye')
         throw new Error('Chat history load nahi ho payi')
@@ -486,6 +549,13 @@ export default function AtursevaChatClient() {
   const [sending, setSending] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [showJump, setShowJump] = useState(false)
+
+  // ── GPS "Nearby" chip state (Phase 2) ──
+  // Only the ENABLED flag persists (localStorage); coords are re-acquired
+  // silently on mount. When coords exist, every POST body carries `location`.
+  const [gpsEnabled, setGpsEnabled] = useState(false)
+  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [gpsLoading, setGpsLoading] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -537,6 +607,64 @@ export default function AtursevaChatClient() {
     setShowJump(false)
   }, [])
 
+  // ── GPS "Nearby" chip (Phase 2) ──
+
+  const acquireGps = useCallback((silent: boolean) => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      if (!silent) toast.error('Location permission nahi mili — city se search kar sakte ho')
+      return
+    }
+    setGpsLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setGpsLoading(false)
+        if (!silent) toast.success("Location on — ab 'paas ke doctor' poochh sakte ho")
+      },
+      () => {
+        setGpsLoading(false)
+        if (!silent) toast.error('Location permission nahi mili — city se search kar sakte ho')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    )
+  }, [])
+
+  // Restore the persisted enabled flag; silently re-acquire coordinates.
+  useEffect(() => {
+    let enabled = false
+    try {
+      enabled = window.localStorage.getItem(GPS_STORAGE_KEY) === '1'
+    } catch {
+      enabled = false
+    }
+    if (enabled) {
+      setGpsEnabled(true)
+      acquireGps(true)
+    }
+  }, [acquireGps])
+
+  const toggleGps = useCallback(() => {
+    if (gpsLoading) return
+    if (gpsEnabled) {
+      // Off: drop coords (POSTs stop carrying location) + forget the flag.
+      setGpsEnabled(false)
+      setGpsCoords(null)
+      try {
+        window.localStorage.removeItem(GPS_STORAGE_KEY)
+      } catch {
+        // private mode — state alone is fine
+      }
+      return
+    }
+    setGpsEnabled(true)
+    try {
+      window.localStorage.setItem(GPS_STORAGE_KEY, '1')
+    } catch {
+      // private mode — state alone is fine
+    }
+    acquireGps(false)
+  }, [gpsEnabled, gpsLoading, acquireGps])
+
   // ── Send one turn (SSE) ──
   const send = useCallback(
     async (text?: string) => {
@@ -560,11 +688,12 @@ export default function AtursevaChatClient() {
         setMessages((prev) => prev.map((m) => (m.id === aiId ? { ...m, streaming: false } : m)))
 
       try {
-        // History lives server-side — the body carries ONLY the new message.
+        // History lives server-side — the body carries ONLY the new message
+        // (plus GPS coords when the 📍 Nearby chip is on).
         const res = await fetch('/api/dashboard/patient/aturseva/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify(gpsCoords ? { message, location: gpsCoords } : { message }),
         })
 
         if (!res.ok || !res.body) {
@@ -628,6 +757,9 @@ export default function AtursevaChatClient() {
               finishBubble()
               // Refresh the cache (page + FAB sheet read the same thread).
               void queryClient.invalidateQueries({ queryKey: ['aturseva-chat'] })
+              // The reply just landed in THIS window — reset the sidebar
+              // unread badge too (the refetch re-stamps lastReadAt).
+              void queryClient.invalidateQueries({ queryKey: ['aturseva-unread'] })
             } else if (event === 'error') {
               finished = true
               const msgText = asString(payload.message) || 'Kuch dikkat aayi — dobara try karein'
@@ -650,7 +782,15 @@ export default function AtursevaChatClient() {
         finishBubble()
       }
     },
-    [input, sending, isLoading, queryClient]
+    [input, sending, isLoading, queryClient, gpsCoords]
+  )
+
+  // Card interactions (slot chips / other-day chips) ride the same turn pipeline.
+  const handleCardSend = useCallback(
+    (text: string) => {
+      void send(text)
+    },
+    [send]
   )
 
   // ── Clear the thread (AlertDialog-confirmed) ──
@@ -777,7 +917,7 @@ export default function AtursevaChatClient() {
             ) : isError ? (
               <HistoryError onRetry={() => void refetch()} />
             ) : (
-              messages.map((m) =>
+              messages.map((m, i) =>
                 m.role === 'action' && m.action ? (
                   <motion.div
                     key={m.id}
@@ -786,10 +926,15 @@ export default function AtursevaChatClient() {
                     transition={{ duration: 0.2 }}
                     className={cn(
                       'flex w-full justify-start',
-                      m.action.kind === 'doctors' ? 'sm:max-w-xl lg:max-w-2xl' : 'max-w-md'
+                      m.action.kind === 'doctors' || m.action.kind === 'nearby'
+                        ? 'sm:max-w-xl lg:max-w-2xl'
+                        : 'max-w-md'
                     )}
                   >
-                    <ActionCardShell action={m.action} />
+                    <ActionCardShell
+                      action={m.action}
+                      ctx={{ onSend: handleCardSend, messages, messageIndex: i }}
+                    />
                   </motion.div>
                 ) : (
                   <motion.div
@@ -878,6 +1023,40 @@ export default function AtursevaChatClient() {
 
       {/* ── Composer ── */}
       <div className="shrink-0 border-t bg-background px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-4">
+        {/* GPS "Nearby" chip — shares coordinates with every chat POST */}
+        <div className="mx-auto mb-2 flex w-full max-w-3xl items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleGps}
+            disabled={gpsLoading}
+            aria-label="Paas ke doctors ke liye location on karein"
+            aria-pressed={gpsEnabled}
+            className={cn(
+              'inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-wait',
+              gpsEnabled
+                ? 'border-teal-600 bg-teal-600 text-white hover:bg-teal-700'
+                : 'border-border bg-background text-muted-foreground hover:border-teal-400 hover:text-teal-700 dark:hover:border-teal-700 dark:hover:text-teal-400'
+            )}
+          >
+            {gpsLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <MapPin className="h-3.5 w-3.5" aria-hidden />
+            )}
+            <span>Nearby</span>
+            {gpsEnabled && !gpsLoading && (
+              <span
+                className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-300"
+                aria-hidden
+              />
+            )}
+          </button>
+          {gpsEnabled && gpsCoords && (
+            <span className="hidden truncate text-[10px] text-muted-foreground sm:inline">
+              📍 {gpsCoords.lat.toFixed(3)}, {gpsCoords.lng.toFixed(3)} — "paas ke doctor" poochhein
+            </span>
+          )}
+        </div>
         <form
           className="mx-auto flex w-full max-w-3xl items-end gap-2"
           onSubmit={(e) => {

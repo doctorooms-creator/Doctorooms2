@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/api-auth'
 import { db } from '@/lib/db'
 import { buildAtursevaContext, buildGreeting } from '@/lib/aturseva/context'
 import { buildAtursevaSystemPrompt, runAtursevaTurn, type AtursevaLLMMessage } from '@/lib/aturseva/agent'
+import type { ToolContext } from '@/lib/aturseva/tools'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -11,6 +12,14 @@ export const maxDuration = 60
 
 const bodySchema = z.object({
   message: z.string().min(1, 'Kuch likhiye to sahi 🩺').max(1000),
+  // Phase 2: optional GPS location shared by the patient (composer 📍 chip).
+  // Used ONLY by find_nearby_doctors (haversine vs Doctor.lat/longi).
+  location: z
+    .object({
+      lat: z.number().min(-90).max(90),
+      lng: z.number().min(-180).max(180),
+    })
+    .optional(),
 })
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -66,7 +75,16 @@ function safeParse(json: string): Record<string, unknown> {
   }
 }
 
+/** Compact `[CARD …]` note for the LLM history window (action rows). */
+function compactCardPayload(actionType: string | null, actionJson: string | null): string {
+  const parsed = actionJson ? safeParse(actionJson) : {}
+  const compact = JSON.stringify(parsed)
+  return compact.length > 520 ? `${compact.slice(0, 520)}…` : compact
+}
+
 // ─── GET: history + greeting (empty thread) ─────────────────────────────────
+// `?markRead=1` stamps AtursevaConversation.lastReadAt (unread-badge reset).
+// The full chat window and the FAB sheet pass it; nothing else does.
 
 export async function GET(req: NextRequest) {
   const user = await requireRole(req, 'patient')
@@ -84,6 +102,12 @@ export async function GET(req: NextRequest) {
   if (messages.length === 0) {
     const ctx = await buildAtursevaContext(user.id)
     greeting = buildGreeting(ctx.patientName, ctx.dataBlock)
+  }
+
+  if (conversation && req.nextUrl.searchParams.get('markRead') === '1') {
+    await db.atursevaConversation
+      .update({ where: { id: conversation.id }, data: { lastReadAt: new Date() } })
+      .catch(() => {}) // badge reset is best-effort — never block the thread
   }
 
   return Response.json({ success: true, sessionExists: !!conversation, greeting, messages })
@@ -131,7 +155,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { message } = parsed.data
+  const { message, location } = parsed.data
 
   // Persist the user message first (coherent even if the stream dies).
   const conversation = await getOrCreateConversation(user.id)
@@ -143,27 +167,51 @@ export async function POST(req: NextRequest) {
     data: { updatedAt: new Date() },
   })
 
-  // Fresh context (L2) + history window (last 12 turns from DB — no client echo).
+  // Fresh context (L2) + history window (last ~15 turns from DB — no client echo).
+  // ACTION rows are included as compact `[CARD …]` assistant notes so the model
+  // remembers which doctors/slots/confirm cards it already showed (Phase 2: the
+  // slot-pick turn needs the previous slots card in context).
   const [ctx, historyRows] = await Promise.all([
     buildAtursevaContext(user.id),
     db.atursevaMessage.findMany({
-      where: { conversationId: conversation.id, role: { in: ['user', 'aturseva'] } },
+      where: { conversationId: conversation.id, role: { in: ['user', 'aturseva', 'action'] } },
       orderBy: { createdAt: 'desc' },
-      take: 24, // ~12 turns
+      take: 36, // ~12 turns incl. action cards
     }),
   ])
 
   const historyMessages: AtursevaLLMMessage[] = historyRows
     .reverse()
     .filter((r) => r.id !== userMsg.id) // this turn's message is appended below
-    .slice(-23) // keep the most recent turns
-    .map((r) => ({ role: r.role === 'user' ? 'user' : 'assistant', content: r.content }))
+    .slice(-35)
+    .map((r) => {
+      if (r.role === 'action') {
+        // IMPORTANT: inject as a USER-role system note (same contract as the
+        // TOOL RESULT blocks) — assistant-role card notes get MIMICKED by the
+        // model as its own output format (observed: “[CARD prepare_booking]…”
+        // leaked as a reply). User-role notes are treated as ground truth
+        // context, never as a style to copy.
+        const payload = compactCardPayload(r.actionType, r.actionJson)
+        return {
+          role: 'user' as const,
+          content: `(SELF-CONTEXT — system note, ye patient ka message NAHI hai: isse pehle aapne patient ko ek ${r.actionType} ka card dikhaya tha. Card payload: ${payload}. Ye sirf reference context hai — apne jawab me is format ko ya card ka content copy/repeat MAT karein.)`,
+        }
+      }
+      return { role: (r.role === 'user' ? 'user' : 'assistant') as 'user' | 'assistant', content: r.content }
+    })
+
+  // Shared GPS location → the model knows find_nearby_doctors will work.
+  const dataBlock = location
+    ? `${ctx.dataBlock}\n\nPATIENT LOCATION (GPS shared): ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)} — "paas ke/nearby doctors" ke liye find_nearby_doctors tool use karein.`
+    : ctx.dataBlock
 
   const llmMessages: AtursevaLLMMessage[] = [
-    { role: 'system', content: buildAtursevaSystemPrompt(ctx.patientName, ctx.dataBlock) },
+    { role: 'system', content: buildAtursevaSystemPrompt(ctx.patientName, dataBlock) },
     ...historyMessages,
     { role: 'user', content: message },
   ]
+
+  const toolCtx: ToolContext = location ? { location } : {}
 
   const encoder = new TextEncoder()
   const stream = new ReadableStream<Uint8Array>({
@@ -176,7 +224,7 @@ export async function POST(req: NextRequest) {
         const { reply, actions } = await runAtursevaTurn(llmMessages, user.id, {
           delta: (text) => send('delta', { text }),
           action: (a) => send('action', { id: a.id, type: a.type, title: a.title, data: a.data }),
-        })
+        }, toolCtx)
 
         // Persist action rows (before the reply, matching emission order).
         for (const a of actions) {
