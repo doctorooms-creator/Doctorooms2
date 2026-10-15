@@ -29,11 +29,30 @@ export const metadata: Metadata = {
     "queue token",
     "Doctorooms",
   ],
+  icons: {
+    icon: [{ url: "/aturseva-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/aturseva-icon.svg" }],
+  },
   openGraph: {
     title: "Aturseva — The doctor visits. Aturseva stays.",
     description:
       "Doctor home visits with an AI care companion that never clocks out.",
     type: "website",
+    images: [
+      {
+        url: "/og/aturseva-og.png",
+        width: 1200,
+        height: 630,
+        alt: "Aturseva — the doctor visits, she stays. A monochrome ink-and-ivory orb breathing on black.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Aturseva — The doctor visits. Aturseva stays.",
+    description:
+      "Doctor home visits with an AI care companion that never clocks out.",
+    images: ["/og/aturseva-og.png"],
   },
 };
 

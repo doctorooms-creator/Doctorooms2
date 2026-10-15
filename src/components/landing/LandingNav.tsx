@@ -9,6 +9,7 @@ import { useMagnetic } from "@/hooks/use-magnetic";
 const NAV_LINKS = [
   { href: "#day", label: "A day with her" },
   { href: "#baari", label: "The wait" },
+  { href: "#boundary", label: "The close" },
   { href: "#queue", label: "Your number" },
   { href: "#book", label: "Book" },
 ];

@@ -10,6 +10,7 @@ import {
 } from "framer-motion";
 import { ArrowDown, Bell, Footprints } from "lucide-react";
 import { useReducedMotion } from "@/hooks/use-media";
+import { setBaari } from "@/lib/fx/baari-store";
 
 /* ── The BAARI scrub — the signature beat ──────────────────────────────
    The section pins for ~2.4 screens. Your token counts down 12 → 1 as
@@ -76,13 +77,19 @@ export function BaariScrub() {
   useIsoLayoutEffect(() => {
     if (rm) {
       setP(1);
+      setBaari(1, true);
       return;
     }
-    setP(scrollYProgress.get());
+    const v = scrollYProgress.get();
+    setP(v);
+    setBaari(tokenAt(v), v >= TURN_AT);
   }, [rm, scrollYProgress]);
 
   useMotionValueEvent(scrollYProgress, "change", (v) => {
-    if (!rm) setP(v);
+    if (!rm) {
+      setP(v);
+      setBaari(tokenAt(v), v >= TURN_AT);
+    }
   });
 
   const turn = p >= TURN_AT;

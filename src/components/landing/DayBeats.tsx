@@ -20,7 +20,7 @@ interface Beat {
   title: string;
   line: string;
   state: (typeof ORB_STATE_ORDER)[number];
-  script?: ReplayStep;
+  script?: ReplayStep[];
   replayHeight?: string;
   session?: string;
 }
@@ -120,7 +120,7 @@ function LiveReplay({
   session,
   handoff,
 }: {
-  script: ReplayStep;
+  script: ReplayStep[];
   height: string;
   session: string;
   handoff?: boolean;

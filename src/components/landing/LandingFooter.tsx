@@ -26,9 +26,23 @@ export function LandingFooter() {
               <span className="text-sm font-semibold uppercase tracking-[0.34em] text-ivory">
                 Aturseva
               </span>
+              {/* Night orb — the day ends; she&rsquo;s still on */}
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden
+                className="ml-1 h-6 w-6"
+                role="img"
+              >
+                <circle cx="12" cy="12" r="10" fill="none" stroke="#f4f2ec" strokeOpacity="0.22" />
+                <circle cx="12" cy="12" r="6.2" fill="#f4f2ec" fillOpacity="0.16" />
+                <circle cx="9.8" cy="9.2" r="1.9" fill="#f4f2ec" fillOpacity="0.5" />
+              </svg>
             </Link>
             <p className="font-display mt-3 text-lg italic text-silver/80">
               Care that stays.
+            </p>
+            <p className="mt-1 text-[10.5px] uppercase tracking-[0.2em] text-ash/70">
+              The day ends · she&rsquo;s still on
             </p>
           </div>
 
