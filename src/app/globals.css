@@ -415,3 +415,142 @@ a {
 .sevika-chat-scroll::-webkit-scrollbar-thumb:hover {
   background-color: hsl(173 70% 40%);
 }
+
+/* ══════════════════════════════════════════════════════════════════
+   ATURSEVA LANDING v2 — monochrome design system
+   Strictly scoped to `.aturseva`. ink → ivory only, zero hue.
+   ══════════════════════════════════════════════════════════════════ */
+
+@theme {
+  --color-ink-950: #0a0b0d;
+  --color-ink-900: #0e1013;
+  --color-ink-850: #121418;
+  --color-ink-800: #171a1f;
+  --color-ink-700: #22262e;
+  --color-ink-600: #2e333d;
+  --color-ivory: #f4f2ec;
+  --color-silver: #b7b2a7;
+  --color-ash: #807c73;
+}
+
+.aturseva {
+  font-family: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background-color: var(--color-ink-950);
+  color: var(--color-ivory);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.aturseva-body {
+  background-color: var(--color-ink-950) !important;
+}
+
+.aturseva ::selection {
+  background: var(--color-ivory);
+  color: var(--color-ink-950);
+}
+
+.aturseva :focus-visible {
+  outline: 1px solid rgba(244, 242, 236, 0.55);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.aturseva .font-display {
+  font-family: var(--font-fraunces), 'Iowan Old Style', Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+/* Glass panel — the landing's only surface */
+.aturseva .glass {
+  background: rgba(244, 242, 236, 0.028);
+  border: 1px solid rgba(244, 242, 236, 0.09);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.aturseva .glass-strong {
+  background: rgba(14, 16, 19, 0.72);
+  border: 1px solid rgba(244, 242, 236, 0.12);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.aturseva .hairline-b { border-bottom: 1px solid rgba(244, 242, 236, 0.08); }
+.aturseva .hairline-t { border-top: 1px solid rgba(244, 242, 236, 0.08); }
+
+/* Custom cursor gate — enabled only when CursorLayer mounts (pointer:fine) */
+.aturseva.aturseva-cursor-on,
+.aturseva.aturseva-cursor-on * { cursor: none !important; }
+.aturseva.aturseva-cursor-on input,
+.aturseva.aturseva-cursor-on textarea,
+.aturseva.aturseva-cursor-on select { cursor: text !important; }
+
+/* ── Keyframes ── */
+@keyframes atva-marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}
+
+@keyframes atva-caret {
+  0%, 45%  { opacity: 1; }
+  50%, 95% { opacity: 0; }
+}
+
+@keyframes atva-dot-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30%           { transform: translateY(-3px); opacity: 1; }
+}
+
+@keyframes atva-wave {
+  0%, 100% { transform: scaleY(0.28); }
+  50%      { transform: scaleY(1); }
+}
+
+@keyframes atva-pulse-ring {
+  0%   { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+@keyframes atva-float-y {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-8px); }
+}
+
+@keyframes atva-grain {
+  0%   { transform: translate3d(0, 0, 0); }
+  25%  { transform: translate3d(-2%, 3%, 0); }
+  50%  { transform: translate3d(3%, -2%, 0); }
+  75%  { transform: translate3d(-3%, -3%, 0); }
+  100% { transform: translate3d(2%, 2%, 0); }
+}
+
+@keyframes atva-scroll-line {
+  0%   { transform: scaleY(0); transform-origin: top; }
+  45%  { transform: scaleY(1); transform-origin: top; }
+  55%  { transform: scaleY(1); transform-origin: bottom; }
+  100% { transform: scaleY(0); transform-origin: bottom; }
+}
+
+/* ── Replay chat scrollbar ── */
+.aturseva .atva-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(244, 242, 236, 0.22) transparent;
+}
+.aturseva .atva-scroll::-webkit-scrollbar { width: 5px; }
+.aturseva .atva-scroll::-webkit-scrollbar-track { background: transparent; }
+.aturseva .atva-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(244, 242, 236, 0.22);
+  border-radius: 999px;
+}
+
+/* ── Reduced motion: kill every landing animation ── */
+@media (prefers-reduced-motion: reduce) {
+  .aturseva *,
+  .aturseva *::before,
+  .aturseva *::after {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001s !important;
+  }
+}
