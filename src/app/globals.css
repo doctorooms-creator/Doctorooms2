@@ -512,6 +512,11 @@ a {
   100% { transform: scale(2.6); opacity: 0; }
 }
 
+@keyframes atva-token-glow {
+  0%, 100% { text-shadow: 0 0 24px rgba(244, 242, 236, 0.10); }
+  50%      { text-shadow: 0 0 44px rgba(244, 242, 236, 0.22); }
+}
+
 @keyframes atva-float-y {
   0%, 100% { transform: translateY(0); }
   50%      { transform: translateY(-8px); }

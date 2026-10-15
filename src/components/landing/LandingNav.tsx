@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { motion, useScroll, useSpring } from "framer-motion";
 import { ArrowUpRight } from "lucide-react";
 import { useMagnetic } from "@/hooks/use-magnetic";
 
 const NAV_LINKS = [
   { href: "#day", label: "A day with her" },
+  { href: "#baari", label: "The wait" },
   { href: "#queue", label: "Your number" },
   { href: "#book", label: "Book" },
 ];
@@ -14,6 +16,12 @@ const NAV_LINKS = [
 export function LandingNav() {
   const [scrolled, setScrolled] = useState(false);
   const ctaRef = useMagnetic<HTMLAnchorElement>({ strength: 0.22, radius: 70 });
+  const { scrollYProgress } = useScroll();
+  const progress = useSpring(scrollYProgress, {
+    stiffness: 120,
+    damping: 26,
+    mass: 0.4,
+  });
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -30,6 +38,12 @@ export function LandingNav() {
           : "border-b border-transparent py-5"
       }`}
     >
+      {/* Reading progress — a hairline that fills as the day is told */}
+      <motion.div
+        aria-hidden
+        className="absolute inset-x-0 bottom-0 h-px origin-left bg-gradient-to-r from-ivory/50 via-ivory to-ivory/50"
+        style={{ scaleX: progress }}
+      />
       <div className="mx-auto flex max-w-6xl items-center justify-between px-5 sm:px-8">
         <Link
           href="/"

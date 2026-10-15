@@ -93,6 +93,43 @@ export const HERO_MOMENTS: Moment[] = [
   },
 ];
 
+/** Beat 2 of the Day section — the queue scan, replayed. Leads into #baari. */
+export const QUEUE_SCRIPT: ReplayStep[] = [
+  { kind: "system", text: "09:10 · Monday · you scanned the clinic QR from home" },
+  { kind: "typing", ms: 900 },
+  {
+    kind: "msg",
+    from: "ai",
+    text: "You're number 12. Eleven ahead of you — about 25 minutes. Stay home; I'll tell you when to leave.",
+    time: "09:10",
+  },
+  { kind: "typing", ms: 700 },
+  { kind: "msg", from: "patient", text: "Achha. Tea is on the stove.", time: "09:11" },
+  { kind: "system", text: "Queue synced live · City Care Clinic OPD" },
+];
+
+/** Beat 4 of the Day section — the afternoon vitals check, replayed. */
+export const VITALS_SCRIPT: ReplayStep[] = [
+  { kind: "system", text: "14:00 · Monday · vitals check-in" },
+  { kind: "typing", ms: 800 },
+  {
+    kind: "msg",
+    from: "ai",
+    text: "Good afternoon, Amma. How is the sugar feeling after lunch?",
+    time: "14:00",
+  },
+  { kind: "typing", ms: 1000 },
+  { kind: "msg", from: "patient", text: "A little shaky, actually.", time: "14:01" },
+  { kind: "typing", ms: 1300 },
+  {
+    kind: "msg",
+    from: "ai",
+    text: "Noted — logged. Dr. Rao asked for a 2 pm reading; the glucometer is in the kitchen drawer. I'll walk you through it.",
+    time: "14:01",
+  },
+  { kind: "system", text: "Vitals relayed · flagged to Dr. Rao" },
+];
+
 /** Beat 1 of the Day section — the fully-live morning replay. */
 export const MORNING_SCRIPT: ReplayStep[] = [
   { kind: "system", text: "06:30 · Monday" },

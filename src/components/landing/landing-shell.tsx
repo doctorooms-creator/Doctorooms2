@@ -8,6 +8,7 @@ import { LandingNav } from "@/components/landing/LandingNav";
 import { Hero } from "@/components/landing/Hero";
 import { Marquee } from "@/components/landing/Marquee";
 import { DayBeats } from "@/components/landing/DayBeats";
+import { BaariScrub } from "@/components/landing/BaariScrub";
 import { QueueToken } from "@/components/landing/QueueToken";
 import { ClosingCTA } from "@/components/landing/ClosingCTA";
 import { LandingFooter } from "@/components/landing/LandingFooter";
@@ -34,6 +35,7 @@ export function LandingShell() {
           <Hero />
           <Marquee />
           <DayBeats />
+          <BaariScrub />
           <QueueToken />
           <ClosingCTA />
         </main>

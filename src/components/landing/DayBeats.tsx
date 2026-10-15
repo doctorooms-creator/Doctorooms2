@@ -2,9 +2,14 @@
 
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import { Stethoscope, Activity, FileText, Moon, QrCode } from "lucide-react";
+import { Stethoscope, Activity, FileText, Moon, QrCode, ArrowDown } from "lucide-react";
 import { ChatReplay } from "@/components/landing/chat/ChatReplay";
-import { MORNING_SCRIPT } from "@/components/landing/moments";
+import type { ReplayStep } from "@/components/landing/chat/ChatReplay";
+import {
+  MORNING_SCRIPT,
+  QUEUE_SCRIPT,
+  VITALS_SCRIPT,
+} from "@/components/landing/moments";
 import { ORB_STATES, ORB_STATE_ORDER } from "@/components/landing/orb/orb-states";
 import { useSpotlight } from "@/hooks/use-spotlight";
 
@@ -15,6 +20,9 @@ interface Beat {
   title: string;
   line: string;
   state: (typeof ORB_STATE_ORDER)[number];
+  script?: ReplayStep;
+  replayHeight?: string;
+  session?: string;
 }
 
 const BEATS: Beat[] = [
@@ -23,12 +31,18 @@ const BEATS: Beat[] = [
     title: "She wakes her first.",
     line: "A voice reminder for the BP tablet — logged the moment it's taken.",
     state: "speaking",
+    script: MORNING_SCRIPT,
+    replayHeight: "h-[300px]",
+    session: "session 0847",
   },
   {
     time: "09:10",
     title: "The queue that follows you.",
     line: "Scan the clinic QR from your sofa. Your number counts down at home.",
     state: "vigilant",
+    script: QUEUE_SCRIPT,
+    replayHeight: "h-[240px]",
+    session: "session 0847",
   },
   {
     time: "11:00",
@@ -41,6 +55,9 @@ const BEATS: Beat[] = [
     title: "Vitals, logged & relayed.",
     line: "She checks in, nudges the reading, and flags anything unusual.",
     state: "vigilant",
+    script: VITALS_SCRIPT,
+    replayHeight: "h-[280px]",
+    session: "session 0847",
   },
   {
     time: "18:30",
@@ -59,16 +76,6 @@ const BEATS: Beat[] = [
 /* ── Miniature previews for the non-live beats ──────────────────────── */
 
 function BeatPreview({ index }: { index: number }) {
-  if (index === 1) {
-    return (
-      <div className="mt-4 flex items-center justify-end gap-4">
-        <span className="text-[11px] uppercase tracking-[0.2em] text-ash">
-          3 ahead · ~12 min
-        </span>
-        <span className="font-display text-5xl italic text-ivory/90">#07</span>
-      </div>
-    );
-  }
   if (index === 2) {
     return (
       <div className="mt-4 flex items-center gap-3.5">
@@ -80,24 +87,6 @@ function BeatPreview({ index }: { index: number }) {
           <p className="text-ash">At your door · Rx written today</p>
         </div>
         <Stethoscope className="ml-auto h-4 w-4 text-silver/60" />
-      </div>
-    );
-  }
-  if (index === 3) {
-    return (
-      <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[12px]">
-        <span className="text-ivory/85">
-          BP <span className="font-display italic">128/82</span>
-        </span>
-        <span className="text-ivory/85">
-          Sugar <span className="font-display italic">156</span>
-        </span>
-        <span className="text-ivory/85">
-          Temp <span className="font-display italic">98.4°F</span>
-        </span>
-        <span className="ml-auto inline-flex items-center gap-1.5 text-ash">
-          <Activity className="h-3.5 w-3.5" /> relayed to Dr. Rao
-        </span>
       </div>
     );
   }
@@ -123,11 +112,54 @@ function BeatPreview({ index }: { index: number }) {
   );
 }
 
+/* ── Live beat card (own in-view gate) ───────────────────────────────── */
+
+function LiveReplay({
+  script,
+  height,
+  session,
+  handoff,
+}: {
+  script: ReplayStep;
+  height: string;
+  session: string;
+  handoff?: boolean;
+}) {
+  const liveRef = useRef<HTMLDivElement>(null);
+  const liveInView = useInView(liveRef, { margin: "-24% 0px -24% 0px" });
+
+  return (
+    <div
+      ref={liveRef}
+      data-cursor="REPLAY"
+      className="mt-5 rounded-2xl border border-ivory/10 bg-ink-950/60 p-4"
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-ash">
+          <QrCode className="h-3.5 w-3.5" />
+          Live replay · {session}
+        </span>
+        <span className="text-[10px] uppercase tracking-[0.18em] text-ash/60">
+          {liveInView ? "playing" : "paused"}
+        </span>
+      </div>
+      <ChatReplay script={script} active={liveInView} className={`${height} pr-1`} />
+      {handoff ? (
+        <a
+          href="#baari"
+          className="group mt-3 inline-flex items-center gap-2 rounded-full border border-ivory/10 bg-ivory/[0.03] px-3.5 py-2 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-silver transition-colors hover:border-ivory/25 hover:text-ivory"
+        >
+          Live the whole wait
+          <ArrowDown className="h-3 w-3 transition-transform duration-300 group-hover:translate-y-0.5" />
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 /* ── Section ────────────────────────────────────────────────────────── */
 
 export function DayBeats() {
-  const liveRef = useRef<HTMLDivElement>(null);
-  const liveInView = useInView(liveRef, { margin: "-24% 0px -24% 0px" });
   const sectionRef = useSpotlight<HTMLElement>();
 
   return (
@@ -182,7 +214,7 @@ export function DayBeats() {
         {/* Beats */}
         <ol className="mt-16 space-y-5">
           {BEATS.map((beat, i) => {
-            const live = i === 0;
+            const live = Boolean(beat.script);
             return (
               <motion.li
                 key={beat.time}
@@ -221,26 +253,13 @@ export function DayBeats() {
                     </span>
                   </div>
 
-                  {live ? (
-                    <div
-                      ref={liveRef}
-                      className="mt-5 rounded-2xl border border-ivory/10 bg-ink-950/60 p-4"
-                    >
-                      <div className="mb-3 flex items-center justify-between">
-                        <span className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-ash">
-                          <QrCode className="h-3.5 w-3.5" />
-                          Live replay · session 0847
-                        </span>
-                        <span className="text-[10px] uppercase tracking-[0.18em] text-ash/60">
-                          {liveInView ? "playing" : "paused"}
-                        </span>
-                      </div>
-                      <ChatReplay
-                        script={MORNING_SCRIPT}
-                        active={liveInView}
-                        className="h-[300px] pr-1"
-                      />
-                    </div>
+                  {live && beat.script ? (
+                    <LiveReplay
+                      script={beat.script}
+                      height={beat.replayHeight ?? "h-[260px]"}
+                      session={beat.session ?? "session 0847"}
+                      handoff={i === 1}
+                    />
                   ) : (
                     <BeatPreview index={i} />
                   )}
