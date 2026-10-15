@@ -61,7 +61,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 
-import SevikaChatButton from './chat'
+// SevikaChatButton (Aturseva FAB) is mounted globally in dashboard/layout.tsx.
 
 // ============ TYPES ============
 
@@ -282,7 +282,7 @@ export default function PatientSevikaClient() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-600 text-white shadow-sm">
               <Pill className="h-5 w-5" />
             </span>
-            Sevika
+            Aturseva
             <Badge className="border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-400">
               Aapki AI Nurse
             </Badge>
@@ -588,8 +588,8 @@ export default function PatientSevikaClient() {
         onDone={invalidate}
       />
 
-      {/* ── P3: Sevika chat (floating nurse button + sheet) ── */}
-      <SevikaChatButton />
+      {/* Aturseva FAB is now mounted GLOBALLY in dashboard/layout.tsx (patient
+          role) — no local mount here, no double FAB on this page. */}
     </div>
   )
 }
@@ -794,7 +794,7 @@ function EmptyTimeline({
         <p className="font-semibold">Aaj koi dawai schedule nahi hai</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Doctor ki prescription import karein ya khud dawai add karein —
-          Sevika time pe yaad dilayegi.
+          Aturseva time pe yaad dilayegi.
         </p>
       </div>
       <div className="flex flex-wrap justify-center gap-2">
@@ -930,7 +930,7 @@ function AddMedicineDialog({
             <Pill className="h-4 w-4 text-teal-600" /> Nayi Dawai Add Karein
           </DialogTitle>
           <DialogDescription>
-            Sevika khud reminders set kar legi — subah / dopahar / raat ke time pe.
+            Aturseva khud reminders set kar legi — subah / dopahar / raat ke time pe.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -1056,7 +1056,7 @@ function ImportPrescriptionDialog({
             <Upload className="h-4 w-4 text-teal-600" /> Prescription se Import
           </DialogTitle>
           <DialogDescription>
-            Doctor ke Rx ki dawaiyaan select karein — Sevika schedule khud bana legi.
+            Doctor ke Rx ki dawaiyaan select karein — Aturseva schedule khud bana legi.
           </DialogDescription>
         </DialogHeader>
 
@@ -1696,7 +1696,7 @@ function WeeklyReportCard() {
                 {data.narrative}
               </p>
               <p className="mt-1.5 text-[10px] text-muted-foreground">
-                {data.narrativeAI ? 'Sevika ki taraf se — AI summary' : 'Sevika ki taraf se'} •
+                {data.narrativeAI ? 'Aturseva ki taraf se — AI summary' : 'Aturseva ki taraf se'} •
                 Koi bhi dawai change karne se pehle doctor se salah lein.
               </p>
             </div>

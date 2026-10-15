@@ -24,6 +24,7 @@ import {
   Stethoscope,
   Play,
   Gift,
+  Pill,
 } from 'lucide-react'
 
 // Event → toast configuration per role
@@ -189,6 +190,21 @@ export const EVENT_CONFIG: Record<string, EventConfig> = {
     roles: ['doctor'],
     critical: true,
   },
+
+  // ── Aturseva (AI nurse) dose events ──────────────────────────────
+  'med-reminder': {
+    title: 'Dawai ka Samay',
+    icon: Pill,
+    color: 'text-teal-600',
+    roles: ['patient'],
+    critical: true,
+  },
+  'dose-missed': {
+    title: 'Ek Dawa Reh Gayi',
+    icon: AlertTriangle,
+    color: 'text-amber-600',
+    roles: ['patient'],
+  },
 }
 
 // Event → list of TanStack Query keys to invalidate when the event fires
@@ -210,6 +226,8 @@ const QUERY_INVALIDATION: Record<string, string[][]> = {
   'bed-status-changed': [['ipd-admissions'], ['wards'], ['beds']],
   'prescription-shared': [['patient-rx-access']],
   'referral-reward': [['referral-me']],
+  'med-reminder': [['sevika-today'], ['sevika-weekly'], ['patient-notifications']],
+  'dose-missed': [['sevika-today'], ['sevika-weekly'], ['patient-notifications']],
 }
 
 // Dedup: avoid showing duplicate toasts for same event within 5 seconds

@@ -1,7 +1,7 @@
 import PatientSevikaClient from './client'
 
 export const metadata = {
-  title: 'Sevika — Dawai Reminders',
+  title: 'Aturseva — Dawai Reminders',
 }
 
 export default function PatientSevikaPage() {

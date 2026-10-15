@@ -74,7 +74,7 @@ export function reminderMessage(tone: NudgeTone, med: NudgeMed): string {
       return [
         `${base} ka time — aapki regularity dekh kar khushi ho rahi hai! 💪`,
         `Streak zinda rakhenge?${instr}`,
-        '— Sevika, aapki nurse 🩺',
+        '— Aturseva, aapki nurse 🩺',
       ]
         .filter(Boolean)
         .join(' ')
@@ -82,10 +82,10 @@ export function reminderMessage(tone: NudgeTone, med: NudgeMed): string {
       return [
         `Yaad hai na — ${base} lena hai.`,
         'Chhoti si cheez hai, ho jayegi. Main saath hoon, bina tension.',
-        `${instr}— Sevika, aapki nurse 🩺`.trim(),
+        `${instr}— Aturseva, aapki nurse 🩺`.trim(),
       ].join(' ')
     default:
-      return [`${base} lena hai.`, instr, '— Sevika, aapki nurse 🩺']
+      return [`${base} lena hai.`, instr, '— Aturseva, aapki nurse 🩺']
         .filter((p) => p && p.trim())
         .join(' ')
   }
@@ -95,10 +95,10 @@ export function reminderMessage(tone: NudgeTone, med: NudgeMed): string {
 export function missedMessage(tone: NudgeTone, medicine: string): string {
   switch (tone) {
     case 'celebrate':
-      return `Arre, ${medicine} reh gayi? Koi baat nahi — itni acchi streak ke baad ek dose se farak nahi padta. Jab yaad aaye le lijiye, agli se phir wahi rhythm. — Sevika 🩺`
+      return `Arre, ${medicine} reh gayi? Koi baat nahi — itni acchi streak ke baad ek dose se farak nahi padta. Jab yaad aaye le lijiye, agli se phir wahi rhythm. — Aturseva 🩺`
     case 'gentle':
-      return `Dil pe mat lijiye — ${medicine} jab yaad aaye le lena, der se lene se bhi faida hi hai. Apna rhythm aaram se wapas paiye, main hoon na. — Sevika 🩺`
+      return `Dil pe mat lijiye — ${medicine} jab yaad aaye le lena, der se lene se bhi faida hi hai. Apna rhythm aaram se wapas paiye, main hoon na. — Aturseva 🩺`
     default:
-      return `Koi baat nahi — jab yaad aaye le lijiye. Agli dose ka dhyan rakhenge. — Sevika 🩺`
+      return `Koi baat nahi — jab yaad aaye le lijiye. Agli dose ka dhyan rakhenge. — Aturseva 🩺`
   }
 }

@@ -7838,3 +7838,46 @@ Work Log:
 Stage Summary:
 - KEY ARCHITECTURAL INSIGHT recorded: current product = FORM-FIRST (pages/forms as primary, AI chat as side Sheet with info-only context); owner vision = AI-FIRST (agent with tool-calling + persistent memory as the primary interface). The backend data/APIs needed for the agent tools largely EXIST (booking, queue, doctors, prescriptions APIs) — the missing layer is the AGENT architecture (function/tool-calling, chat persistence models, proactive status-watcher, expanded context) + AI-first chat UI + geolocation.
 - Discussion ongoing; awaiting owner decisions before any development. No files/code modified.
+
+---
+Task ID: 2-c
+Agent: full-stack-developer subagent (timed out during QA; entry recorded by Main on its behalf — files were complete and verified)
+Task: Build the full-page Aturseva chat window at /dashboard/patient/aturseva (frontend only; backend + contract were done and live-verified by Main in Task 2-a)
+
+Work Log:
+- Read ATURSEVA-AGENT-PLAN.md + existing FAB sheet (sevika/chat.tsx) + dashboard chrome measurements (agent-browser) before coding
+- Created src/app/dashboard/patient/aturseva/page.tsx (metadata "Aturseva — AI Sahayika") + client.tsx (~940 lines): ChatGPT-style full window — header (avatar/badge/status + Dawai-page link + AlertDialog clear-chat), messages area (user/aturseva bubbles + 3 ACTION CARD renderers: doctor grid with Book links, bookings rows with status badges, queue hero with big token + position/wait strip), SSE parser (delta/action/done/error), history via TanStack Query ['aturseva-chat'] with lastSyncedDataRef guard (no revert during streaming), jump-to-latest floating button (scroll-position aware), quick chips, auto-grow composer with char count, skeleton/error/empty states, dark mode, mobile responsive, aria labels
+- Handled quirks defensively: action `type` arrives as tool name (search_doctors etc.); history rows normalizeAction unwraps nested {title,data}; leading "\n" in narrated replies trimmed for display
+- Height computed per breakpoint from MEASURED dashboard chrome (h-[calc(100vh-12.5625rem)] etc. with min-h 560px) so only the messages area scrolls
+
+Stage Summary:
+- Files: page.tsx + client.tsx (only those two, as instructed). Subagent timed out before its own QA/worklog entry; Main completed QA (Task 3) and recorded this entry. All contract compliance verified live by Main: doctor-search card, queue hero, bookings card, history persistence, shared thread with FAB sheet, mobile 390px 0-overflow.
+
+---
+Task ID: aturseva-agent-phase-1
+Agent: Main
+Task: Owner GO ("Go ahead") after audit-aturseva-user-side-1/2 — execute PHASE 1 of ATURSEVA-AGENT-PLAN.md: the Agent Layer (persistent chat + 3 read-only tools + AI-first chat window) + Sevika→Aturseva user-visible rename + live dose toasts. Delegated decisions per owner's standing pattern: D1 full-page window + FAB sheet shared thread; D2 city/specialization search first (geo in Phase 2); D3 actions-as-messages; D4 greeting + live toasts (no unsolicited pushes yet); D5 user-visible rename only.
+
+Work Log:
+- ENV RECOVERY: node_modules wiped → bun install (975 pkgs); db/custom.db empty → bunx prisma db push + bun prisma/seed.ts (3 doctors Mumbai/Delhi/Pune, 11 bookings, patients incl. rahul@patient.com/123456); dev server started via start-all.sh setsid pattern (direct `bun run dev &` dies with the bash session); realtime-service :3006 installed + started; watchdog.sh running (auto-restart)
+- ATURSEVA-AGENT-PLAN.md written (plan of record: architecture, API contract, tool protocol, phases 1-5, QA checklist)
+- Prisma: + AtursevaConversation (userId unique, one continuous thread) + AtursevaMessage (role user/aturseva/action + actionType + actionJson) + User.atursevaConversation back-field; db push OK (additive)
+- src/lib/aturseva/tools.ts: search_doctors (name/spec/city contains — SQLite `mode:'insensitive'` REMOVED after PrismaClientValidationError, SQLite contains is ASCII-case-insensitive anyway), get_my_bookings (upcoming Pending/Approve + recent past, statusHi labels), get_queue_position (token lookup; exact slotAwareSort ahead-count matching /api/patient/bookings/queue; graceful no-token note)
+- src/lib/aturseva/context.ts: buildAtursevaContext = sevika block (reused verbatim from lib/sevika/chat) + upcoming appointments w/ statuses + today's token line; buildGreeting = deterministic context-aware intro (no LLM call)
+- src/lib/aturseva/agent.ts: buildAtursevaSystemPrompt (persona + 7 hard rules + TOOL PROTOCOL: reply must START with exact [[TOOL]]{"tool":...,"args":{...}} and nothing else); runAtursevaTurn = streaming with ~12-char prefix buffer → tool path: swallow stream, parse (brace-slice), execute tool, emit SSE `action`, second LLM call with TOOL RESULT block, stream final answer; malformed [[TOOL]] → graceful fallback (never leaks protocol garbage); singleton z-ai-web-dev-sdk lazy init, thinking disabled
+- src/app/api/dashboard/patient/aturseva/chat/route.ts: GET (history last 200 + greeting when empty; serialize fix: actionJson {type,title,data} properly unwrapped), POST SSE (delta/action/done/error; user msg persisted BEFORE stream; action rows + reply persisted after turn; error fallback persisted as reply so thread stays paired; history from DB — no client echo; last 23 msgs window), DELETE (clear thread)
+- RENAME (user-visible only, per D5): sidebar-config patient: 'Aturseva — AI Sahayika' (new, Sparkles) + 'Dawai Reminders' (sevika page); doctor: 'Patient Adherence (Aturseva)'; nudge.ts signatures → "— Aturseva, aapki nurse 🩺"; sevika page title + client copy (H1, empty states, narrative credit) → Aturseva
+- RealtimeNotification.tsx: EVENT_CONFIG += med-reminder (Pill, teal, patient, critical chime) + dose-missed (AlertTriangle, amber, patient); QUERY_INVALIDATION += sevika-today/sevika-weekly/patient-notifications for both
+- FAB sheet (sevika/chat.tsx) REWRITTEN: Aturseva branding, loads shared persisted history via GET, posts to new API (no history echo), renders action cards inline, "Poori chat" link → full window; FAB mount MOVED global: dashboard/layout.tsx renders <SevikaChatButton/> when role=patient && not on /aturseva (removed local mount in sevika client — no double FAB)
+- BACKEND VERIFIED VIA CURL (login rahul@patient.com): GET → context-aware greeting quoting live booking; "Mera booking status?" → get_my_bookings action card + narration; "Mumbai me doctor dikhao" → search_doctors card (Dr. Rajesh Sharma ₹800) + narration; "Mera queue number?" → queue hero (#07, position 3, 2 ahead, ~20 min — matches seeded data); "Hi, tu kaun hai?" → no-tool direct answer; persistence verified (user+action+aturseva rows); DELETE clear OK
+- BUG FOUND & FIXED (pre-existing, P0): .env NOTIFICATION_SERVICE_URL pointed to OLD port 3005 while merged realtime-service listens on 3006 → ALL server-side socket emits (incl. every sevika-tick reminder) were silently dropped in this sandbox. Fixed to 3006; tick → emit → room broadcast → browser toast VERIFIED LIVE via gateway session
+- BROWSER E2E (agent-browser, gateway :81): login → sidebar shows Aturseva entries; chat page greeting with live facts; doctor-search card + streamed answer; queue hero card; REFRESH → history intact; FAB sheet on dashboard shows SAME thread + "Poori chat" link; mobile 390×844: 0 horizontal overflow, root 643px, composer visible, docH=viewport; tick → live toast "Paracetamol (500mg) lena hai. — Aturseva, aapki nurse 🩺" captured in screenshot; console clean (old socket warnings were from pre-gateway direct:3000 session — users come through gateway); lint 0 errors; dev.log no errors
+- QA data notes: today's token bookings seeded (Rahul #07 + 2 walk-ins detached userId); Paracetamol schedule + doses created for toast testing (kept as demo data)
+- Evidence: download/aturseva-qa/qa-atv-01..10 (page, doctor card, queue, history, dashboard FAB, FAB sheet, mobile 390, toasts)
+
+Stage Summary:
+- PHASE 1 COMPLETE AND BROWSER-VERIFIED: the product now has an AI-FIRST patient interface — full-page Aturseva agent window (persistent ChatGPT-style thread, 3 live tools rendered as rich cards, context-aware greeting) + global FAB sharing the same thread + live dose-reminder toasts + single-name "Aturseva" on every patient-visible surface. The agent is a read-only QUERY agent by design (safety rail: bookings/money keep human confirmation — Phase 2 adds confirm-cards)
+- Architecture insight proven: prompt-based [[TOOL]] protocol with prefix-buffered streaming = 1 LLM call fast path, 2 calls tool path, zero SDK tool-calling dependency; deterministic greeting avoids LLM cost
+- Fixed a latent sandbox-wide bug: .env 3005→3006 (all server-emitted socket events were dead)
+- Next executable (Phase 2 per plan §5): booking THROUGH chat with explicit confirm card (slots via tool → confirm → POST /api/patient/bookings), geolocation nearby (Doctor.lat/longi exist), unread badge on sidebar, then Phase 3 proactive watcher
+- Risks: OOM killer can take the dev server during compile-heavy rounds (watchdog running; heap 1792MB); realtime ticker relies on DEV_MODE=1 (CRON_SECRET unset) — fine for sandbox, set both in prod

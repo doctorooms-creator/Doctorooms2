@@ -1,6 +1,6 @@
 import {
   type LucideIcon,
-  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History, Gift, Megaphone,
+  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History, Gift, Megaphone, Sparkles,
 } from 'lucide-react'
 
 // NOTE: Megaphone = recall campaigns (dormant-patient WhatsApp growth engine).
@@ -66,7 +66,7 @@ export const sidebarConfig: RoleSidebarMap = {
     { label: 'Plan & Billing', href: '/dashboard/doctor/billing', icon: CreditCard },
     { label: 'Schedule', href: '/dashboard/doctor/schedule', icon: Clock },
     { label: 'Patients', href: '/dashboard/doctor/patients', icon: Users },
-    { label: 'Patient Adherence (Sevika)', href: '/dashboard/doctor/sevika', icon: Activity },
+    { label: 'Patient Adherence (Aturseva)', href: '/dashboard/doctor/sevika', icon: Activity },
     { label: 'My Staff', href: '/dashboard/doctor/staff', icon: Users },
     { label: 'Medicine Master', href: '/dashboard/doctor/medicines', icon: FlaskConical },
     { label: 'Lab Results', href: '/dashboard/doctor/lab-results', icon: FlaskConical },
@@ -97,7 +97,8 @@ export const sidebarConfig: RoleSidebarMap = {
   patient: [
     { label: 'Dashboard', href: '/dashboard/patient', icon: LayoutDashboard },
     { label: 'Appointments', href: '/dashboard/patient/appointments', icon: CalendarDays },
-    { label: 'Sevika — Dawai Reminders', href: '/dashboard/patient/sevika', icon: Pill },
+    { label: 'Aturseva — AI Sahayika', href: '/dashboard/patient/aturseva', icon: Sparkles },
+    { label: 'Dawai Reminders', href: '/dashboard/patient/sevika', icon: Pill },
     { label: 'Health Records', href: '/dashboard/patient/health-records', icon: Heart },
     { label: 'My Lab Reports', href: '/dashboard/patient/reports', icon: FileText },
     { label: 'Medical History', href: '/dashboard/patient/medical-history', icon: History },

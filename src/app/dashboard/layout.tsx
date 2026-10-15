@@ -8,6 +8,7 @@ import { DashboardFooter } from '@/components/dashboard/dashboard-footer'
 import { Loader2 } from 'lucide-react'
 import { useAuthStore } from '@/lib/auth-store'
 import type { AuthUser } from '@/lib/auth-store'
+import SevikaChatButton from '@/app/dashboard/patient/sevika/chat'
 
 export default function DashboardLayout({
   children,
@@ -75,6 +76,11 @@ export default function DashboardLayout({
     }
   }, [user, pathname, checking, router])
 
+  // Aturseva FAB — the AI nurse is reachable from ANY patient dashboard page
+  // (hidden on the full chat window itself, where the window IS the interface).
+  const showAtursevaFab =
+    user?.role === 'patient' && !pathname.startsWith('/dashboard/patient/aturseva')
+
   const handleLogout = async () => {
     // Clear all auth state
     sessionStorage.removeItem('doctorooms_dev_user')
@@ -129,6 +135,7 @@ export default function DashboardLayout({
           </div>
         </main>
       </div>
+      {showAtursevaFab && <SevikaChatButton />}
     </div>
   )
 }
