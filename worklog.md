@@ -7806,3 +7806,21 @@ Stage Summary:
 - Assets: /aturseva-icon.svg favicon + /og/aturseva-og.png (1200×630) wired into metadata.
 - Next executable (Phase 3 candidates): global cursor/micro-interaction polish on the new sections (data-cursor labels exist but cursor layer only renders on fine pointers — verify), legacy-section retirement review (Marquee/QueueToken redundancy vs DuskArc QR), LCP field audit with production build, second beat-card livening (beats 3/5/6 previews could become replays), favicon dark-mode variant, and the documented minor: RM live-toggle mid-session leaves replay items in last state until re-activation.
 - Risks: none open. The DayBeats→QueueToken "QR shown twice" adjacency is intentional (check-in vs token ownership) — revisit only if user feedback flags it.
+
+---
+Task ID: audit-aturseva-user-side-1
+Agent: Main (2 Explore subagents: AUDIT-A agent-ef7ab23c, AUDIT-B agent-8c81d80c)
+Task: Owner asked for an IN-DEPTH AUDIT ONLY (development explicitly NOT started): "Aturseva is the main character on the user side — check how much of the planned Aturseva user-side capabilities is actually implemented in the original user-side project."
+
+Work Log:
+- Read PATIENT-APP-PROMPT.md (patient-app spec), AI-NURSE-PLAN.md (Aturseva/Sevika AI-nurse architecture P1–P4), worklog Sevika P1/P2/P3 sections (7232–7340) + landing Phase 0–2 sections (7741–7808)
+- AUDIT-A (Explore): full code-level audit of src/lib/sevika/ (6 files), patient sevika UI (client.tsx 1708 ln + chat.tsx), cron/sevika-tick route, all 10 /api/dashboard/patient/sevika/* endpoints, Prisma Sevika models, doctor-side sevika board, AI integration points (VLM rx-parse, LLM diet/chat/weekly-report), adaptive reschedule + escalation evidence
+- AUDIT-B (Explore): public pages inventory (15+ routes), patient dashboard vs patient-app spec §7, booking+queue flow, patient API surface vs spec §6, naming consistency (Aturseva vs Sevika vs Doctorooms), landing-honesty check (advertised capabilities vs actual product support)
+- Main spot-verified critical claims: sidebar-config.ts:100 ('Sevika — Dawai Reminders' still in patient sidebar), Hero.tsx:86/107/123 ("Doctor home visits"/"A licensed doctor at your door"/"Book a home visit" with NO home-visit booking mode in product), RealtimeNotification.tsx EVENT_CONFIG has NO med-reminder/dose-missed entries (reminders never live-toast)
+
+Stage Summary:
+- ATURSEVA/SEVIKA (AI-NURSE-PLAN): P1+P2+P3 GENUINELY IMPLEMENTED (deterministic scheduler, 5-min ticker via realtime-service, dose actions taken/snooze/shift/skip + 2h catch-up, photo-RX VLM parse with patient-confirm, AI diet plan, context-grounded streaming chat with firewall, weekly report + AI narrative, doctor adherence board with critical flags). MISSING: P4 (voice TTS/ASR, WhatsApp/SMS channels), diet doctorApproved flag + doctor approve/edit workflow, beforeFood 30-min timing, interval frequencies (har-8-ghante), chat persistence (ephemeral, no Prisma model), keyword tripwires (prompt-only), max-3-nudges/day cap
+- PATIENT SIDE vs SPEC: substantially built (17 route groups, all §6 APIs exist). GAPS: 4 ORPHANED pages invisible to navigation (bills, insurance, consents, diet — not in sidebar-config patient list, zero inbound links, /api/diet-orders 401s for patient role), family-member management missing, book form missing family/age/bloodGroup/weight fields, no live toast for med-reminder/dose-missed socket events, chat booking not in product (landing correctly disclaims)
+- NAMING: 3 brands in one patient journey — Aturseva (landing only) → Doctorooms (auth/chrome/emails/SMS/manifest/sidebar-footer) → Sevika (in-app AI nurse: sidebar label, page H1, chat welcome, notification signatures). Renaming decision pending with owner
+- LANDING HONESTY GAPS (landing claims vs product reality): "Book a home visit"/"doctor at your door" = MISSING in product (biggest gap — bookingMode is InPerson/VideoCall only); vitals check-in by patient = MISSING; night-mode monitoring = MISSING; scheduled 7PM diet nudge = MISSING (diet plan is on-demand only); patient-side QR check-in = PARTIAL (kiosk infra exists but orphaned, token has no QR); family access claim = PARTIAL (IPD-only portal, not OPD queue as implied)
+- NO development performed this session. Full audit report delivered to owner with prioritized decision points.
