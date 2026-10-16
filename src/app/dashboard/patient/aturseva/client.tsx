@@ -36,6 +36,7 @@ import {
   CalendarCheck,
   CheckCircle2,
   Clock,
+  FlaskConical,
   HeartPulse,
   Loader2,
   MapPin,
@@ -48,6 +49,7 @@ import {
   Ticket,
   Trash2,
   TrendingUp,
+  Utensils,
   Users,
   Video,
   XCircle,
@@ -76,18 +78,22 @@ import {
   BookingUpdateCardBody,
   CheckInCard,
   CheckInSavedCardBody,
+  DietNudgeCardBody,
+  DietPlanCardBody,
+  LabReportsCardBody,
   NearbyDoctorsCardBody,
   PrepareBookingCardBody,
   PrepareCheckInCardBody,
   SlotsCardBody,
   SymptomLogCardBody,
+  WeeklyReportCardBody,
   type CardRenderCtx,
 } from './cards'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type Role = 'user' | 'aturseva' | 'action'
-type ActionKind = 'doctors' | 'bookings' | 'queue' | 'slots' | 'nearby' | 'confirm' | 'created' | 'booking_update' | 'symptom_log' | 'checkin_confirm' | 'checkin_saved' | 'other'
+type ActionKind = 'doctors' | 'bookings' | 'queue' | 'slots' | 'nearby' | 'confirm' | 'created' | 'booking_update' | 'symptom_log' | 'checkin_confirm' | 'checkin_saved' | 'labs' | 'diet_plan' | 'diet_nudge' | 'weekly_report' | 'other'
 
 interface ActionCard {
   kind: ActionKind
@@ -176,6 +182,15 @@ const KIND_BY_TYPE: Record<string, ActionKind> = {
   'prepare-check-in': 'checkin_confirm',
   check_in_saved: 'checkin_saved',
   'check-in-saved': 'checkin_saved',
+  // Phase 4 — labs / diet / weekly report
+  get_my_lab_reports: 'labs',
+  'lab-reports': 'labs',
+  get_my_diet_plan: 'diet_plan',
+  'diet-plan': 'diet_plan',
+  diet_nudge: 'diet_nudge',
+  'diet-nudge': 'diet_nudge',
+  get_my_weekly_report: 'weekly_report',
+  'weekly-report': 'weekly_report',
 }
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -441,6 +456,14 @@ function ActionCardBody({ action, ctx }: { action: ActionCard; ctx?: CardRenderC
       return <PrepareCheckInCardBody data={action.data} />
     case 'checkin_saved':
       return <CheckInSavedCardBody data={action.data} />
+    case 'labs':
+      return <LabReportsCardBody data={action.data} />
+    case 'diet_plan':
+      return <DietPlanCardBody data={action.data} />
+    case 'diet_nudge':
+      return <DietNudgeCardBody data={action.data} />
+    case 'weekly_report':
+      return <WeeklyReportCardBody data={action.data} />
     default:
       return (
         <p className="rounded-xl border bg-background px-3 py-2.5 text-xs text-muted-foreground">
@@ -458,6 +481,8 @@ function ActionCardShell({ action, ctx }: { action: ActionCard; ctx?: CardRender
   const isRejectedUpdate =
     action.kind === 'booking_update' && asString(action.data.status) !== 'Approve'
   const isCheckInSaved = action.kind === 'checkin_saved'
+  // Phase 4: diet cards get a warm amber shell; weekly report + labs stay teal.
+  const isDiet = action.kind === 'diet_plan' || action.kind === 'diet_nudge'
   const icon =
     action.kind === 'doctors' ? (
       <Stethoscope className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -481,6 +506,12 @@ function ActionCardShell({ action, ctx }: { action: ActionCard; ctx?: CardRender
       )
     ) : action.kind === 'symptom_log' ? (
       <TrendingUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    ) : action.kind === 'labs' ? (
+      <FlaskConical className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    ) : isDiet ? (
+      <Utensils className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    ) : action.kind === 'weekly_report' ? (
+      <TrendingUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
     ) : action.kind === 'checkin_confirm' || action.kind === 'checkin_saved' ? (
       <HeartPulse className="h-3.5 w-3.5 shrink-0" aria-hidden />
     ) : (
@@ -494,7 +525,9 @@ function ActionCardShell({ action, ctx }: { action: ActionCard; ctx?: CardRender
           ? 'border-emerald-300/80 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30'
           : isRejectedUpdate
             ? 'border-rose-300/80 bg-rose-50/60 dark:border-rose-900 dark:bg-rose-950/30'
-            : 'border-teal-200/80 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/30'
+            : isDiet
+              ? 'border-amber-300/80 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/30'
+              : 'border-teal-200/80 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/30'
       )}
     >
       <p
@@ -504,7 +537,9 @@ function ActionCardShell({ action, ctx }: { action: ActionCard; ctx?: CardRender
             ? 'text-emerald-800 dark:text-emerald-300'
             : isRejectedUpdate
               ? 'text-rose-800 dark:text-rose-300'
-              : 'text-teal-800 dark:text-teal-300'
+              : isDiet
+                ? 'text-amber-800 dark:text-amber-300'
+                : 'text-teal-800 dark:text-teal-300'
         )}
       >
         {icon}

@@ -63,11 +63,13 @@ function sweepDedup(now: number) {
 /**
  * Push an unsolicited Aturseva message into the patient's thread + emit the
  * live `aturseva-push` socket event. Fire-safe: never throws.
+ * Returns TRUE when a message was actually persisted (FALSE when the spam-cap
+ * dedup swallowed a duplicate — callers use this for honest push counts).
  */
-export async function pushAtursevaMessage(opts: AtursevaPushOptions): Promise<void> {
+export async function pushAtursevaMessage(opts: AtursevaPushOptions): Promise<boolean> {
   const { userId, text, card, kind = 'generic', refId = '', toastMessage } = opts
-  if (!userId) return
-  if (!text && !card) return
+  if (!userId) return false
+  if (!text && !card) return false
 
   try {
     // ── Spam cap ──
@@ -75,7 +77,7 @@ export async function pushAtursevaMessage(opts: AtursevaPushOptions): Promise<vo
     sweepDedup(now)
     const key = `${userId}:${kind}:${refId}`
     const prev = lastPushAt.get(key)
-    if (prev && now - prev < DEDUP_TTL_MS) return
+    if (prev && now - prev < DEDUP_TTL_MS) return false
     lastPushAt.set(key, now)
 
     // ── Persist into the conversation thread ──
@@ -110,8 +112,10 @@ export async function pushAtursevaMessage(opts: AtursevaPushOptions): Promise<vo
       kind,
     }
     emitNotification('aturseva-push', [userRoom(userId)], payload)
+    return true
   } catch (err) {
     // Business logic must NEVER break because of a chat push.
     console.error('[aturseva/proactive] push failed:', err)
+    return false
   }
 }

@@ -36,6 +36,9 @@ export type AtursevaToolName =
   | 'prepare_booking'
   | 'get_my_symptom_log'
   | 'prepare_check_in'
+  | 'get_my_lab_reports'
+  | 'get_my_diet_plan'
+  | 'get_my_weekly_report'
 
 export interface ToolCall {
   tool: AtursevaToolName
@@ -818,6 +821,247 @@ async function prepareCheckIn(
   }
 }
 
+// ─── Tool 9 (P4): get_my_lab_reports (read-only, grounded explainer data) ───
+
+/**
+ * Fetches the patient's OWN verified lab reports with parameter values +
+ * normal ranges + abnormal flags. The card shows the numbers; the LLM is fed
+ * the SAME data as a TOOL RESULT and explains it in Hinglish — grounded only
+ * in these rows (never invents values, never diagnoses).
+ */
+async function getMyLabReports(
+  userId: string,
+  _args: Record<string, unknown>
+): Promise<ToolOutcome> {
+  const reports = await db.labReport.findMany({
+    where: { patientId: userId, status: 'Verified' },
+    include: {
+      testMaster: { select: { name: true } },
+      doctor: { select: { user: { select: { name: true } } } },
+      parameterValues: {
+        include: { testParameter: true },
+        orderBy: { testParameter: { sortOrder: 'asc' } },
+      },
+    },
+    orderBy: { verifiedAt: 'desc' },
+    take: 4,
+  })
+
+  if (reports.length === 0) {
+    return {
+      ok: false,
+      error:
+        'LAB_REPORTS_EMPTY — is patient ke naam par koi verified lab report abhi tak nahi hai. Patient se bata dein: jab tak lab report nahi aati, values explain karne ki zaroorat nahi (sirf unhi reports ki baat karein jo records me hain).',
+    }
+  }
+
+  let abnormalParams = 0
+  const reportRows = reports.map((r) => {
+    const female = (r.patientGender || '').toLowerCase().startsWith('f')
+    const params = r.parameterValues.map((pv) => {
+      if (pv.isAbnormal) abnormalParams++
+      const tp = pv.testParameter
+      const min = female ? tp.normalFemaleMin : tp.normalMaleMin
+      const max = female ? tp.normalFemaleMax : tp.normalMaleMax
+      return {
+        name: tp.paramName,
+        value: pv.value,
+        unit: tp.unit || '',
+        range: min || max ? `${min}–${max}` : '',
+        abnormal: pv.isAbnormal,
+        remarks: pv.remarks || '',
+      }
+    })
+    const dt = (r.verifiedAt || r.resultEnteredAt || r.createdAt).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata',
+    })
+    return {
+      reportNo: r.reportNo || '',
+      testName: r.testMaster?.name || 'Lab test',
+      dateLabel: dt,
+      doctorName: r.doctor?.user?.name || '',
+      params,
+    }
+  })
+
+  return {
+    ok: true,
+    result: {
+      type: 'get_my_lab_reports',
+      title: `${reports.length} lab report${reports.length > 1 ? 's' : ''} — ${abnormalParams} value${abnormalParams === 1 ? '' : 's'} normal se bahar`,
+      data: { reports: reportRows, totalReports: reports.length, abnormalParams },
+    },
+  }
+}
+
+// ─── Tool 10 (P4): get_my_diet_plan (read-only, today's meals) ──────────────
+
+const MEAL_SLOTS: Array<{ key: keyof import('@/lib/sevika/diet').DietDay; label: string; icon: string }> = [
+  { key: 'morning', label: 'Subah', icon: '🌅' },
+  { key: 'breakfast', label: 'Nashta', icon: '🥣' },
+  { key: 'lunch', label: 'Lunch', icon: '🍛' },
+  { key: 'evening', label: 'Shaam', icon: '🍎' },
+  { key: 'dinner', label: 'Dinner', icon: '🌙' },
+]
+
+async function getMyDietPlan(
+  userId: string,
+  _args: Record<string, unknown>
+): Promise<ToolOutcome> {
+  const { getLatestDietPlan } = await import('@/lib/sevika/diet')
+  const latest = await getLatestDietPlan(userId)
+
+  if (!latest) {
+    return {
+      ok: false,
+      error:
+        'DIET_PLAN_EMPTY — is patient ka koi diet plan generate nahi hua hai. Patient ko Dawai page par "Diet Plan" section ki taraf guide karein (wahan AI plan ban sakta hai). Aap khud plan generate NAHI kar sakti.',
+    }
+  }
+
+  // days[] is Mon→Sun order (lib/sevika/diet.ts contract)
+  const weekdayEn = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    timeZone: 'Asia/Kolkata',
+  })
+  const dayIndex = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].indexOf(weekdayEn)
+  const day = latest.plan.days[Math.max(0, Math.min(dayIndex, latest.plan.days.length - 1))]
+
+  const meals = MEAL_SLOTS.map((s) => ({
+    slot: s.key as string,
+    label: s.label,
+    icon: s.icon,
+    items: String((day as Record<string, unknown>)[s.key as string] || ''),
+  })).filter((m) => m.items)
+
+  return {
+    ok: true,
+    result: {
+      type: 'get_my_diet_plan',
+      title: `Aaj (${weekdayEn}) ka diet plan`,
+      data: {
+        summary: latest.plan.summary,
+        disclaimer: latest.plan.disclaimer,
+        medicinesSummary: latest.medicinesSummary,
+        dayLabel: weekdayEn,
+        note: day.note || '',
+        meals,
+        generatedLabel: latest.createdAt.toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          timeZone: 'Asia/Kolkata',
+        }),
+      },
+    },
+  }
+}
+
+// ─── Tool 11 (P4): get_my_weekly_report (read-only, last 7 days) ────────────
+
+/**
+ * Shared weekly-report builder — used BOTH by the get_my_weekly_report tool
+ * (patient asks in chat) AND the Sunday-evening proactive push (scheduler.ts).
+ * Pure computation + DB reads; returns the card ActionResult.
+ */
+export async function buildWeeklyReportCard(
+  userId: string
+): Promise<{ result: ActionResult }> {
+  const { computeAdherence } = await import('@/lib/sevika/schedule')
+  const today = todayISTStr()
+  const days: string[] = []
+  for (let i = 6; i >= 0; i--) {
+    days.push(new Date(Date.parse(`${today}T00:00:00.000Z`) - i * 86400000).toISOString().slice(0, 10))
+  }
+
+  const [checkIns, adherence, bookings, labs] = await Promise.all([
+    db.atursevaCheckIn.findMany({ where: { userId, day: { in: days } } }),
+    computeAdherence(userId),
+    db.booking.findMany({
+      where: { userId, bookingDate: { gte: new Date(Date.now() - 6 * 86400000) } },
+      select: { status: true },
+    }),
+    db.labReport.count({
+      where: { patientId: userId, verifiedAt: { gte: new Date(Date.now() - 7 * 86400000) } },
+    }),
+  ])
+
+  const avg = (f: (r: (typeof checkIns)[number]) => number) =>
+    checkIns.length === 0
+      ? 0
+      : Math.round((checkIns.reduce((s, r) => s + f(r), 0) / checkIns.length) * 10) / 10
+
+  const counts = new Map<string, number>()
+  for (const r of checkIns) {
+    for (const tag of r.symptoms.split(',').map((s) => s.trim()).filter(Boolean)) {
+      counts.set(tag, (counts.get(tag) || 0) + 1)
+    }
+  }
+  const topSymptoms = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([tag, n]) => ({ tag, days: n }))
+
+  const upcoming = bookings.filter((b) => b.status === 'Pending' || b.status === 'Approve').length
+
+  // Deterministic headline (no LLM guesswork in the card itself)
+  const weekAvg = (avg((r) => r.mood) + avg((r) => r.energy)) / 2
+  const headline =
+    checkIns.length >= 3 && weekAvg >= 3.5
+      ? 'Achha week raha — mood aur energy dono theek rahi 👏'
+      : checkIns.length >= 3 && weekAvg < 2.5
+        ? 'Thoda dheema week — body ko aaram chahiye tha'
+        : checkIns.length > 0
+          ? 'Theek-thaak week — kuch din achhe, kuch aise hi'
+          : 'Is hafte check-ins nahi hue — agle hafte se shuru karein?'
+
+  const startLabel = new Date(Date.parse(`${days[0]}T00:00:00.000Z`)).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+  const endLabel = new Date(Date.parse(`${days[6]}T00:00:00.000Z`)).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+
+  return {
+    result: {
+      type: 'get_my_weekly_report',
+      title: `Weekly report — ${startLabel} se ${endLabel}`,
+      data: {
+        weekLabel: `${startLabel} – ${endLabel}`,
+        headline,
+        checkIns: {
+          days: checkIns.length,
+          avgMood: avg((r) => r.mood),
+          avgEnergy: avg((r) => r.energy),
+          topSymptoms,
+        },
+        adherence: {
+          weekTaken: adherence.weekTaken,
+          weekTotal: adherence.weekTotal,
+          scorePct: adherence.scorePct,
+          streakDays: adherence.streakDays,
+        },
+        appointments: { total: bookings.length, upcoming },
+        labsNew: labs,
+      },
+    },
+  }
+}
+
+async function getMyWeeklyReport(
+  userId: string,
+  _args: Record<string, unknown>
+): Promise<ToolOutcome> {
+  const { result } = await buildWeeklyReportCard(userId)
+  return { ok: true, result }
+}
+
 // ─── Dispatcher ─────────────────────────────────────────────────────────────
 
 export async function executeTool(
@@ -842,6 +1086,12 @@ export async function executeTool(
       return getMySymptomLog(userId, call.args)
     case 'prepare_check_in':
       return prepareCheckIn(userId, call.args)
+    case 'get_my_lab_reports':
+      return getMyLabReports(userId, call.args)
+    case 'get_my_diet_plan':
+      return getMyDietPlan(userId, call.args)
+    case 'get_my_weekly_report':
+      return getMyWeeklyReport(userId, call.args)
     default:
       return {
         ok: false,
@@ -860,6 +1110,16 @@ export const TOOL_CATALOGUE = `TOOLS — jab live data chahiye to SIRF inhi ko u
 6. prepare_booking — booking ka CONFIRM CARD banata hai (args: {doctorId, date "YYYY-MM-DD", timeSlot "HH:MM" 24h, mode "InPerson"|"VideoCall", disease}) — SIRF tab jab patient ne doctor + date + slot + reason clearly chun liya ho. Ye book NAHI karta — patient card par Confirm button dabayega tabhi booking hogi.
 7. get_my_symptom_log — pichhle 14 din ke check-ins + mood/energy/symptom trend (args: {}) — "mera symptom log", "tabiyat ka trend", "kal se kaisa feel hua"
 8. prepare_check_in — aaj ka check-in CONFIRM CARD banata hai (args: {mood 1-5, energy 1-5, symptoms? "comma,tags", note?}) — jab patient mood/tabiyat/symptoms bataye ya check-in maange. Ye save NAHI karta — patient card par button dabayega tabhi save hoga (din me kabhi bhi update ho sakta hai).
+9. get_my_lab_reports — patient ke OWN verified lab reports + values + ranges + abnormal flags (args: {}) — "mera lab report", "blood test ka result", "report samjhao". GROUNDED EXPLANATION: sirf card/TOOL RESULT me di gayi values ka matlab samjhao (Hb 11.2 low hai aise), koi diagnosis NAHI, aur values ko doctor se discuss karne ko kahein.
+10. get_my_diet_plan — aaj ka diet plan meals ke saath (args: {}) — "aaj kya khaun", "diet plan dikhao", "khane me kya lena chahiye"
+11. get_my_weekly_report — pichhle 7 din ka summary card (args: {}) — "meri weekly report", "is hafte kaisa raha", "week summary"
+
+LAB REPORT RULES (important):
+- "report samjhao / kya matlab hai" → pehle get_my_lab_reports chalayein, phir TOOL RESULT ki values ko simple Hinglish me samjhayein (kya normal hai, kya thoda bahar hai, kya mean kar sakta hai COMMON-SENSE level par).
+- KABHI bhi diagnosis ya ilaaj suggest na karein. Serious abnormal (bahut high/low) ho to doctor se jaldi milne ko kahein.
+- Jis report ki values NAHI hain uske baare me andaza kabhi na lagaayein — "ye report abhi mere paas nahi hai" bolein.
+
+DIET RULES: diet nurse-nutritionist level par hi — ghar-ka-khana, hydration, light meals. Dawai ka dose/timing kabhi na chhoohein. Plan na ho to Dawai page ka Diet Plan section bataayein.
 
 BOOKING FLOW (important):
 - Patient doctor chune → get_doctor_slots chalayein → slots card dikhega → patient slot chune (reason na ho to pehle poochh lein: "kis wajah se?") → prepare_booking chalayein → confirm card patient ko dikh raha hoga → bolein "Confirm kar dijiye".

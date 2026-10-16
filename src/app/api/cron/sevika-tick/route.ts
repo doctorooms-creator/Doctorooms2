@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { runSevikaTick } from '@/lib/sevika/schedule'
+import { runAtursevaProactiveTick } from '@/lib/aturseva/scheduler'
 import { createNotification } from '@/lib/emit-notification'
 
 export const dynamic = 'force-dynamic'
@@ -38,7 +39,10 @@ async function handle(req: NextRequest) {
         payload: { message: p.message, title: p.title, doseId: p.doseId },
       })
     })
-    return NextResponse.json({ success: true, ...result })
+    // Phase 4: Aturseva scheduled proactivity (diet nudges + Sunday weekly
+    // report). Fire-and-report — it NEVER throws (internally guarded).
+    const aturseva = await runAtursevaProactiveTick()
+    return NextResponse.json({ success: true, ...result, aturseva })
   } catch (err) {
     console.error('[cron/sevika-tick] error:', err)
     return NextResponse.json({ error: 'Sevika tick failed' }, { status: 500 })

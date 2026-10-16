@@ -1228,3 +1228,325 @@ export function CheckInCard({ compact = false }: { compact?: boolean }) {
     </div>
   )
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Phase 4 — lab reports / diet plan / weekly report cards
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─── 9) get_my_lab_reports (grounded explainer card) ────────────────────────
+
+interface LabParam {
+  name?: string
+  value?: string
+  unit?: string
+  range?: string
+  abnormal?: boolean
+  remarks?: string
+}
+
+interface LabReportRow {
+  reportNo?: string
+  testName?: string
+  dateLabel?: string
+  doctorName?: string
+  params?: LabParam[]
+}
+
+export function LabReportsCardBody({ data }: { data: Record<string, unknown> }) {
+  const reports = arr<LabReportRow>(data.reports)
+  const abnormal = Number(data.abnormalParams) || 0
+
+  if (reports.length === 0) {
+    return (
+      <p className="rounded-xl border bg-background px-3 py-2.5 text-xs text-muted-foreground">
+        Abhi koi verified lab report nahi hai.
+      </p>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border bg-background p-3">
+      <div className="flex items-center gap-2">
+        <HeartPulse className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+        <p className="text-sm font-semibold leading-tight">Lab reports</p>
+        {abnormal > 0 && (
+          <Badge
+            variant="outline"
+            className="ml-auto border-amber-300 bg-amber-50 text-[10px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+          >
+            {abnormal} value{abnormal > 1 ? 's' : ''} normal se bahar
+          </Badge>
+        )}
+      </div>
+
+      {/* report blocks (scrollable — long list handling) */}
+      <div className="mt-2 max-h-72 space-y-2 overflow-y-auto pr-0.5">
+        {reports.map((r, i) => (
+          <div key={r.reportNo || i} className="rounded-lg border border-dashed p-2">
+            <div className="flex items-baseline gap-1.5">
+              <p className="text-xs font-semibold">{r.testName || 'Lab test'}</p>
+              <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                {r.dateLabel || ''}
+              </span>
+            </div>
+            {r.doctorName && (
+              <p className="text-[10px] text-muted-foreground">
+                <Stethoscope className="mr-0.5 inline h-2.5 w-2.5" aria-hidden />
+                {r.doctorName}
+              </p>
+            )}
+            <table className="mt-1 w-full border-collapse text-[11px]">
+              <tbody>
+                {(r.params || []).map((p, j) => (
+                  <tr key={j} className="border-t border-border/60 first:border-t-0">
+                    <td className="py-1 pr-1 text-muted-foreground">{p.name || '—'}</td>
+                    <td
+                      className={cn(
+                        'py-1 pr-1 text-right font-semibold tabular-nums',
+                        p.abnormal
+                          ? 'text-rose-600 dark:text-rose-400'
+                          : 'text-foreground'
+                      )}
+                    >
+                      {p.value || '—'}
+                      {p.unit ? <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">{p.unit}</span> : null}
+                      {p.abnormal && (
+                        <span
+                          className="ml-1 align-middle"
+                          title="Normal se bahar"
+                          aria-label="normal se bahar"
+                        >
+                          <XCircle className="inline h-3 w-3 text-rose-500" aria-hidden />
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-1 text-right text-[10px] tabular-nums text-muted-foreground">
+                      {p.range ? `${p.range}` : ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {abnormal > 0 && i === 0 && (
+              <p className="mt-1.5 rounded-md bg-muted/60 px-1.5 py-1 text-[10px] leading-snug text-muted-foreground">
+                In values ko apne doctor se discuss karein — main sirf samjhaati hoon, ilaaj doctor
+                batayenge.
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── 10) get_my_diet_plan (today's meals) ───────────────────────────────────
+
+interface DietMeal {
+  slot?: string
+  label?: string
+  icon?: string
+  items?: string
+}
+
+export function DietPlanCardBody({ data }: { data: Record<string, unknown> }) {
+  const meals = arr<DietMeal>(data.meals)
+  const summary = str(data.summary)
+
+  if (meals.length === 0) {
+    return (
+      <p className="rounded-xl border bg-background px-3 py-2.5 text-xs text-muted-foreground">
+        Diet plan abhi available nahi hai — Dawai page par generate karein.
+      </p>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-amber-200/70 bg-background p-3 dark:border-amber-800/50">
+      <div className="flex items-center gap-2">
+        <CalendarDays className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+        <p className="text-sm font-semibold leading-tight">
+          Aaj ka diet plan
+          {data.dayLabel ? <span className="ml-1 text-[11px] font-normal text-muted-foreground">({str(data.dayLabel)})</span> : null}
+        </p>
+        {data.generatedLabel && (
+          <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+            {str(data.generatedLabel)}
+          </span>
+        )}
+      </div>
+
+      {summary && (
+        <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{summary}</p>
+      )}
+
+      <ul className="mt-2 space-y-1.5">
+        {meals.map((m, i) => (
+          <li
+            key={m.slot || i}
+            className="flex items-start gap-2 rounded-lg border border-dashed px-2 py-1.5"
+          >
+            <span className="shrink-0 text-sm leading-none" aria-hidden>
+              {m.icon || '🍽️'}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {m.label || m.slot}
+              </p>
+              <p className="text-[11px] leading-snug text-foreground">{m.items || '—'}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {str(data.note) && (
+        <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[10px] leading-snug text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+          💡 {str(data.note)}
+        </p>
+      )}
+      <p className="mt-1.5 text-[9px] leading-snug text-muted-foreground/80">
+        AI-suggested plan — doctor se confirm karke follow karein.
+      </p>
+    </div>
+  )
+}
+
+// ─── diet_nudge (proactive meal-time push — compact) ────────────────────────
+
+export function DietNudgeCardBody({ data }: { data: Record<string, unknown> }) {
+  const items = str(data.items)
+  return (
+    <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-3 dark:border-amber-800/50 dark:bg-amber-950/20">
+      <div className="flex items-center gap-2">
+        <span className="text-base leading-none" aria-hidden>
+          {str(data.icon) || '🍽️'}
+        </span>
+        <p className="text-sm font-semibold leading-tight">
+          {str(data.label) || 'Meal'} ka waqt
+        </p>
+      </div>
+      <p className="mt-1 text-[11px] leading-snug text-foreground">{items}</p>
+      <p className="mt-1 text-[10px] text-muted-foreground">
+        Poora din ka plan poochh lijiye — "aaj ka diet plan dikhao"
+      </p>
+    </div>
+  )
+}
+
+// ─── 11) get_my_weekly_report (7-day summary) ───────────────────────────────
+
+interface WeeklyCheckIns {
+  days?: number
+  avgMood?: number
+  avgEnergy?: number
+  topSymptoms?: { tag?: string; days?: number }[]
+}
+
+interface WeeklyAdherence {
+  weekTaken?: number
+  weekTotal?: number
+  scorePct?: number
+  streakDays?: number
+}
+
+export function WeeklyReportCardBody({ data }: { data: Record<string, unknown> }) {
+  const checkIns =
+    data.checkIns && typeof data.checkIns === 'object' ? (data.checkIns as WeeklyCheckIns) : {}
+  const adherence =
+    data.adherence && typeof data.adherence === 'object' ? (data.adherence as WeeklyAdherence) : {}
+  const appointments =
+    data.appointments && typeof data.appointments === 'object'
+      ? (data.appointments as { total?: number; upcoming?: number })
+      : {}
+  const labsNew = Number(data.labsNew) || 0
+  const headline = str(data.headline)
+
+  return (
+    <div className="rounded-xl border border-teal-200 bg-background p-3 dark:border-teal-800/70">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+        <p className="text-sm font-semibold leading-tight">
+          Weekly report
+          {data.weekLabel ? (
+            <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+              {str(data.weekLabel)}
+            </span>
+          ) : null}
+        </p>
+        {(adherence.streakDays ?? 0) >= 2 && (
+          <Badge
+            variant="outline"
+            className="ml-auto border-teal-300 bg-teal-50 text-[10px] font-medium text-teal-700 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-400"
+          >
+            🔥 {adherence.streakDays}-day streak
+          </Badge>
+        )}
+      </div>
+
+      {headline && (
+        <p className="mt-1.5 text-[11px] font-medium leading-snug text-foreground/90">
+          {headline}
+        </p>
+      )}
+
+      {/* stat grid */}
+      <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+        <div className="rounded-lg bg-muted/60 px-1.5 py-2 text-center">
+          <p className="text-[10px] text-muted-foreground">Check-ins</p>
+          <p className="text-sm font-bold text-teal-700 dark:text-teal-400">
+            {checkIns.days ?? 0}<span className="text-[10px] font-normal text-muted-foreground">/7</span>
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/60 px-1.5 py-2 text-center">
+          <p className="text-[10px] text-muted-foreground">Avg mood</p>
+          <p className="text-sm font-bold text-teal-700 dark:text-teal-400">
+            {checkIns.avgMood ?? '—'}<span className="text-[10px] font-normal text-muted-foreground">/5</span>
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/60 px-1.5 py-2 text-center">
+          <p className="text-[10px] text-muted-foreground">Dawai</p>
+          <p className="text-sm font-bold text-teal-700 dark:text-teal-400">
+            {adherence.scorePct ?? '—'}<span className="text-[10px] font-normal text-muted-foreground">%</span>
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/60 px-1.5 py-2 text-center">
+          <p className="text-[10px] text-muted-foreground">Appointments</p>
+          <p className="text-sm font-bold text-teal-700 dark:text-teal-400">
+            {appointments.total ?? 0}
+          </p>
+        </div>
+      </div>
+
+      {/* details row */}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
+        <Badge variant="secondary" className="font-medium">
+          Dawai {adherence.weekTaken ?? 0}/{adherence.weekTotal ?? 0}
+        </Badge>
+        {labsNew > 0 && (
+          <Badge variant="secondary" className="font-medium">
+            🧪 {labsNew} nayi report{labsNew > 1 ? 's' : ''}
+          </Badge>
+        )}
+        {checkIns.avgEnergy !== undefined && (
+          <Badge variant="secondary" className="font-medium">
+            Energy {checkIns.avgEnergy}/5
+          </Badge>
+        )}
+      </div>
+
+      {checkIns.topSymptoms && checkIns.topSymptoms.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {checkIns.topSymptoms.map((s) => (
+            <Badge
+              key={s.tag}
+              variant="outline"
+              className="border-border text-[10px] font-medium text-muted-foreground"
+            >
+              {s.tag} ×{s.days}
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

@@ -439,6 +439,132 @@ function ActionCardBody({ action, ctx }: { action: ActionCard; ctx: CardRenderCt
     return <CompactCheckInConfirm data={action.data} />
   }
 
+  // ── Phase 4: lab reports (compact — top report + abnormal chips) ──
+  if (action.type === 'get_my_lab_reports' || action.type === 'lab-reports') {
+    const reports =
+      Array.isArray(action.data.reports)
+        ? (action.data.reports as {
+            testName?: string
+            dateLabel?: string
+            params?: { name?: string; value?: string; unit?: string; range?: string; abnormal?: boolean }[]
+          }[])
+        : []
+    const abnormal = Number(action.data.abnormalParams) || 0
+    const top = reports[0]
+    if (!top) {
+      return (
+        <p className="rounded-lg border px-3 py-2.5 text-[11px] text-muted-foreground">
+          Abhi koi verified lab report nahi hai.
+        </p>
+      )
+    }
+    return (
+      <div className="space-y-1 rounded-lg border px-3 py-2.5">
+        <p className="flex items-center gap-1 text-[11px] font-semibold">
+          <Stethoscope className="h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+          {top.testName || 'Lab report'}
+          <span className="ml-auto shrink-0 text-[10px] font-normal text-muted-foreground">
+            {top.dateLabel}
+          </span>
+        </p>
+        <div className="max-h-24 space-y-0.5 overflow-y-auto">
+          {(top.params || []).map((p, i) => (
+            <p
+              key={i}
+              className={cn(
+                'flex items-baseline gap-1 text-[11px]',
+                p.abnormal && 'font-semibold text-rose-600 dark:text-rose-400'
+              )}
+            >
+              <span className="text-muted-foreground">{p.name}</span>
+              <span className="ml-auto tabular-nums">
+                {p.value}
+                {p.unit ? <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">{p.unit}</span> : null}
+              </span>
+              {p.range ? (
+                <span className="text-[9px] tabular-nums text-muted-foreground">({p.range})</span>
+              ) : null}
+            </p>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          {reports.length > 1 ? `+${reports.length - 1} aur report · ` : ''}
+          {abnormal > 0 ? `${abnormal} value normal se bahar — doctor se discuss karein` : 'Sab values normal range me'}
+          {' · '}poora detail full window me
+        </p>
+      </div>
+    )
+  }
+
+  // ── Phase 4: diet plan (compact meal list) ──
+  if (action.type === 'get_my_diet_plan' || action.type === 'diet-plan') {
+    const meals = Array.isArray(action.data.meals)
+      ? (action.data.meals as { label?: string; icon?: string; items?: string }[])
+      : []
+    return (
+      <div className="space-y-1 rounded-lg border border-amber-300/70 bg-amber-50/50 px-3 py-2.5 dark:border-amber-800/50 dark:bg-amber-950/20">
+        <p className="text-[11px] font-semibold">
+          🍽️ Aaj ka diet plan
+          {action.data.dayLabel ? (
+            <span className="ml-1 font-normal text-muted-foreground">({str(action.data.dayLabel)})</span>
+          ) : null}
+        </p>
+        <div className="max-h-28 space-y-0.5 overflow-y-auto">
+          {meals.map((m, i) => (
+            <p key={i} className="text-[11px] leading-snug">
+              <span aria-hidden>{m.icon || '•'}</span>{' '}
+              <span className="text-muted-foreground">{m.label}:</span> {m.items}
+            </p>
+          ))}
+        </div>
+        <p className="text-[9px] text-muted-foreground/80">AI-suggested — doctor se confirm karein.</p>
+      </div>
+    )
+  }
+
+  // ── Phase 4: diet nudge (proactive meal-time push — compact) ──
+  if (action.type === 'diet_nudge' || action.type === 'diet-nudge') {
+    return (
+      <div className="rounded-lg border border-amber-300/70 bg-amber-50/50 px-3 py-2.5 dark:border-amber-800/50 dark:bg-amber-950/20">
+        <p className="text-[11px] font-semibold">
+          <span aria-hidden>{str(action.data.icon) || '🍽️'}</span>{' '}
+          {str(action.data.label) || 'Meal'} ka waqt
+        </p>
+        <p className="text-[11px] leading-snug">{str(action.data.items)}</p>
+      </div>
+    )
+  }
+
+  // ── Phase 4: weekly report (compact stat line) ──
+  if (action.type === 'get_my_weekly_report' || action.type === 'weekly-report') {
+    const checkIns =
+      action.data.checkIns && typeof action.data.checkIns === 'object'
+        ? (action.data.checkIns as { days?: number; avgMood?: number })
+        : {}
+    const adherence =
+      action.data.adherence && typeof action.data.adherence === 'object'
+        ? (action.data.adherence as { scorePct?: number; streakDays?: number })
+        : {}
+    return (
+      <div className="space-y-1 rounded-lg border border-teal-300/70 bg-teal-50/50 px-3 py-2.5 dark:border-teal-800/50 dark:bg-teal-950/20">
+        <p className="flex items-center gap-1 text-[11px] font-semibold">
+          <TrendingUp className="h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+          Weekly report
+          {action.data.weekLabel ? (
+            <span className="ml-1 font-normal text-muted-foreground">{str(action.data.weekLabel)}</span>
+          ) : null}
+        </p>
+        <p className="text-[11px] leading-snug">{str(action.data.headline)}</p>
+        <p className="text-[11px] text-muted-foreground">
+          Check-ins {checkIns.days ?? 0}/7 · mood {checkIns.avgMood ?? '—'}/5 · dawai{' '}
+          {adherence.scorePct ?? '—'}%
+          {(adherence.streakDays ?? 0) >= 2 ? ` · 🔥${adherence.streakDays}` : ''}
+        </p>
+        <p className="text-[10px] text-muted-foreground">Poori detail full chat window me hai.</p>
+      </div>
+    )
+  }
+
   return <p className="text-[11px] text-muted-foreground">{action.title}</p>
 }
 

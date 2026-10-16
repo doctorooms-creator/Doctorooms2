@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import { hash } from 'bcryptjs';
+import { seedPhase4 } from './seed-p4';
 
 const db = new PrismaClient();
 
@@ -1254,6 +1255,9 @@ async function main() {
   console.log(`   Medical Docs:     5`);
   console.log(`   Chat Messages:    3`);
   console.log('   ============================================\n');
+
+  // Phase 4 demo data (lab reports + diet plan + check-in history for rahul)
+  await seedPhase4();
 }
 
 main()
