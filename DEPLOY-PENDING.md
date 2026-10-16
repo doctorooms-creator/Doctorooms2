@@ -1,128 +1,92 @@
-# ⏳ DEPLOY-PENDING — Aturseva production rollout, final 2 steps
+# ⏳ DEPLOY-PENDING — Aturseva production rollout
 
-**Status (verified live 2026-10-16):** Steps 1–5 of the single-DB Supabase migration are DONE
-and verified — Vercel prod runs the new landing + full Aturseva UI (Phases 1–5), Supabase has
-all 6 Aturseva tables + shared data, GitHub `origin/main` = `705e655` (in sync).
+**Last updated 2026-10-16 (after Vercel token session + provider abstraction deploy).**
 
-**What is still broken on production (both need owner-supplied credentials):**
+## ✅ DONE since last update
 
-| # | Symptom on prod | Root cause | Fix |
-|---|---|---|---|
-| 1 | Aturseva chat replies with fallback "abhi jawab nahi de pa rahi", 🔊 Sunein → 500 "Awaaz generate nahi ho payi" | `z-ai-web-dev-sdk` reads credentials from a `.z-ai-config` FILE that doesn't exist on Vercel. The repo already has the plumbing (`scripts/zai-config.js` writes it at build time from `ZAI_*` env vars; `next.config.ts` `outputFileTracingIncludes` bundles it into the 9 SDK routes) — but the Vercel project is missing (a) the `ZAI_*` env vars and (b) the updated buildCommand, and needs one redeploy. | Steps A–C below |
-| 2 | Aturseva proactive pushes (toast/unread live update) rejected; Sevika scheduler (diet nudges / weekly report) dead on prod | Render realtime service still runs the Oct-3 build: `aturseva-push` not in VALID_EVENTS + no Sevika ticker. Stopgap currently active: the sandbox realtime-service ticks `sevika-tick` against the same Supabase DB, so nudges/reports still land in the shared DB (patients see them on next load — just no live toast). | Step D below |
+- **Vercel redeploy executed** (token worked): prod now runs commit `3905be6` — the
+  landing + full Aturseva UI + voice + the new **LLM provider abstraction**. Build green
+  (custom buildCommand `node scripts/zai-config.js && prisma generate && next build --webpack`,
+  `.z-ai-config` written with real values, 439 static pages, `/leaderboard` exports cleanly).
+- **Mis-link incident fixed**: `vercel deploy --yes` had silently re-linked to a junk project
+  "my-project" (created Oct 7 by an earlier session, no env vars — caused two failed builds).
+  `.vercel/project.json` now pins `doctorooms-hms` **with the `projectName` field** (prevents
+  recurrence). Deploy commands MUST include `--scope aditya-2b2c`.
+- **Sandbox hard-reset #7 recovered**: env fully reconstructed by **decrypting the Vercel
+  project's env vars via API** (DATABASE_URL transformed transaction→session pooler). This is
+  the recovery playbook for future resets.
 
-Sandbox dev server (port 3000) + realtime (3006) are both live on the same Supabase DB and fully
-working — the app code is proven correct; only the two deploy targets above are stale.
+## 🔴 P0 — Production AI brain needs ONE thing from the owner: a public LLM API key
 
----
+**Why:** `z-ai-web-dev-sdk` talks to `internal-api.z.ai` — PRIVATE z.ai-network IPs
+(172.25.x.x), unreachable from Vercel/Render (verified live in runtime logs: ConnectTimeout).
+The public `api.z.ai` rejects the sandbox JWT (401). This is a platform boundary: the SDK is
+a sandbox dev tool, not a production API.
 
-## A. Set the 5 ZAI_* env vars on Vercel (values from the sandbox)
+**The fix is already deployed** (`src/lib/aturseva/llm-provider.ts`): the app now supports any
+OpenAI-compatible public provider via env vars — chat streaming, TTS, and ASR all switch
+automatically. The sandbox keeps using the SDK (zero behavior change there).
 
-Read the values in the sandbox with:
-
-```bash
-cat /etc/.z-ai-config
-```
-
-Set on the Vercel project `doctorooms-hms` (Dashboard → Settings → Environment Variables, or API):
-
-| Vercel env var | Value source (key in /etc/.z-ai-config) |
-|---|---|
-| `ZAI_BASE_URL` | `baseUrl` |
-| `ZAI_API_KEY` | `apiKey` |
-| `ZAI_TOKEN` | `token` |
-| `ZAI_CHAT_ID` | `chatId` |
-| `ZAI_USER_ID` | `userId` |
-
-## B. Update the Vercel buildCommand
-
-Dashboard → Settings → General → Build Command, change:
-
-```
-prisma generate && next build --webpack
-```
-
-to:
-
-```
-node scripts/zai-config.js && prisma generate && next build --webpack
-```
-
-(`scripts/zai-config.js` writes `.z-ai-config` into the project root right before `next build`.)
-
-## C. Deploy + verify
-
-```bash
-cd /home/z/my-project
-bunx vercel deploy --prod --yes --token=<FRESH_VERCEL_TOKEN>
-```
-
-Verify after Ready (~3 min):
-
-```bash
-# login (patient qa-recall-aiims4@test.dev / 123456 — password upserted 2026-10-16)
-curl -s -X POST https://doctorooms-hms.vercel.app/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"qa-recall-aiims4@test.dev","password":"123456"}' -c /tmp/pc.txt
-# chat must stream a REAL LLM reply (not the "abhi jawab nahi de pa rahi" fallback):
-curl -s -N -X POST https://doctorooms-hms.vercel.app/api/dashboard/patient/aturseva/chat \
-  -H 'Content-Type: application/json' -b /tmp/pc.txt \
-  -d '{"message":"Namaste! Meri dawai ka time kya hai?"}'
-# TTS must return 200 audio/wav (not 500):
-curl -s -X POST https://doctorooms-hms.vercel.app/api/dashboard/patient/aturseva/voice/speak \
-  -H 'Content-Type: application/json' -b /tmp/pc.txt -d '{"text":"Namaste"}' -o /tmp/t.wav -w '%{http_code}'
-```
-
-## D. Redeploy Render realtime (service `doctorooms-realtime`, srv-db0dple0tbcc73fd472g)
-
-Render does NOT auto-deploy on git push (webhook never fired). Trigger manually — Render
-Dashboard → doctorooms-realtime → "Manual Deploy" → "Deploy latest commit", or with an API key:
-
-```bash
-curl -X POST https://api.render.com/api/v1/services/srv-db0dple0tbcc73fd472g/deploys \
-  -H 'Authorization: Bearer <RENDER_API_KEY>' -H 'Content-Type: application/json' -d '{}'
-```
-
-The service env (Dashboard → Environment) must contain (existing 8 vars + 3 new):
+### Owner steps (Vercel Dashboard → doctorooms-hms → Settings → Environment Variables):
 
 | Env var | Value |
 |---|---|
-| `DATABASE_URL` | Supabase **transaction pooler** `...supabase.com:6543/postgres?pgbouncer=true&connection_limit=1` (already set) |
-| `NEXTAUTH_SECRET` | must hash-match the Vercel value (already set) |
-| `REALTIME_STRICT_AUTH` | `1` (already set) |
-| `REALTIME_EMIT_SECRET` | must match Vercel (already set) |
-| `REALTIME_ALLOWED_ORIGINS` | `https://doctorooms-hms.vercel.app` (already set) |
-| `PORT` | leave unset / Render-injected (already set) |
-| `CRON_URL` | `https://doctorooms-hms.vercel.app/api/cron/referral-daily` (already set) |
-| `CRON_SECRET` | must match Vercel CRON_SECRET (already set) |
-| **`SEVIKA_TICK_URL`** (NEW) | `https://doctorooms-hms.vercel.app/api/cron/sevika-tick` |
-| `SELF_PING_URL` | keep as-is (self-ping keep-alive) |
+| `LLM_BASE_URL` | e.g. `https://api.z.ai/api/paas/v4` (z.ai open platform) or any OpenAI-compatible base |
+| `LLM_API_KEY` | your API key from that provider |
+| `LLM_MODEL` | e.g. `glm-4.6` (z.ai) or the provider's model id |
 
-(`SEVIKA_TICK_URL` is the only truly new var — the Sevika 5-min ticker. If omitted it defaults
-to localhost and the prod scheduler stays dead.)
+Optional (voice mode on prod — without these, chat works but 🔊/🎤 degrade gracefully):
 
-Verify after deploy finishes:
+| Env var | Value |
+|---|---|
+| `TTS_BASE_URL` | OpenAI-compatible base with `/audio/speech` (OpenAI: `https://api.openai.com/v1`) |
+| `TTS_API_KEY` | provider key |
+| `TTS_MODEL` | e.g. `tts-1` / `gpt-4o-mini-tts` |
+| `TTS_VOICE` | provider voice id (e.g. `alloy`) — maps Aturseva's voice on prod |
+| `ASR_BASE_URL` | OpenAI-compatible base with `/audio/transcriptions` |
+| `ASR_API_KEY` | provider key |
+| `ASR_MODEL` | e.g. `whisper-1` |
+
+**Then redeploy** (Dashboard → Deployments → latest → ⋯ → Redeploy — no CLI token needed;
+env vars only take effect on a new deployment). Verify:
 
 ```bash
-curl -s https://doctorooms-realtime.onrender.com/health
-# uptimeSec must be small (fresh boot), db: up
-# then within ~6 min, prod Supabase AtursevaMessage rows gain diet-nudge/weekly-report rows
-# (check dev sandbox: POST localhost:3000/api/cron/sevika-tick returns counts)
+curl -s -X POST https://doctorooms-hms.vercel.app/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"qa-recall-aiims4@test.dev","password":"123456"}' -c /tmp/pc.txt
+curl -s -N -X POST https://doctorooms-hms.vercel.app/api/dashboard/patient/aturseva/chat \
+  -H 'Content-Type: application/json' -b /tmp/pc.txt \
+  -d '{"message":"Namaste! Meri dawai ka time kya hai?"}'
+# → must stream a real reply (today it returns the honest fallback:
+#   "Aturseva abhi jawab nahi de pa rahi" — expected until the key is set)
 ```
 
-After Render is redeployed, the sandbox stopgap ticker becomes redundant but harmless
-(both tickers are idempotent — DB-level dedup on nudges/reports).
+## 🟠 P1 — Render realtime redeploy (needs owner Render API key `rnd_...`)
 
----
+Service `doctorooms-realtime` (`srv-db0dple0tbcc73fd472g`) still runs the Oct-3 build:
+`aturseva-push` socket event rejected + no Sevika scheduler on prod. Render does NOT
+auto-deploy on git push. Trigger manually (Dashboard → doctorooms-realtime → Manual Deploy →
+Deploy latest commit) and add ONE new env var:
 
-### Already-done evidence (2026-10-16)
+| Env var | Value |
+|---|---|
+| `SEVIKA_TICK_URL` | `https://doctorooms-hms.vercel.app/api/cron/sevika-tick` |
 
-- Prod landing title: "Aturseva — See the doctor. Aturseva stays." (`GET /` 200)
-- Prod `/api/public/stats`: `{"doctorCount":97,"hospitalCount":13,"patientCount":27,"bookingCount":28}`
-- Prod patient login + dashboard + appointments + Aturseva page all render (agent-browser,
-  screenshots `download/aturseva-qa/qa-restore2-01..04-prod-*.png`); Phase-5 voice UI present
-  (Sunein buttons); socket CONNECTED; SW registered; zero console errors
-- Supabase: all 6 Aturseva tables present; booking-E2E data verified
-  (`qa-supabase-01-booking-e2e.png` — Dr. Amit Shah booking + check-in card)
-- Sandbox chat on the same Supabase DB streams real LLM replies → app code correct,
-  prod failure is env-config only
+(The other 8 vars are already set. The sandbox's own 5-min ticker keeps writing diet nudges
++ weekly reports into the SHARED Supabase DB as a working stopgap — both tickers are
+DB-idempotent, so overlap is safe.)
+
+## 🧹 Cleanup pending (safe, low priority)
+
+- Junk Vercel project **"my-project"** (`prj_DrI4cUuH1FX2u07KG5INXyTtJRvy`, domain
+  `my-project-ivory-ten-47.vercel.app`, zero traffic) — deletable via Dashboard →
+  Settings → Delete, or: `curl -X DELETE https://api.vercel.com/v9/projects/prj_DrI4cUuH1FX2u07KG5INXyTtJRvy?teamId=team_hZdjcz6cYZF3uarVVRwDtrgN -H "Authorization: Bearer <token>"`
+
+## Already-verified evidence (2026-10-16)
+
+- Prod landing/login/dashboard/appointments/Aturseva page all render (qa-restore2-01..04
+  screenshots); Phase-5 voice UI present; socket CONNECTED; zero console errors
+- Build log: `[zai-config] wrote .z-ai-config (baseUrl set: true)` → SDK config file
+  plumbing WORKS on Vercel; the failure is purely the internal endpoint's network boundary
+- Sandbox E2E through the new provider abstraction: chat streams real LLM replies, TTS 200
+  (456KB canonical WAV), ASR round-trip transcribes — SDK path unchanged
