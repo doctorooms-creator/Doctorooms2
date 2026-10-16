@@ -43,7 +43,7 @@ export const HERO_MOMENTS: Moment[] = [
     label: "Your queue number, at home",
     state: "vigilant",
     script: [
-      { kind: "system", text: "09:10 · you scanned the clinic QR from home" },
+      { kind: "system", text: "09:10 · you checked your queue from home" },
       {
         kind: "msg",
         from: "ai",
@@ -55,26 +55,26 @@ export const HERO_MOMENTS: Moment[] = [
     ],
   },
   {
-    id: "vitals",
+    id: "checkin",
     time: "14:00",
-    label: "Vitals check-in",
+    label: "Daily check-in",
     state: "attentive",
     script: [
-      { kind: "system", text: "14:00 · vitals check-in" },
+      { kind: "system", text: "14:00 · daily check-in" },
       {
         kind: "msg",
         from: "ai",
-        text: "Good afternoon, Amma. How is the sugar feeling after lunch?",
+        text: "Good afternoon, Amma. How are you feeling after lunch — mood and energy?",
         time: "14:00",
       },
-      { kind: "msg", from: "patient", text: "A little shaky, actually.", time: "14:01" },
+      { kind: "msg", from: "patient", text: "A little low, actually.", time: "14:01" },
       {
         kind: "msg",
         from: "ai",
-        text: "Noted — logged. Dr. Rao asked for a 2 pm reading; the glucometer is in the kitchen drawer. I'll walk you through it.",
+        text: "Noted — mood 2, energy 3 saved to your diary, and it goes into this week's summary. Rest a while; I'll check in again tomorrow.",
         time: "14:01",
       },
-      { kind: "system", text: "Vitals relayed · flagged to Dr. Rao" },
+      { kind: "system", text: "Check-in saved · care log updated" },
     ],
   },
   {
@@ -83,19 +83,19 @@ export const HERO_MOMENTS: Moment[] = [
     label: "Night watch",
     state: "night",
     script: [
-      { kind: "system", text: "21:30 · night mode" },
+      { kind: "system", text: "21:30 · evening wind-down" },
       {
         kind: "voice",
         text: "Dinner was light tonight — that's Dr. Rao's advice working. Sleep well, Amma. I'll wake you at 6:30.",
       },
-      { kind: "system", text: "Night mode on · monitoring continues" },
+      { kind: "system", text: "Tomorrow planned · reminders scheduled" },
     ],
   },
 ];
 
 /** Beat 2 of the Day section — the queue scan, replayed. Leads into #baari. */
 export const QUEUE_SCRIPT: ReplayStep[] = [
-  { kind: "system", text: "09:10 · Monday · you scanned the clinic QR from home" },
+  { kind: "system", text: "09:10 · Monday · you checked your queue from home" },
   { kind: "typing", ms: 900 },
   {
     kind: "msg",
@@ -108,26 +108,26 @@ export const QUEUE_SCRIPT: ReplayStep[] = [
   { kind: "system", text: "Queue synced live · City Care Clinic OPD" },
 ];
 
-/** Beat 4 of the Day section — the afternoon vitals check, replayed. */
-export const VITALS_SCRIPT: ReplayStep[] = [
-  { kind: "system", text: "14:00 · Monday · vitals check-in" },
+/** Beat 4 of the Day section — the afternoon check-in, replayed. */
+export const CHECKIN_SCRIPT: ReplayStep[] = [
+  { kind: "system", text: "14:00 · Monday · daily check-in" },
   { kind: "typing", ms: 800 },
   {
     kind: "msg",
     from: "ai",
-    text: "Good afternoon, Amma. How is the sugar feeling after lunch?",
+    text: "Good afternoon, Amma. How are you feeling after lunch — mood and energy?",
     time: "14:00",
   },
   { kind: "typing", ms: 1000 },
-  { kind: "msg", from: "patient", text: "A little shaky, actually.", time: "14:01" },
+  { kind: "msg", from: "patient", text: "A little low, actually.", time: "14:01" },
   { kind: "typing", ms: 1300 },
   {
     kind: "msg",
     from: "ai",
-    text: "Noted — logged. Dr. Rao asked for a 2 pm reading; the glucometer is in the kitchen drawer. I'll walk you through it.",
+    text: "Noted — mood 2, energy 3 saved to your diary, and it goes into this week's summary. Rest a while; I'll check in again tomorrow.",
     time: "14:01",
   },
-  { kind: "system", text: "Vitals relayed · flagged to Dr. Rao" },
+  { kind: "system", text: "Check-in saved · care log updated" },
 ];
 
 /** Beat 1 of the Day section — the fully-live morning replay. */

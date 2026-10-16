@@ -17,15 +17,15 @@ const manrope = Manrope({
 
 export const metadata: Metadata = {
   title: {
-    absolute: "Aturseva — The doctor visits. Aturseva stays.",
+    absolute: "Aturseva — See the doctor. Aturseva stays.",
   },
   description:
-    "Doctor home visits with an AI care companion that never clocks out. Medicine reminders, vitals check-ins and your live queue number — living on your family's phone.",
+    "Doctor appointments — clinic or video — with an AI care companion that never clocks out. Medicine reminders, daily check-ins and your live queue number — living on your family's phone.",
   keywords: [
     "Aturseva",
-    "doctor home visit",
+    "doctor appointment online",
     "AI care companion",
-    "home healthcare India",
+    "online doctor consultation India",
     "queue token",
     "Doctorooms",
   ],
@@ -34,9 +34,9 @@ export const metadata: Metadata = {
     apple: [{ url: "/aturseva-icon.svg" }],
   },
   openGraph: {
-    title: "Aturseva — The doctor visits. Aturseva stays.",
+    title: "Aturseva — See the doctor. Aturseva stays.",
     description:
-      "Doctor home visits with an AI care companion that never clocks out.",
+      "Doctor appointments — clinic or video — with an AI care companion that never clocks out.",
     type: "website",
     images: [
       {
@@ -49,9 +49,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Aturseva — The doctor visits. Aturseva stays.",
+    title: "Aturseva — See the doctor. Aturseva stays.",
     description:
-      "Doctor home visits with an AI care companion that never clocks out.",
+      "Doctor appointments — clinic or video — with an AI care companion that never clocks out.",
     images: ["/og/aturseva-og.png"],
   },
 };

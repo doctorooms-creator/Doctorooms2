@@ -41,10 +41,12 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
+  Mic,
   Pill,
   RefreshCw,
   Send,
   Sparkles,
+  Square,
   Stethoscope,
   Ticket,
   Trash2,
@@ -52,6 +54,8 @@ import {
   Utensils,
   Users,
   Video,
+  Volume2,
+  VolumeX,
   XCircle,
 } from 'lucide-react'
 
@@ -89,6 +93,12 @@ import {
   WeeklyReportCardBody,
   type CardRenderCtx,
 } from './cards'
+import {
+  blobToBase64,
+  isVoiceInputSupported,
+  startVoiceRecording,
+  type VoiceRecorder,
+} from '@/lib/aturseva/voice-client'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -155,6 +165,9 @@ const QUICK_CHIPS = [
 
 /** localStorage key persisting ONLY the GPS "Nearby" enabled flag. */
 const GPS_STORAGE_KEY = 'aturseva-gps-enabled'
+
+/** localStorage key persisting the "Bol kar jawab" (TTS reply voice) flag. */
+const TTS_STORAGE_KEY = 'aturseva-tts-enabled'
 
 /** Action `type` → renderer kind. Tool names AND hyphenated aliases. */
 const KIND_BY_TYPE: Record<string, ActionKind> = {
@@ -654,6 +667,24 @@ export default function AtursevaChatClient() {
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [gpsLoading, setGpsLoading] = useState(false)
 
+  // ── Voice mode state (Phase 5) ──
+  // 🎤 input: recorder handle + elapsed ticker; transcript fills the composer
+  // INPUT for review (never auto-sent — same human-confirm ethos as /book).
+  // 🔊 output: TTS toggle + per-bubble replay; one Audio plays at a time.
+  const [voiceSupported, setVoiceSupported] = useState(true)
+  const [recording, setRecording] = useState(false)
+  const [recordSeconds, setRecordSeconds] = useState(0)
+  const [transcribing, setTranscribing] = useState(false)
+  const [ttsEnabled, setTtsEnabled] = useState(false)
+  const [speakingId, setSpeakingId] = useState<string | null>(null)
+  const recorderRef = useRef<VoiceRecorder | null>(null)
+  // WebAudio playback (verified to decode the TTS WAV where <audio> demuxers
+  // sometimes choke on non-standard chunks): one shared context, one source
+  // at a time, stopped via audioStopRef.
+  const playbackCtxRef = useRef<AudioContext | null>(null)
+  const audioStopRef = useRef<(() => void) | null>(null)
+  const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
   const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const atBottomRef = useRef(true)
@@ -762,6 +793,175 @@ export default function AtursevaChatClient() {
     acquireGps(false)
   }, [gpsEnabled, gpsLoading, acquireGps])
 
+  // ── Voice mode (Phase 5) ──
+
+  // Feature-detect mic support + restore the persisted "Bol kar jawab" flag.
+  useEffect(() => {
+    setVoiceSupported(isVoiceInputSupported())
+    try {
+      if (window.localStorage.getItem(TTS_STORAGE_KEY) === '1') setTtsEnabled(true)
+    } catch {
+      /* private mode — state alone is fine */
+    }
+    return () => {
+      recorderRef.current?.cancel()
+      if (tickerRef.current) clearInterval(tickerRef.current)
+      audioStopRef.current?.()
+      audioStopRef.current = null
+      void playbackCtxRef.current?.close().catch(() => {})
+      playbackCtxRef.current = null
+    }
+  }, [])
+
+  const stopSpeaking = useCallback(() => {
+    audioStopRef.current?.()
+    audioStopRef.current = null
+  }, [])
+
+  /** Decode + play a WAV blob via the shared AudioContext (one at a time). */
+  const speakBlob = useCallback(
+    async (blob: Blob, bubbleId: string) => {
+      stopSpeaking()
+      setSpeakingId(bubbleId)
+      const cleanup = () => setSpeakingId((cur) => (cur === bubbleId ? null : cur))
+      try {
+        const ab = await blob.arrayBuffer()
+        if (!playbackCtxRef.current) playbackCtxRef.current = new AudioContext()
+        const ctx = playbackCtxRef.current
+        if (ctx.state === 'suspended') await ctx.resume()
+        const buf = await ctx.decodeAudioData(ab)
+        const src = ctx.createBufferSource()
+        src.buffer = buf
+        src.connect(ctx.destination)
+        const stopThis = () => {
+          try {
+            src.stop()
+          } catch {
+            /* already stopped */
+          }
+          cleanup()
+        }
+        src.onended = () => {
+          if (audioStopRef.current === stopThis) audioStopRef.current = null
+          cleanup()
+        }
+        audioStopRef.current = stopThis
+        src.start()
+      } catch {
+        audioStopRef.current = null
+        cleanup()
+        toast.error('Awaaz play nahi ho payi — thodi der baad try karein')
+      }
+    },
+    [stopSpeaking]
+  )
+
+  /** POST /voice/speak → play the returned WAV (one at a time). */
+  const speakText = useCallback(
+    async (text: string, bubbleId: string) => {
+      const clean = text.trim()
+      if (!clean) return
+      try {
+        const res = await fetch('/api/dashboard/patient/aturseva/voice/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: clean.slice(0, 1000) }),
+        })
+        if (!res.ok) throw new Error('tts-failed')
+        const blob = await res.blob()
+        await speakBlob(blob, bubbleId)
+      } catch {
+        toast.error('Awaaz generate nahi ho payi — thodi der baad try karein')
+      }
+    },
+    [speakBlob]
+  )
+
+  const toggleTts = useCallback(() => {
+    setTtsEnabled((prev) => {
+      const next = !prev
+      try {
+        if (next) window.localStorage.setItem(TTS_STORAGE_KEY, '1')
+        else window.localStorage.removeItem(TTS_STORAGE_KEY)
+      } catch {
+        /* private mode — state alone is fine */
+      }
+      if (!next) stopSpeaking()
+      return next
+    })
+  }, [stopSpeaking])
+
+  /** Stop the recorder → WAV blob → ASR → transcript lands in the input. */
+  const finishRecording = useCallback(async () => {
+    const recorder = recorderRef.current
+    if (!recorder) return
+    recorderRef.current = null
+    setRecording(false)
+    if (tickerRef.current) {
+      clearInterval(tickerRef.current)
+      tickerRef.current = null
+    }
+    setTranscribing(true)
+    try {
+      const blob = await recorder.stop()
+      if (blob.size < 2000) {
+        toast.error('Awaaz bahut chhoti thi — mic button dabakar phir se boliye')
+        return
+      }
+      const audioB64 = await blobToBase64(blob)
+      const res = await fetch('/api/dashboard/patient/aturseva/voice/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio: audioB64 }),
+      })
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(err.error || 'Awaaz samajh nahi aa payi')
+      }
+      const data = (await res.json()) as { text?: string }
+      const text = (data.text || '').trim()
+      if (!text) {
+        toast.error('Kuch sunayi nahi diya — thoda loud boliye 🩺')
+        return
+      }
+      setInput(text)
+      textareaRef.current?.focus()
+      toast.success('Sun liya ✓ — check karke send karein')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Awaaz samajh nahi aa payi')
+    } finally {
+      setTranscribing(false)
+      setRecordSeconds(0)
+    }
+  }, [])
+
+  const toggleMic = useCallback(() => {
+    if (transcribing) return
+    if (recording) {
+      void finishRecording()
+      return
+    }
+    if (!voiceSupported) {
+      toast.error('Is browser me mic available nahi hai')
+      return
+    }
+    startVoiceRecording()
+      .then((recorder) => {
+        recorderRef.current = recorder
+        setRecording(true)
+        setRecordSeconds(0)
+        tickerRef.current = setInterval(() => {
+          const elapsed = recorderRef.current?.elapsed() ?? 0
+          setRecordSeconds(Math.floor(elapsed))
+          // Auto-stop at 45s — keeps the ASR payload comfortably small.
+          if (elapsed >= 45) void finishRecording()
+        }, 500)
+      })
+      .catch(() => {
+        toast.error('Mic permission nahi mili — browser permission check karein')
+      })
+  }, [recording, transcribing, voiceSupported, finishRecording])
+
   // ── Send one turn (SSE) ──
   const send = useCallback(
     async (text?: string) => {
@@ -775,6 +975,7 @@ export default function AtursevaChatClient() {
       setShowJump(false)
 
       const aiId = `a-${Date.now()}`
+      let fullReply = '' // Phase 5: accumulated for the auto-speak pass
       setMessages((prev) => [
         ...prev.filter((m) => m.id !== 'greeting'),
         { id: `u-${Date.now()}`, role: 'user', content: message },
@@ -832,6 +1033,7 @@ export default function AtursevaChatClient() {
             if (event === 'delta') {
               const t = asString(payload.text)
               if (!t) continue
+              fullReply += t
               setMessages((prev) =>
                 prev.map((m) => (m.id === aiId ? { ...m, content: m.content + t } : m))
               )
@@ -857,6 +1059,10 @@ export default function AtursevaChatClient() {
               // The reply just landed in THIS window — reset the sidebar
               // unread badge too (the refetch re-stamps lastReadAt).
               void queryClient.invalidateQueries({ queryKey: ['aturseva-unread'] })
+              // Phase 5: "Bol kar jawab" ON → speak the completed reply.
+              if (ttsEnabled && fullReply.trim()) {
+                void speakText(fullReply, 'auto-speak')
+              }
             } else if (event === 'error') {
               finished = true
               const msgText = asString(payload.message) || 'Kuch dikkat aayi — dobara try karein'
@@ -879,7 +1085,7 @@ export default function AtursevaChatClient() {
         finishBubble()
       }
     },
-    [input, sending, isLoading, queryClient, gpsCoords]
+    [input, sending, isLoading, queryClient, gpsCoords, ttsEnabled, speakText]
   )
 
   // Card interactions (slot chips / other-day chips) ride the same turn pipeline.
@@ -912,6 +1118,15 @@ export default function AtursevaChatClient() {
   // Nothing to clear when the thread holds only the greeting bubble.
   const canClear =
     !clearing && !isLoading && !isError && messages.some((m) => m.id !== 'greeting')
+
+  // Auto-speak targets the LATEST aturseva message (the just-completed
+  // reply). The streaming bubble's local id is replaced by the server row id
+  // on refetch, so send() passes the sentinel 'auto-speak' and the LAST
+  // aturseva bubble claims the playing state instead.
+  let lastAtursevaId: string | null = null
+  for (const m of messages) {
+    if (m.role === 'aturseva' && !m.streaming && m.content.trim()) lastAtursevaId = m.id
+  }
 
   return (
     // Height = viewport minus the dashboard chrome, MEASURED per breakpoint
@@ -1069,6 +1284,44 @@ export default function AtursevaChatClient() {
                             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-500 [animation-delay:300ms]" />
                           </span>
                         ) : null)}
+                      {/* Phase 5: per-bubble voice replay (🔊 Sunein) */}
+                      {m.role === 'aturseva' && !m.streaming && !!m.content.trim() && (
+                        (() => {
+                          const isSpeakingThis =
+                            speakingId === m.id ||
+                            (speakingId === 'auto-speak' && m.id === lastAtursevaId)
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isSpeakingThis) stopSpeaking()
+                                else void speakText(m.content, m.id)
+                              }}
+                              aria-label={
+                                isSpeakingThis ? 'Awaaz band karein' : 'Ye message bol kar sunein'
+                              }
+                              className={cn(
+                                'mt-1.5 inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[10px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+                                isSpeakingThis
+                                  ? 'border-teal-600 bg-teal-600 text-white hover:bg-teal-700'
+                                  : 'border-border bg-background text-muted-foreground hover:border-teal-400 hover:text-teal-700 dark:hover:border-teal-700 dark:hover:text-teal-400'
+                              )}
+                            >
+                              {isSpeakingThis ? (
+                                <>
+                                  <Square className="h-2.5 w-2.5 fill-current" aria-hidden />
+                                  Bol rahi hain…
+                                </>
+                              ) : (
+                                <>
+                                  <Volume2 className="h-2.5 w-2.5" aria-hidden />
+                                  Sunein
+                                </>
+                              )}
+                            </button>
+                          )
+                        })()
+                      )}
                     </div>
                   </motion.div>
                 )
@@ -1178,6 +1431,36 @@ export default function AtursevaChatClient() {
               📍 {gpsCoords.lat.toFixed(3)}, {gpsCoords.lng.toFixed(3)} — "paas ke doctor" poochhein
             </span>
           )}
+          {/* "Bol kar jawab" (TTS) chip — Phase 5 voice output */}
+          <button
+            type="button"
+            onClick={toggleTts}
+            aria-label="Aturseva ke jawab bol kar sunein"
+            aria-pressed={ttsEnabled}
+            className={cn(
+              'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500',
+              ttsEnabled
+                ? 'border-teal-600 bg-teal-600 text-white hover:bg-teal-700'
+                : 'border-border bg-background text-muted-foreground hover:border-teal-400 hover:text-teal-700 dark:hover:border-teal-700 dark:hover:text-teal-400'
+            )}
+          >
+            {ttsEnabled ? (
+              <Volume2 className="h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <VolumeX className="h-3.5 w-3.5" aria-hidden />
+            )}
+            <span>Bol kar jawab</span>
+          </button>
+          {recording && (
+            <span
+              className="inline-flex h-9 shrink-0 animate-pulse items-center gap-1.5 rounded-full border border-rose-300 bg-rose-50 px-3 text-xs font-semibold text-rose-600 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-400"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="h-2 w-2 rounded-full bg-rose-500" aria-hidden />
+              Sun rahi hoon… {recordSeconds}s
+            </span>
+          )}
         </div>
         <form
           className="mx-auto flex w-full max-w-3xl items-end gap-2"
@@ -1208,6 +1491,31 @@ export default function AtursevaChatClient() {
             disabled={isLoading}
             className="max-h-32 min-h-[2.75rem] flex-1 resize-none rounded-xl border bg-background px-3.5 py-2.5 text-sm leading-relaxed outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-teal-500 disabled:opacity-60"
           />
+          {/* Phase 5: voice input — tap to record, tap again to stop+transcribe */}
+          <Button
+            type="button"
+            size="icon"
+            onClick={toggleMic}
+            disabled={isLoading || (!recording && !voiceSupported)}
+            aria-label={
+              recording ? 'Recording band karein aur text me badlein' : 'Bol kar message likhein'
+            }
+            aria-pressed={recording}
+            className={cn(
+              'h-11 w-11 shrink-0 rounded-xl shadow-sm',
+              recording
+                ? 'bg-rose-600 text-white hover:bg-rose-700'
+                : 'border border-input bg-background text-muted-foreground hover:border-teal-400 hover:text-teal-700 dark:hover:border-teal-700 dark:hover:text-teal-400'
+            )}
+          >
+            {transcribing ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : recording ? (
+              <Square className="h-4 w-4 fill-current" aria-hidden />
+            ) : (
+              <Mic className="h-4 w-4" aria-hidden />
+            )}
+          </Button>
           <Button
             type="submit"
             size="icon"

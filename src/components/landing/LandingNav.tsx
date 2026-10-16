@@ -81,7 +81,7 @@ export function LandingNav() {
           data-cursor="BOOK"
           className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-ivory px-5 py-2.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-ink-950 transition-transform will-change-transform hover:bg-white"
         >
-          Book a home visit
+          Book a doctor visit
           <ArrowUpRight className="h-3.5 w-3.5" />
         </Link>
       </div>

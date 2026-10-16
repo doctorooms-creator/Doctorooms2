@@ -83,7 +83,7 @@ export function Hero() {
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-ivory" />
             </span>
             <span className="text-[10px] font-semibold uppercase tracking-[0.26em] text-silver">
-              AI care companion · Doctor home visits
+              AI care companion · Doctor on video
             </span>
           </motion.div>
 
@@ -104,7 +104,7 @@ export function Hero() {
             transition={{ duration: 0.8, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
             className="mt-6 max-w-md text-[15px] leading-relaxed text-silver"
           >
-            A licensed doctor at your door — and an AI care companion in your
+            A licensed doctor, in clinic or on video — and an AI care companion in your
             family&rsquo;s phone who follows the recovery hour by hour.
             She reminds. She tracks. She relays everything to your doctor.
           </motion.p>
@@ -120,7 +120,7 @@ export function Hero() {
               data-cursor="BOOK"
               className="inline-flex min-h-[48px] items-center gap-2 rounded-full bg-ivory px-7 py-3.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-950 transition-transform will-change-transform hover:bg-white"
             >
-              Book a home visit
+              Book a doctor visit
               <ArrowUpRight className="h-4 w-4" />
             </Link>
             <a

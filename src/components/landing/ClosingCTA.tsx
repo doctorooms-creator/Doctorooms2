@@ -131,7 +131,7 @@ export function ClosingCTA() {
             data-cursor="BOOK"
             className="inline-flex min-h-[48px] items-center gap-2 rounded-full bg-ivory px-8 py-4 text-[13px] font-semibold uppercase tracking-[0.14em] text-ink-950 transition-transform will-change-transform hover:bg-white"
           >
-            Book a home visit
+            Book a doctor visit
             <ArrowUpRight className="h-4 w-4" />
           </Link>
           <Link

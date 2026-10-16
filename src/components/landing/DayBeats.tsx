@@ -8,7 +8,7 @@ import type { ReplayStep } from "@/components/landing/chat/ChatReplay";
 import {
   MORNING_SCRIPT,
   QUEUE_SCRIPT,
-  VITALS_SCRIPT,
+  CHECKIN_SCRIPT,
 } from "@/components/landing/moments";
 import { ORB_STATES, ORB_STATE_ORDER } from "@/components/landing/orb/orb-states";
 import { useSpotlight } from "@/hooks/use-spotlight";
@@ -38,7 +38,7 @@ const BEATS: Beat[] = [
   {
     time: "09:10",
     title: "The queue that follows you.",
-    line: "Scan the clinic QR from your sofa. Your number counts down at home.",
+    line: "Your number counts down on your phone. Leave home at the right moment.",
     state: "vigilant",
     script: QUEUE_SCRIPT,
     replayHeight: "h-[240px]",
@@ -47,15 +47,15 @@ const BEATS: Beat[] = [
   {
     time: "11:00",
     title: "The doctor arrives.",
-    line: "A licensed physician at your door — exam, diagnosis, prescription.",
+    line: "A licensed physician — in clinic or on video — exam, diagnosis, prescription.",
     state: "attentive",
   },
   {
     time: "14:00",
-    title: "Vitals, logged & relayed.",
-    line: "She checks in, nudges the reading, and flags anything unusual.",
+    title: "Check-in, logged & relayed.",
+    line: "She asks, you tap — mood, energy, symptoms logged and summarised.",
     state: "vigilant",
-    script: VITALS_SCRIPT,
+    script: CHECKIN_SCRIPT,
     replayHeight: "h-[280px]",
     session: "session 0847",
   },
@@ -68,7 +68,7 @@ const BEATS: Beat[] = [
   {
     time: "21:30",
     title: "Goodnight. Not goodbye.",
-    line: "Night mode — slower, dimmer, still watching. Tomorrow is planned.",
+    line: "Tomorrow's doses are already planned. She never sleeps on reminders.",
     state: "night",
   },
 ];
@@ -84,7 +84,7 @@ function BeatPreview({ index }: { index: number }) {
         </span>
         <div className="text-[12px] leading-snug">
           <p className="text-ivory/90">Dr. S. Rao · General Medicine</p>
-          <p className="text-ash">At your door · Rx written today</p>
+          <p className="text-ash">Clinic or video · Rx written today</p>
         </div>
         <Stethoscope className="ml-auto h-4 w-4 text-silver/60" />
       </div>

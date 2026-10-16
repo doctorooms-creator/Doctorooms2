@@ -11,10 +11,10 @@ const TOTAL = 720;
 const SPEED = 12;
 
 const CLAIMS = [
-  "Scan once at the clinic QR — the number follows you home",
+  "One tap — the number follows you home",
   "Live countdown — three ahead of you, about twelve minutes",
   "She calls you in — leave home at the right moment, not early",
-  "Works on Amma's phone too — family access, no app to learn",
+  "Works on Amma's phone too — just a browser, no app to learn",
 ];
 
 /* Fallback QR tile pattern (used until/if the real QR renders). */

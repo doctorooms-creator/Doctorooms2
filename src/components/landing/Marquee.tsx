@@ -1,14 +1,14 @@
 "use client";
 
 const ITEMS = [
-  "Doctor at your door",
+  "Doctor, clinic or video",
   "Medicine reminders",
   "Live queue number",
-  "Vitals check-ins",
-  "Family access",
+  "Daily check-ins",
+  "Attender portal",
   "Lab reports on your phone",
   "Care log for your doctor",
-  "Night-mode monitoring",
+  "Dose-missed alerts",
 ];
 
 export function Marquee() {
