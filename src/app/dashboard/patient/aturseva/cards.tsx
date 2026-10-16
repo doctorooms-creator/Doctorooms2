@@ -30,11 +30,15 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  HeartPulse,
   Loader2,
   MapPin,
   Stethoscope,
+  TrendingUp,
   Video,
   X,
+  XCircle,
+  Zap,
 } from 'lucide-react'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -600,6 +604,627 @@ export function BookingCreatedCardBody({
       {appointmentNo && (
         <p className="mt-2 truncate text-[10px] text-muted-foreground">{appointmentNo}</p>
       )}
+    </div>
+  )
+}
+
+// ═════════════════════════ PHASE 3 (proactive + check-in) ═══════════════════
+
+// ─── useSubmitCheckIn (shared Save-button POST) ─────────────────────────────
+
+export interface CheckInPayload {
+  mood: number
+  energy: number
+  symptoms: string[]
+  note?: string
+}
+
+/**
+ * The check-in write rail (twin of useConfirmBooking): POST
+ * /api/dashboard/patient/aturseva/check-in on the patient's Save tap. On 201:
+ * success toast + ['aturseva-chat'] + ['aturseva-checkin'] refetch (the
+ * check_in_saved card + mood-aware reply were persisted server-side).
+ */
+export function useSubmitCheckIn() {
+  const queryClient = useQueryClient()
+  const [pending, setPending] = useState(false)
+
+  const submit = useCallback(
+    async (payload: CheckInPayload): Promise<boolean> => {
+      setPending(true)
+      try {
+        const res = await fetch('/api/dashboard/patient/aturseva/check-in', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const json = (await res.json().catch(() => ({}))) as { success?: boolean; error?: string }
+        if (res.ok && (res.status === 201 || json.success)) {
+          toast.success('Aaj ka check-in save ho gaya ✓')
+          void queryClient.invalidateQueries({ queryKey: ['aturseva-chat'] })
+          void queryClient.invalidateQueries({ queryKey: ['aturseva-checkin'] })
+          return true
+        }
+        toast.error(json.error || 'Check-in save nahi hua — dobara try karein')
+        return false
+      } catch {
+        toast.error('Check-in save nahi hua — dobara try karein')
+        return false
+      } finally {
+        setPending(false)
+      }
+    },
+    [queryClient]
+  )
+
+  return { submit, pending }
+}
+
+// ─── 5) booking_update (proactive: approved / rejected) ─────────────────────
+
+export function BookingUpdateCardBody({ data }: { data: Record<string, unknown> }) {
+  const status = str(data.status)
+  const isApproved = status === 'Approve'
+  const doctor = str(data.doctor)
+  const specialization = str(data.specialization)
+  const dateLabel = str(data.dateLabel) || str(data.date)
+  const timeSlot = str(data.timeSlot)
+  const statusHi = str(data.statusHi)
+  const tokenNumber = str(data.tokenNumber)
+  const queuePosition = Number(data.queuePosition)
+  const reason = str(data.reason)
+  const mode = data.mode
+
+  return (
+    <div
+      className={cn(
+        'rounded-xl border p-3',
+        isApproved
+          ? 'border-emerald-200 bg-background dark:border-emerald-800/70'
+          : 'border-rose-200 bg-background dark:border-rose-900/70'
+      )}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={cn(
+            'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+            isApproved
+              ? 'bg-emerald-100 dark:bg-emerald-950/50'
+              : 'bg-rose-100 dark:bg-rose-950/50'
+          )}
+          aria-hidden
+        >
+          {isApproved ? (
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <XCircle className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+          )}
+        </span>
+        <p
+          className={cn(
+            'text-sm font-bold',
+            isApproved
+              ? 'text-emerald-700 dark:text-emerald-400'
+              : 'text-rose-700 dark:text-rose-400'
+          )}
+        >
+          {isApproved ? 'Appointment confirm ho gaya!' : 'Appointment reject ho gaya'}
+        </p>
+        <Badge
+          variant="outline"
+          className={cn(
+            'ml-auto text-[10px] font-medium',
+            isApproved
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400'
+              : 'border-rose-300 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-400'
+          )}
+        >
+          {statusHi ? `${status} — ${statusHi}` : status}
+        </Badge>
+      </div>
+
+      <p className="mt-2 truncate text-sm font-semibold leading-tight">{doctor}</p>
+      {specialization && (
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{specialization}</p>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-1">
+          <CalendarDays className="h-3 w-3 shrink-0" aria-hidden />
+          <span className="truncate">{dateLabel}</span>
+        </span>
+        {timeSlot && (
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3 shrink-0" aria-hidden />
+            {timeSlot}
+          </span>
+        )}
+        {mode ? <span className="flex items-center gap-1">{modeLabel(mode)}</span> : null}
+      </div>
+
+      {isApproved && (tokenNumber || Number.isFinite(queuePosition)) && (
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          {tokenNumber && (
+            <span className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1.5 text-xs font-bold text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300">
+              Token {tokenNumber}
+            </span>
+          )}
+          {Number.isFinite(queuePosition) && queuePosition > 0 && (
+            <span className="rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1.5 text-xs font-bold text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300">
+              Queue #{queuePosition}
+            </span>
+          )}
+          {Number.isFinite(Number(data.fees)) && Number(data.fees) > 0 && (
+            <span className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold text-muted-foreground">
+              {formatMoney(data.fees)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {!isApproved && reason && (
+        <p className="mt-1.5 text-xs text-muted-foreground">Reason: {reason}</p>
+      )}
+
+      <Button
+        asChild
+        variant="outline"
+        size="sm"
+        className={cn(
+          'mt-2.5 h-10 w-full rounded-lg',
+          isApproved
+            ? 'border-teal-300 text-teal-700 hover:bg-teal-50 dark:border-teal-800 dark:text-teal-400 dark:hover:bg-teal-950/40'
+            : 'text-muted-foreground hover:bg-muted'
+        )}
+      >
+        <Link href="/dashboard/patient/appointments" aria-label="Appointments page kholein">
+          Appointments page dekhein
+          <ArrowRight className="ml-1 h-3.5 w-3.5" aria-hidden />
+        </Link>
+      </Button>
+    </div>
+  )
+}
+
+// ─── 6) get_my_symptom_log (14-day diary trend) ─────────────────────────────
+
+interface LogDay {
+  day?: string
+  mood?: number
+  moodFace?: string
+  energy?: number
+  symptoms?: string
+  note?: string
+}
+
+export function SymptomLogCardBody({ data }: { data: Record<string, unknown> }) {
+  const days = arr<LogDay>(data.days)
+  const summary =
+    data.summary && typeof data.summary === 'object'
+      ? (data.summary as { daysLogged?: number; avgMood?: number; avgEnergy?: number; streak?: number; topSymptoms?: { tag?: string; days?: number }[] })
+      : null
+
+  if (days.length === 0) {
+    return (
+      <p className="rounded-xl border bg-background px-3 py-2.5 text-xs text-muted-foreground">
+        {str(data.note) || 'Abhi koi check-in nahi hua — aaj ka card thread me hai.'}
+      </p>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border bg-background p-3">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+        <p className="text-sm font-semibold leading-tight">
+          {summary?.daysLogged ?? days.length} din ka symptom diary
+        </p>
+        {typeof summary?.streak === 'number' && summary.streak >= 2 && (
+          <Badge
+            variant="outline"
+            className="ml-auto border-teal-300 bg-teal-50 text-[10px] font-medium text-teal-700 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-400"
+          >
+            🔥 {summary.streak}-day streak
+          </Badge>
+        )}
+      </div>
+
+      {/* summary stats */}
+      <div className="mt-2 grid grid-cols-3 gap-1.5 text-center">
+        <div className="rounded-lg bg-muted/60 px-1.5 py-2">
+          <p className="text-[10px] text-muted-foreground">Avg mood</p>
+          <p className="text-sm font-bold text-teal-700 dark:text-teal-400">
+            {summary?.avgMood ?? '—'}/5
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/60 px-1.5 py-2">
+          <p className="text-[10px] text-muted-foreground">Avg energy</p>
+          <p className="text-sm font-bold text-teal-700 dark:text-teal-400">
+            {summary?.avgEnergy ?? '—'}/5
+          </p>
+        </div>
+        <div className="rounded-lg bg-muted/60 px-1.5 py-2">
+          <p className="text-[10px] text-muted-foreground">Din logged</p>
+          <p className="text-sm font-bold text-teal-700 dark:text-teal-400">
+            {summary?.daysLogged ?? days.length}
+          </p>
+        </div>
+      </div>
+
+      {/* day rows (scrollable — long list handling) */}
+      <div className="mt-2 max-h-44 space-y-1.5 overflow-y-auto pr-0.5">
+        {days.map((d, i) => (
+          <div
+            key={`${d.day ?? i}`}
+            className="flex items-center gap-2 rounded-lg border border-dashed px-2 py-1.5"
+          >
+            <span className="shrink-0 text-base leading-none" aria-hidden>
+              {d.moodFace || '😐'}
+            </span>
+            <span className="w-[86px] shrink-0 truncate text-[10px] text-muted-foreground">
+              {d.day?.slice(5) || ''}
+            </span>
+            <span className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground">
+              <Zap className="h-2.5 w-2.5" aria-hidden />
+              {d.energy ?? '—'}/5
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-foreground">
+              {d.symptoms || '—'}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {summary?.topSymptoms && summary.topSymptoms.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {summary.topSymptoms.map((s) => (
+            <Badge
+              key={s.tag}
+              variant="secondary"
+              className="text-[10px] font-medium"
+            >
+              {s.tag} ×{s.days}
+            </Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── 7) prepare_check_in (confirm card — LLM prepared, patient Saves) ───────
+
+export function PrepareCheckInCardBody({ data }: { data: Record<string, unknown> }) {
+  const { submit, pending } = useSubmitCheckIn()
+  const [saved, setSaved] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+
+  const mood = Number(data.mood)
+  const energy = Number(data.energy)
+  const moodFace = str(data.moodFace) || '😐'
+  const dayLabel = str(data.dayLabel) || str(data.day) || ''
+  const symptoms = arr<string>(data.symptoms)
+  const note = str(data.note)
+  const updating = !!data.updating
+
+  const handleSave = async () => {
+    const ok = await submit({ mood, energy, symptoms, note })
+    if (ok) setSaved(true)
+  }
+
+  if (saved) {
+    return (
+      <p
+        role="status"
+        className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-sm font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
+      >
+        <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+        Check-in save ho gaya ✓
+      </p>
+    )
+  }
+
+  return (
+    <div className={cn('rounded-xl border bg-background p-3', dismissed && 'opacity-60')}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-sm font-semibold leading-tight">
+            <HeartPulse className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+            {updating ? 'Aaj ka check-in update karein' : 'Aaj ka check-in'}
+          </p>
+          {dayLabel && (
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{dayLabel}</p>
+          )}
+        </div>
+        <span className="shrink-0 text-2xl leading-none" aria-label={`Mood ${mood} out of 5`}>
+          {moodFace}
+        </span>
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-1.5 text-center text-xs">
+        <div className="rounded-lg bg-muted/60 px-2 py-1.5">
+          <span className="text-muted-foreground">Mood</span>{' '}
+          <span className="font-bold text-teal-700 dark:text-teal-400">{mood}/5</span>
+        </div>
+        <div className="rounded-lg bg-muted/60 px-2 py-1.5">
+          <span className="text-muted-foreground">Energy</span>{' '}
+          <span className="font-bold text-teal-700 dark:text-teal-400">{energy}/5</span>
+        </div>
+      </div>
+
+      {symptoms.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {symptoms.map((s) => (
+            <Badge key={s} variant="secondary" className="text-[10px] font-medium">
+              {s}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {note && <p className="mt-1.5 text-xs italic text-muted-foreground">“{note}”</p>}
+
+      {dismissed ? (
+        <p
+          role="status"
+          className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2.5 text-xs text-muted-foreground"
+        >
+          <X className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          Aapne cancel kar diya
+        </p>
+      ) : (
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <Button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={pending}
+            aria-label="Check-in save karein"
+            className="h-11 flex-1 rounded-lg bg-teal-600 text-sm font-semibold text-white shadow-sm hover:bg-teal-700"
+          >
+            {pending ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Check className="mr-1 h-4 w-4" aria-hidden />
+            )}
+            Save {updating ? 'Update' : 'Check-in'}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setDismissed(true)}
+            disabled={pending}
+            aria-label="Check-in cancel karein"
+            className="h-11 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted"
+          >
+            <X className="mr-1 h-4 w-4" aria-hidden />
+            Nahi, badalna hai
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── 8) check_in_saved (persisted summary card) ─────────────────────────────
+
+export function CheckInSavedCardBody({ data }: { data: Record<string, unknown> }) {
+  const moodFace = str(data.moodFace) || '😐'
+  const dayLabel = str(data.dayLabel) || str(data.day)
+  const mood = Number(data.mood)
+  const energy = Number(data.energy)
+  const symptoms = arr<string>(data.symptoms)
+  const note = str(data.note)
+  const streak = Number(data.streak)
+
+  return (
+    <div className="rounded-xl border border-teal-200 bg-background p-3 dark:border-teal-800/70">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xl leading-none" aria-hidden>
+          {moodFace}
+        </span>
+        <p className="text-sm font-bold text-teal-700 dark:text-teal-400">
+          {dayLabel ? `${dayLabel} ka check-in` : 'Aaj ka check-in'}
+        </p>
+        {Number.isFinite(streak) && streak >= 2 && (
+          <Badge
+            variant="outline"
+            className="ml-auto border-teal-300 bg-teal-50 text-[10px] font-medium text-teal-700 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-400"
+          >
+            🔥 {streak} din streak
+          </Badge>
+        )}
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span>Mood <b className="text-foreground">{Number.isFinite(mood) ? mood : '—'}/5</b></span>
+        <span className="flex items-center gap-1">
+          <Zap className="h-3 w-3 shrink-0" aria-hidden />
+          Energy <b className="text-foreground">{Number.isFinite(energy) ? energy : '—'}/5</b>
+        </span>
+      </div>
+      {symptoms.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {symptoms.map((s) => (
+            <Badge key={s} variant="secondary" className="text-[10px] font-medium">
+              {s}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {note && <p className="mt-1.5 text-xs italic text-muted-foreground">“{note}”</p>}
+    </div>
+  )
+}
+
+// ─── 9) CheckInCard — the interactive DAILY NUDGE (thread-inline) ───────────
+
+const MOOD_OPTIONS = [
+  { value: 1, face: '😞', label: 'Bahut low' },
+  { value: 2, face: '🙁', label: 'Thoda low' },
+  { value: 3, face: '😐', label: 'Theek' },
+  { value: 4, face: '🙂', label: 'Achha' },
+  { value: 5, face: '😄', label: 'Bahut achha' },
+]
+
+const SYMPTOM_CHIPS = [
+  'bukhar',
+  'sardad',
+  'khansi',
+  'thakan',
+  'neend',
+  'pet',
+  'chakkar',
+  'dard',
+]
+
+/**
+ * The daily check-in card rendered INLINE at the end of the thread when
+ * today's check-in is still pending (GET /check-in → today === null).
+ * Mood + energy selectors, symptom chips, optional note → Save (human-tap
+ * write). After saving it collapses to a one-line confirmation.
+ */
+export function CheckInCard({ compact = false }: { compact?: boolean }) {
+  const { submit, pending } = useSubmitCheckIn()
+  const [mood, setMood] = useState<number | null>(null)
+  const [energy, setEnergy] = useState<number | null>(null)
+  const [symptoms, setSymptoms] = useState<string[]>([])
+  const [note, setNote] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  const toggleSymptom = (tag: string) => {
+    setSymptoms((prev) =>
+      prev.includes(tag) ? prev.filter((s) => s !== tag) : prev.length < 6 ? [...prev, tag] : prev
+    )
+  }
+
+  const handleSave = async () => {
+    if (mood === null || energy === null) return
+    const ok = await submit({ mood, energy, symptoms, note: note.trim() || undefined })
+    if (ok) setSaved(true)
+  }
+
+  if (saved) {
+    return (
+      <p
+        role="status"
+        className="flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2.5 text-xs font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        Aaj ka check-in ho gaya — kal phir milenge! 🩺
+      </p>
+    )
+  }
+
+  return (
+    <div className="rounded-xl border border-teal-200 bg-background p-3 dark:border-teal-800/70">
+      <div className="flex items-center gap-1.5">
+        <HeartPulse className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+        <p className="text-sm font-semibold leading-tight">Aaj ka check-in</p>
+        <span className="ml-auto text-[10px] text-muted-foreground">1 minute lagta hai</span>
+      </div>
+
+      {/* mood selector */}
+      <p className="mt-2 text-[11px] font-medium text-muted-foreground">Aaj mood kaisa hai?</p>
+      <div className="mt-1 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Aaj ka mood">
+        {MOOD_OPTIONS.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={mood === o.value}
+            aria-label={`${o.label} (${o.value}/5)`}
+            onClick={() => setMood(o.value)}
+            className={cn(
+              'flex h-10 w-10 items-center justify-center rounded-lg border text-lg transition-colors',
+              mood === o.value
+                ? 'border-teal-500 bg-teal-50 ring-2 ring-teal-500/30 dark:border-teal-600 dark:bg-teal-950/50'
+                : 'border-border hover:bg-muted/60'
+            )}
+          >
+            {o.face}
+          </button>
+        ))}
+      </div>
+
+      {/* energy selector */}
+      <p className="mt-2.5 text-[11px] font-medium text-muted-foreground">Energy kitni hai?</p>
+      <div className="mt-1 flex flex-wrap gap-1.5" role="radiogroup" aria-label="Aaj ki energy">
+        {[1, 2, 3, 4, 5].map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={energy === v}
+            aria-label={`Energy ${v}/5`}
+            onClick={() => setEnergy(v)}
+            className={cn(
+              'flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 text-xs font-semibold transition-colors',
+              energy === v
+                ? 'border-teal-500 bg-teal-50 text-teal-700 ring-2 ring-teal-500/30 dark:border-teal-600 dark:bg-teal-950/50 dark:text-teal-300'
+                : 'border-border text-muted-foreground hover:bg-muted/60'
+            )}
+          >
+            <Zap className="mr-0.5 h-3 w-3" aria-hidden />
+            {v}
+          </button>
+        ))}
+      </div>
+
+      {/* symptom chips */}
+      <p className="mt-2.5 text-[11px] font-medium text-muted-foreground">
+        Koi symptom? (optional — multiple chun sakte hain)
+      </p>
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        {SYMPTOM_CHIPS.map((tag) => (
+          <button
+            key={tag}
+            type="button"
+            aria-pressed={symptoms.includes(tag)}
+            onClick={() => toggleSymptom(tag)}
+            className={cn(
+              'h-7 rounded-full border px-2.5 text-[11px] font-medium transition-colors',
+              symptoms.includes(tag)
+                ? 'border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-600 dark:bg-teal-950/50 dark:text-teal-300'
+                : 'border-border text-muted-foreground hover:bg-muted/60'
+            )}
+          >
+            {tag}
+          </button>
+        ))}
+      </div>
+
+      {/* note */}
+      {!compact && (
+        <>
+          <label
+            htmlFor="checkin-note"
+            className="mt-2.5 block text-[11px] font-medium text-muted-foreground"
+          >
+            Kuch aur note karna hai? (optional)
+          </label>
+          <input
+            id="checkin-note"
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value.slice(0, 300))}
+            placeholder="jaise: subah se sar halka dard tha…"
+            className="mt-1 h-10 w-full rounded-lg border border-border bg-background px-3 text-xs outline-none placeholder:text-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-teal-500/40"
+          />
+        </>
+      )}
+
+      <Button
+        type="button"
+        onClick={() => void handleSave()}
+        disabled={pending || mood === null || energy === null}
+        aria-label="Aaj ka check-in save karein"
+        className="mt-3 h-11 w-full rounded-lg bg-teal-600 text-sm font-semibold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+      >
+        {pending ? (
+          <Loader2 className="mr-1 h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <Check className="mr-1 h-4 w-4" aria-hidden />
+        )}
+        Save Check-in
+      </Button>
     </div>
   )
 }

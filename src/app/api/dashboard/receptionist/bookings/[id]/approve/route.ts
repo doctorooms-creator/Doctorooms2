@@ -4,6 +4,16 @@ import { requireAuth, RECEPTION_ROLES } from '@/lib/api-auth'
 import { todayISTRange } from '@/lib/date-utils'
 import { generateTokenNumber } from '@/lib/token-utils'
 import { emitToRole, emitToHospital } from '@/lib/emit-notification'
+import { pushAtursevaMessage } from '@/lib/aturseva/proactive'
+
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+function bookingDateLabel(d: Date): string {
+  const ist = new Date(d.getTime() + 5.5 * 3600 * 1000)
+  const day = DAYS_EN[ist.getUTCDay()] || ''
+  return `${day}, ${ist.getUTCDate()} ${MONTHS_EN[ist.getUTCMonth()] || ''}`
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -98,6 +108,30 @@ export async function PATCH(
             title: 'Booking Rejected',
             message: `Your appointment request with Dr. ${booking.doctor?.user?.name || 'Unknown'} has been rejected. The OPD limit for today is full. Please try another date or time.`,
           },
+        })
+
+        // ── Aturseva proactive push (Phase 3): rejection lands in the chat ──
+        const docName = booking.doctor?.user?.name || 'Doctor'
+        const label = bookingDateLabel(booking.bookingDate)
+        await pushAtursevaMessage({
+          userId: booking.userId,
+          kind: 'booking-rejected',
+          refId: booking.id,
+          card: {
+            type: 'booking_update',
+            title: 'Appointment reject ho gayi',
+            data: {
+              bookingId: booking.id,
+              doctor: docName,
+              specialization: booking.doctor?.specialization || 'General Physician',
+              dateLabel: label,
+              timeSlot: booking.timeSlot || '',
+              status: 'Rejected',
+              statusHi: 'Reject ho gaya',
+              reason: "OPD limit full ho gaya tha",
+            },
+          },
+          text: `${docName} ki clinic ne ${label} ko ${booking.timeSlot || ''} baje ki appointment reject kar di — OPD limit full tha. Koi baat nahi, main doosri date ya doosra doctor dhoondh sakti hoon, bas bataiye. 🩺`,
         })
       }
 
@@ -223,6 +257,36 @@ export async function PATCH(
       }
     } catch (emitErr) {
       console.error('queue-updated emit failed:', emitErr)
+    }
+
+    // ── Aturseva proactive push (Phase 3): approval lands in the chat ──
+    // The patient's own thread gets the good news + token + queue position —
+    // "AI batati hai" pillar: no need to open the Appointments page to know.
+    if (booking.userId) {
+      const label = bookingDateLabel(booking.bookingDate)
+      await pushAtursevaMessage({
+        userId: booking.userId,
+        kind: 'booking-approved',
+        refId: booking.id,
+        card: {
+          type: 'booking_update',
+          title: 'Appointment confirm ho gaya ✓',
+          data: {
+            bookingId: booking.id,
+            doctor: doctorName,
+            specialization: booking.doctor?.specialization || 'General Physician',
+            dateLabel: label,
+            timeSlot: booking.timeSlot || '',
+            mode: booking.bookingMode || 'InPerson',
+            status: 'Approve',
+            statusHi: 'Confirmed ✓',
+            tokenNumber: tokenNumber || null,
+            queuePosition,
+            fees: booking.appointmentCharge || booking.doctor?.fees || 0,
+          },
+        },
+        text: `Achhi khabar! 🎉 ${doctorName} ne aapki ${label} ko ${booking.timeSlot || ''} baje ki appointment CONFIRM kar di hai.${tokenNumber ? ` Token ${tokenNumber} hai,` : ''} queue me position #${queuePosition}. ${booking.bookingMode === 'VideoCall' ? 'Video call ka link appointment page me milega.' : 'Clinic pahunchne ka time nikal lijiye!'}`,
+      })
     }
 
     return NextResponse.json({

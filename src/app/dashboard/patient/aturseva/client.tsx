@@ -36,6 +36,7 @@ import {
   CalendarCheck,
   CheckCircle2,
   Clock,
+  HeartPulse,
   Loader2,
   MapPin,
   MessageCircle,
@@ -46,8 +47,10 @@ import {
   Stethoscope,
   Ticket,
   Trash2,
+  TrendingUp,
   Users,
   Video,
+  XCircle,
 } from 'lucide-react'
 
 import {
@@ -70,16 +73,21 @@ import { cn } from '@/lib/utils'
 
 import {
   BookingCreatedCardBody,
+  BookingUpdateCardBody,
+  CheckInCard,
+  CheckInSavedCardBody,
   NearbyDoctorsCardBody,
   PrepareBookingCardBody,
+  PrepareCheckInCardBody,
   SlotsCardBody,
+  SymptomLogCardBody,
   type CardRenderCtx,
 } from './cards'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type Role = 'user' | 'aturseva' | 'action'
-type ActionKind = 'doctors' | 'bookings' | 'queue' | 'slots' | 'nearby' | 'confirm' | 'created' | 'other'
+type ActionKind = 'doctors' | 'bookings' | 'queue' | 'slots' | 'nearby' | 'confirm' | 'created' | 'booking_update' | 'symptom_log' | 'checkin_confirm' | 'checkin_saved' | 'other'
 
 interface ActionCard {
   kind: ActionKind
@@ -159,6 +167,15 @@ const KIND_BY_TYPE: Record<string, ActionKind> = {
   'booking-confirm': 'confirm',
   booking_created: 'created',
   'booking-created': 'created',
+  // Phase 3 — proactive pushes + check-in diary
+  booking_update: 'booking_update',
+  'booking-update': 'booking_update',
+  get_my_symptom_log: 'symptom_log',
+  'symptom-log': 'symptom_log',
+  prepare_check_in: 'checkin_confirm',
+  'prepare-check-in': 'checkin_confirm',
+  check_in_saved: 'checkin_saved',
+  'check-in-saved': 'checkin_saved',
 }
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -416,6 +433,14 @@ function ActionCardBody({ action, ctx }: { action: ActionCard; ctx?: CardRenderC
       return <PrepareBookingCardBody data={action.data} ctx={ctx} />
     case 'created':
       return <BookingCreatedCardBody data={action.data} ctx={ctx} />
+    case 'booking_update':
+      return <BookingUpdateCardBody data={action.data} />
+    case 'symptom_log':
+      return <SymptomLogCardBody data={action.data} />
+    case 'checkin_confirm':
+      return <PrepareCheckInCardBody data={action.data} />
+    case 'checkin_saved':
+      return <CheckInSavedCardBody data={action.data} />
     default:
       return (
         <p className="rounded-xl border bg-background px-3 py-2.5 text-xs text-muted-foreground">
@@ -428,6 +453,11 @@ function ActionCardBody({ action, ctx }: { action: ActionCard; ctx?: CardRenderC
 function ActionCardShell({ action, ctx }: { action: ActionCard; ctx?: CardRenderCtx }) {
   // booking_created gets an emerald success shell; everything else stays teal.
   const isCreated = action.kind === 'created'
+  // booking_update: emerald when approved, rose when rejected (matches the
+  // card body's own status colouring).
+  const isRejectedUpdate =
+    action.kind === 'booking_update' && asString(action.data.status) !== 'Approve'
+  const isCheckInSaved = action.kind === 'checkin_saved'
   const icon =
     action.kind === 'doctors' ? (
       <Stethoscope className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -443,6 +473,16 @@ function ActionCardShell({ action, ctx }: { action: ActionCard; ctx?: CardRender
       <CalendarCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />
     ) : action.kind === 'created' ? (
       <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    ) : action.kind === 'booking_update' ? (
+      isRejectedUpdate ? (
+        <XCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      ) : (
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      )
+    ) : action.kind === 'symptom_log' ? (
+      <TrendingUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
+    ) : action.kind === 'checkin_confirm' || action.kind === 'checkin_saved' ? (
+      <HeartPulse className="h-3.5 w-3.5 shrink-0" aria-hidden />
     ) : (
       <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden />
     )
@@ -450,17 +490,21 @@ function ActionCardShell({ action, ctx }: { action: ActionCard; ctx?: CardRender
     <div
       className={cn(
         'w-full rounded-2xl rounded-tl-md border p-3 shadow-sm',
-        isCreated
+        isCreated || isCheckInSaved
           ? 'border-emerald-300/80 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/30'
-          : 'border-teal-200/80 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/30'
+          : isRejectedUpdate
+            ? 'border-rose-300/80 bg-rose-50/60 dark:border-rose-900 dark:bg-rose-950/30'
+            : 'border-teal-200/80 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/30'
       )}
     >
       <p
         className={cn(
           'mb-2 flex items-center gap-1.5 text-xs font-semibold',
-          isCreated
+          isCreated || isCheckInSaved
             ? 'text-emerald-800 dark:text-emerald-300'
-            : 'text-teal-800 dark:text-teal-300'
+            : isRejectedUpdate
+              ? 'text-rose-800 dark:text-rose-300'
+              : 'text-teal-800 dark:text-teal-300'
         )}
       >
         {icon}
@@ -543,6 +587,24 @@ export default function AtursevaChatClient() {
     },
     retry: 1,
   })
+
+  // ── Daily check-in status (Phase 3): today === null → render the inline
+  // CheckInCard nudge at the end of the thread. Invalidated by
+  // 'aturseva-push' + after a successful save (useSubmitCheckIn).
+  const { data: checkInData } = useQuery({
+    queryKey: ['aturseva-checkin'],
+    queryFn: async (): Promise<{ today: { day: string } | null; streak: number }> => {
+      try {
+        const res = await fetch('/api/dashboard/patient/aturseva/check-in')
+        if (!res.ok) return { today: null, streak: 0 }
+        return (await res.json()) as { today: { day: string } | null; streak: number }
+      } catch {
+        return { today: null, streak: 0 }
+      }
+    },
+    staleTime: 60 * 1000,
+  })
+  const showCheckInNudge = checkInData?.today == null && !isLoading && !isError
 
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [input, setInput] = useState('')
@@ -976,6 +1038,31 @@ export default function AtursevaChatClient() {
                   </motion.div>
                 )
               )
+            )}
+
+            {/* ── Daily check-in nudge (Phase 3): today's check-in still
+                pending → inline interactive card at the end of the thread. ── */}
+            {showCheckInNudge && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: 0.05 }}
+                className="flex w-full justify-start"
+              >
+                <span
+                  className="mr-2 mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-100 text-sm dark:bg-teal-900/50"
+                  aria-hidden
+                >
+                  🩺
+                </span>
+                <div className="max-w-md">
+                  <p className="mb-1.5 rounded-2xl rounded-bl-md border bg-muted/60 px-3.5 py-2 text-xs text-muted-foreground shadow-sm">
+                    Namaste! Aaj ka chhota check-in pending hai — mood bata dijiye, main diary me
+                    note kar dungi. 🩺
+                  </p>
+                  <CheckInCard />
+                </div>
+              </motion.div>
             )}
 
             {showChips && (

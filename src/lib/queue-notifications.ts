@@ -1,4 +1,5 @@
 import { db } from '@/lib/db'
+import { pushAtursevaMessage } from '@/lib/aturseva/proactive'
 
 type QueueNotificationEvent =
   | 'consultation_started'
@@ -102,6 +103,33 @@ export async function sendQueueNotification(
         message: n.message,
       })),
     })
+
+    // ── Aturseva proactive push (Phase 3): the same event lands in the ──
+    // patient's chat thread in Aturseva's voice. turn_approaching is skipped
+    // here — the two outer callers (notifyNextPatient / notifyApproachingPatient)
+    // push richer, position-aware copy themselves.
+    if (ctx.patientUserId && event !== 'turn_approaching') {
+      const doc = `Dr. ${ctx.doctorName}`
+      const token = ctx.tokenNumber ? ` Token #${ctx.tokenNumber}.` : ''
+      const text =
+        event === 'consultation_started'
+          ? `🔔 Aapki baari shuru ho gayi! ${doc} ne aapki consultation start kar di hai${token} Consultation room me chaliye — main yahin hoon.`
+          : event === 'consultation_completed'
+            ? `✅ ${doc} ke saath aapki consultation complete ho gayi. Agar dawai likhi gayi hai to pharmacy se le lijiye. Tabiyat ka dhyan rakhna — koi sawaal ho to poochh lijiye. 🩺`
+            : event === 'wait_extended'
+              ? `⏳ ${doc} ne aapka wait thoda extend kiya hai. Live queue position jaanni ho to bas poochh lijiye — main turant bata dungi.`
+              : event === 'appointment_canceled'
+                ? `⚠️ ${doc} ne aapki aaj ki appointment cancel kar di hai. Rebook karne me madad chahiye to bataiye — main doosra slot dhoondh deti hoon.`
+                : ''
+      if (text) {
+        await pushAtursevaMessage({
+          userId: ctx.patientUserId,
+          kind: `queue-${event}`,
+          refId: ctx.bookingId,
+          text,
+        })
+      }
+    }
   } catch (error) {
     // Notifications should never block the main flow
     console.error('[QueueNotification] Failed to send notification:', error)
@@ -186,6 +214,15 @@ export async function notifyApproachingPatient(
       tokenNumber: approachingBooking.tokenNumber,
       departmentName,
     })
+
+    // ── Aturseva proactive push (Phase 3): "2 patients baad aapki baari" ──
+    // get-ready nudge — the patient should start moving toward the clinic.
+    await pushAtursevaMessage({
+      userId: approachingBooking.userId,
+      kind: 'queue-turn-approaching',
+      refId: approachingBooking.id,
+      text: `⏳ ${doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`} ki clinic me 2 patients baad aapki baari hai${approachingBooking.tokenNumber ? ` (Token #${approachingBooking.tokenNumber})` : ''}. Clinic ke paas pahunchnne ki koshish karein — ready rahein!`,
+    })
   } catch (error) {
     console.error('[QueueNotification] Failed to notify approaching patient:', error)
   }
@@ -266,6 +303,15 @@ export async function notifyNextPatient(
       doctorName,
       tokenNumber: nextBooking.tokenNumber,
       departmentName,
+    })
+
+    // ── Aturseva proactive push (Phase 3): THE leave-now BAARI nudge ──
+    // The immediately-next patient: consultation room ki taraf nikal jao.
+    await pushAtursevaMessage({
+      userId: nextBooking.userId,
+      kind: 'queue-turn-next',
+      refId: nextBooking.id,
+      text: `🚶 Aapki baari aa gayi! ${doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`} ab aapko dekhenge${nextBooking.tokenNumber ? ` — Token #${nextBooking.tokenNumber}` : ''}. Consultation room ki taraf nikal jaayein. 🩺`,
     })
   } catch (error) {
     console.error('[QueueNotification] Failed to notify next patient:', error)

@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth, RECEPTION_ROLES } from '@/lib/api-auth'
+import { pushAtursevaMessage } from '@/lib/aturseva/proactive'
+
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const DAYS_EN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+function bookingDateLabel(d: Date): string {
+  const ist = new Date(d.getTime() + 5.5 * 3600 * 1000)
+  const day = DAYS_EN[ist.getUTCDay()] || ''
+  return `${day}, ${ist.getUTCDate()} ${MONTHS_EN[ist.getUTCMonth()] || ''}`
+}
 
 export async function PATCH(
   req: NextRequest,
@@ -69,6 +79,30 @@ export async function PATCH(
           title: 'Booking Rejected',
           message: `Your appointment request with Dr. ${booking.doctor?.user?.name || 'Unknown'} has been rejected. Please try another date or time.`,
         },
+      })
+
+      // ── Aturseva proactive push (Phase 3): rejection lands in the chat ──
+      const docName = booking.doctor?.user?.name || 'Doctor'
+      const label = bookingDateLabel(booking.bookingDate)
+      await pushAtursevaMessage({
+        userId: booking.userId,
+        kind: 'booking-rejected',
+        refId: booking.id,
+        card: {
+          type: 'booking_update',
+          title: 'Appointment reject ho gayi',
+          data: {
+            bookingId: booking.id,
+            doctor: docName,
+            specialization: booking.doctor?.specialization || 'General Physician',
+            dateLabel: label,
+            timeSlot: booking.timeSlot || '',
+            status: 'Rejected',
+            statusHi: 'Reject ho gaya',
+            reason: 'Clinic ne is date ke liye booking accept nahi ki',
+          },
+        },
+        text: `${docName} ki clinic ne ${label} ko ${booking.timeSlot || ''} baje ki appointment reject kar di hai. Koi baat nahi — main doosri date ya doosra doctor dhoondh sakti hoon, bas bataiye. 🩺`,
       })
     }
 

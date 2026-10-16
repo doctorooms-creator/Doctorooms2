@@ -11,11 +11,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUpRight, Check, CheckCircle2, Loader2, MessageCircle, Send, Sparkles, Stethoscope, X } from 'lucide-react'
+import { ArrowUpRight, Check, CheckCircle2, Loader2, MessageCircle, Send, Sparkles, Stethoscope, TrendingUp, X, XCircle, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
+
+import { useAuthSocket } from '@/hooks/useSocket'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,9 +25,11 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { cn } from '@/lib/utils'
 
 import {
+  CheckInCard,
   findLaterBookingCreated,
   modeLabel,
   useConfirmBooking,
+  useSubmitCheckIn,
   type CardRenderCtx,
 } from '@/app/dashboard/patient/aturseva/cards'
 
@@ -337,7 +341,172 @@ function ActionCardBody({ action, ctx }: { action: ActionCard; ctx: CardRenderCt
     )
   }
 
+  // ── Phase 3: proactive booking status updates (approve / reject) ──
+  if (action.type === 'booking_update' || action.type === 'booking-update') {
+    const approved = str(action.data.status) === 'Approve'
+    const doctor = str(action.data.doctor)
+    const dateLabel = str(action.data.dateLabel) || str(action.data.date)
+    const timeSlot = str(action.data.timeSlot)
+    const token = str(action.data.tokenNumber)
+    return (
+      <div
+        className={cn(
+          'space-y-1.5 rounded-lg px-3 py-2.5',
+          approved
+            ? 'border border-emerald-300 bg-emerald-50/70 dark:border-emerald-800 dark:bg-emerald-950/40'
+            : 'border border-rose-300 bg-rose-50/70 dark:border-rose-800 dark:bg-rose-950/40'
+        )}
+      >
+        <p
+          className={cn(
+            'flex items-center gap-1 text-[11px] font-semibold',
+            approved
+              ? 'text-emerald-700 dark:text-emerald-400'
+              : 'text-rose-700 dark:text-rose-400'
+          )}
+        >
+          {approved ? (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          ) : (
+            <XCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          )}
+          {approved ? 'Confirm ho gaya!' : 'Reject ho gaya'}
+          {token ? ` · Token ${token}` : ''}
+        </p>
+        <p className="truncate text-[11px] text-muted-foreground">
+          {doctor}
+          {dateLabel ? ` · ${dateLabel}` : ''}
+          {timeSlot ? ` · ${timeSlot}` : ''}
+        </p>
+        <Link
+          href="/dashboard/patient/appointments"
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-teal-700 underline-offset-2 hover:underline dark:text-teal-400"
+          aria-label="Appointments page kholein"
+        >
+          Appointments page dekhein
+          <ArrowUpRight className="h-3 w-3" aria-hidden />
+        </Link>
+      </div>
+    )
+  }
+
+  // ── Phase 3: symptom diary trend (compact) ──
+  if (action.type === 'get_my_symptom_log' || action.type === 'symptom-log') {
+    const summary =
+      action.data.summary && typeof action.data.summary === 'object'
+        ? (action.data.summary as { daysLogged?: number; avgMood?: number; avgEnergy?: number; streak?: number })
+        : null
+    return (
+      <div className="space-y-1 rounded-lg border px-3 py-2.5">
+        <p className="flex items-center gap-1 text-[11px] font-semibold">
+          <TrendingUp className="h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" aria-hidden />
+          {summary?.daysLogged ?? 0} din ka diary
+          {summary?.streak != null && summary.streak >= 2 ? ` · 🔥${summary.streak}` : ''}
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Avg mood {summary?.avgMood ?? '—'}/5 · energy {summary?.avgEnergy ?? '—'}/5
+        </p>
+        <p className="text-[10px] text-muted-foreground">Poori detail full chat window me hai.</p>
+      </div>
+    )
+  }
+
+  // ── Phase 3: check-in saved card (compact) ──
+  if (action.type === 'check_in_saved' || action.type === 'check-in-saved') {
+    const moodFace = str(action.data.moodFace) || '😐'
+    const symptoms = Array.isArray(action.data.symptoms)
+      ? (action.data.symptoms as string[])
+      : str(action.data.symptoms)
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+    return (
+      <div className="space-y-1 rounded-lg border border-teal-300 bg-teal-50/60 px-3 py-2.5 dark:border-teal-800 dark:bg-teal-950/40">
+        <p className="flex items-center gap-1 text-[11px] font-semibold text-teal-700 dark:text-teal-400">
+          <span aria-hidden>{moodFace}</span> Check-in save ho gaya ✓
+        </p>
+        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Zap className="h-3 w-3 shrink-0" aria-hidden />
+          Energy {String(action.data.energy ?? '—')}/5
+          {symptoms.length ? ` · ${symptoms.join(', ')}` : ''}
+        </p>
+      </div>
+    )
+  }
+
+  // ── Phase 3: LLM-prepared check-in (compact confirm with Save) ──
+  if (action.type === 'prepare_check_in' || action.type === 'prepare-check-in') {
+    return <CompactCheckInConfirm data={action.data} />
+  }
+
   return <p className="text-[11px] text-muted-foreground">{action.title}</p>
+}
+
+/** Compact prepare_check_in confirm card — same Save rail (useSubmitCheckIn
+ * from aturseva/cards) as the full window. */
+function CompactCheckInConfirm({ data }: { data: Record<string, unknown> }) {
+  const { submit, pending } = useSubmitCheckIn()
+  const [saved, setSaved] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
+
+  const mood = Number(data.mood)
+  const energy = Number(data.energy)
+  const moodFace = str(data.moodFace) || '😐'
+  const symptoms = Array.isArray(data.symptoms) ? (data.symptoms as string[]) : []
+  const note = str(data.note)
+
+  if (saved) {
+    return (
+      <p className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        Check-in save ho gaya ✓
+      </p>
+    )
+  }
+
+  return (
+    <div className={cn('space-y-1.5 rounded-lg border px-3 py-2.5', dismissed && 'opacity-60')}>
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold">
+        <span className="text-base leading-none" aria-hidden>
+          {moodFace}
+        </span>
+        Mood {Number.isFinite(mood) ? mood : '—'}/5 · Energy {Number.isFinite(energy) ? energy : '—'}/5
+      </p>
+      {symptoms.length > 0 && (
+        <p className="truncate text-[11px] text-muted-foreground">{symptoms.join(', ')}</p>
+      )}
+      {note && <p className="truncate text-[10px] italic text-muted-foreground">“{note}”</p>}
+      {dismissed ? (
+        <p className="text-[11px] text-muted-foreground">Aapne cancel kar diya</p>
+      ) : (
+        <div className="flex gap-1.5">
+          <Button
+            type="button"
+            onClick={() => {
+              void submit({ mood, energy, symptoms, note }).then((ok) => ok && setSaved(true))
+            }}
+            disabled={pending}
+            aria-label="Check-in save karein"
+            className="h-9 flex-1 rounded-lg bg-teal-600 text-xs font-semibold text-white hover:bg-teal-700"
+          >
+            {pending ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" aria-hidden /> : <Check className="mr-1 h-3.5 w-3.5" aria-hidden />}
+            Save
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => setDismissed(true)}
+            disabled={pending}
+            aria-label="Check-in cancel karein"
+            className="h-9 rounded-lg text-xs text-muted-foreground hover:bg-muted"
+          >
+            <X className="mr-1 h-3.5 w-3.5" aria-hidden />
+            Nahi
+          </Button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function SevikaChatButton() {
@@ -348,6 +517,40 @@ export default function SevikaChatButton() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // ── Daily check-in status (Phase 3): compact nudge at the end of the
+  // thread when today's check-in is pending. Shares the query cache key
+  // with the full chat window (TanStack dedupes the fetch).
+  const { data: checkInData } = useQuery({
+    queryKey: ['aturseva-checkin'],
+    queryFn: async (): Promise<{ today: { day: string } | null; streak: number }> => {
+      try {
+        const res = await fetch('/api/dashboard/patient/aturseva/check-in')
+        if (!res.ok) return { today: null, streak: 0 }
+        return (await res.json()) as { today: { day: string } | null; streak: number }
+      } catch {
+        return { today: null, streak: 0 }
+      }
+    },
+    enabled: open,
+    staleTime: 60 * 1000,
+  })
+
+  // ── LIVE proactive pushes (Phase 3): while the sheet is open, an
+  // 'aturseva-push' (booking approved/rejected, aapki baari) reloads the
+  // thread so the new message lands in front of the patient immediately.
+  const socket = useAuthSocket()
+  useEffect(() => {
+    if (!socket || !open) return
+    const onPush = () => {
+      setLoaded(false) // re-arms the history-load effect below
+      void queryClient.invalidateQueries({ queryKey: ['aturseva-unread'] })
+    }
+    socket.on('aturseva-push', onPush)
+    return () => {
+      socket.off('aturseva-push', onPush)
+    }
+  }, [socket, open, queryClient])
 
   // Load the shared persisted history once, when the sheet is first opened.
   // markRead=1 stamps the thread SEEN → sidebar unread badge resets right after.
@@ -614,6 +817,21 @@ export default function SevikaChatButton() {
                   </div>
                 </motion.div>
               )
+            )}
+
+            {/* ── Phase 3: daily check-in nudge (compact) when today's
+                check-in is still pending. ── */}
+            {open && loaded && checkInData?.today == null && (
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="ml-9 max-w-[90%]"
+              >
+                <p className="mb-1.5 rounded-2xl rounded-bl-md border bg-muted/60 px-3.5 py-2 text-[11px] text-muted-foreground shadow-sm">
+                  Aaj ka chhota check-in pending hai — mood bata dijiye. 🩺
+                </p>
+                <CheckInCard compact />
+              </motion.div>
             )}
 
             {showChips && (

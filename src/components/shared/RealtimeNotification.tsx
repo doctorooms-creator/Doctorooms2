@@ -25,6 +25,7 @@ import {
   Play,
   Gift,
   Pill,
+  MessageCircleHeart,
 } from 'lucide-react'
 
 // Event → toast configuration per role
@@ -205,6 +206,18 @@ export const EVENT_CONFIG: Record<string, EventConfig> = {
     color: 'text-amber-600',
     roles: ['patient'],
   },
+
+  // ── Aturseva (Phase 3) proactive chat pushes ───────────────────────
+  // Booking approved/rejected, aapki baari, consultation updates — pushed
+  // into the patient's chat thread; the toast + invalidations keep every
+  // open surface live (full chat window, FAB sheet, sidebar badge).
+  'aturseva-push': {
+    title: 'Aturseva',
+    icon: MessageCircleHeart,
+    color: 'text-teal-600',
+    roles: ['patient'],
+    critical: true,
+  },
 }
 
 // Event → list of TanStack Query keys to invalidate when the event fires
@@ -228,6 +241,13 @@ const QUERY_INVALIDATION: Record<string, string[][]> = {
   'referral-reward': [['referral-me']],
   'med-reminder': [['sevika-today'], ['sevika-weekly'], ['patient-notifications']],
   'dose-missed': [['sevika-today'], ['sevika-weekly'], ['patient-notifications']],
+  'aturseva-push': [
+    ['aturseva-chat'],
+    ['aturseva-unread'],
+    ['aturseva-checkin'],
+    ['patient-appointments'],
+    ['patient-notifications'],
+  ],
 }
 
 // Dedup: avoid showing duplicate toasts for same event within 5 seconds

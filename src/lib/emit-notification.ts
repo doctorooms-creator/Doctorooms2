@@ -53,6 +53,9 @@ type EventType =
   // Sevika — AI Nurse (AI-NURSE-PLAN.md): medication reminders + miss follow-ups.
   | 'med-reminder'
   | 'dose-missed'
+  // Aturseva — Phase 3 proactive watcher: unsolicited status pushes that
+  // land in the patient's chat thread (booking approved/rejected, aapki baari).
+  | 'aturseva-push'
 
 const VALID_EVENTS: EventType[] = [
   'new-admission',
@@ -85,6 +88,7 @@ const VALID_EVENTS: EventType[] = [
   'celebration',
   'med-reminder',
   'dose-missed',
+  'aturseva-push',
 ]
 
 const EMIT_URL = `${process.env.NOTIFICATION_SERVICE_URL || 'http://localhost:3006'}/emit`
@@ -308,6 +312,10 @@ const EVENT_TITLES: Record<EventType, { title: string; messageFn: (p: Record<str
   'dose-missed': {
     title: 'Dose Missed',
     messageFn: (p) => `${p.message || 'Ek dose miss ho gayi — jab yaad aaye le lijiye.'}`,
+  },
+  'aturseva-push': {
+    title: 'Aturseva',
+    messageFn: (p) => `${p.message || 'Aturseva ne ek update bheja hai.'}`,
   },
 }
 

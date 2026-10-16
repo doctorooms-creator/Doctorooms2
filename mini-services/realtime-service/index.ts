@@ -151,6 +151,9 @@ const VALID_EVENTS = [
   'celebration',
   'med-reminder',
   'dose-missed',
+  // Aturseva Phase 3: proactive chat pushes (booking approved/rejected,
+  // aapki baari) → patient's chat thread + toast + unread badge.
+  'aturseva-push',
 ] as const
 type ValidEvent = (typeof VALID_EVENTS)[number]
 

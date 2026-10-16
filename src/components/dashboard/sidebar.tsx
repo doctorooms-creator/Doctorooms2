@@ -63,14 +63,15 @@ function getSidebarBadge(role: string, href: string): React.ReactNode {
   }
 
   // Patient — Aturseva agent unread messages (Phase 2: booking confirmations
-  // + future proactive watcher nudges). Resets when the thread is SEEN
-  // (chat window load / FAB sheet open — both mark read).
+  // + Phase 3 proactive watcher pushes: booking approved/rejected, aapki
+  // baari). Resets when the thread is SEEN (chat window load / FAB sheet
+  // open — both mark read).
   if (role === 'patient' && href === '/dashboard/patient/aturseva') {
     return (
       <SidebarBadge
         queryKey={['aturseva-unread']}
         fetchUrl="/api/dashboard/patient/aturseva/unread"
-        eventTriggers={['med-reminder', 'dose-missed', 'queue-updated', 'booking-status']}
+        eventTriggers={['med-reminder', 'dose-missed', 'queue-updated', 'booking-status', 'aturseva-push']}
       />
     )
   }

@@ -34,6 +34,8 @@ export type AtursevaToolName =
   | 'get_doctor_slots'
   | 'find_nearby_doctors'
   | 'prepare_booking'
+  | 'get_my_symptom_log'
+  | 'prepare_check_in'
 
 export interface ToolCall {
   tool: AtursevaToolName
@@ -650,6 +652,172 @@ async function prepareBooking(
   }
 }
 
+// ─── Tool 7 (P3): get_my_symptom_log (read-only, last 14 days) ─────────────
+
+const MOOD_FACES: Record<number, string> = { 1: '😞', 2: '🙁', 3: '😐', 4: '🙂', 5: '😄' }
+
+async function getMySymptomLog(
+  userId: string,
+  _args: Record<string, unknown>
+): Promise<ToolOutcome> {
+  const rows = await db.atursevaCheckIn.findMany({
+    where: { userId },
+    orderBy: { day: 'desc' },
+    take: 14,
+  })
+
+  if (rows.length === 0) {
+    return {
+      ok: true,
+      result: {
+        type: 'get_my_symptom_log',
+        title: 'Abhi koi check-in nahi hua',
+        data: {
+          days: [],
+          note: 'Aaj ka check-in card thread me hai — patient mood/symptoms chun kar save kar de to trend banna shuru ho jayega.',
+        },
+      },
+    }
+  }
+
+  const avg = (f: (r: (typeof rows)[number]) => number) =>
+    Math.round((rows.reduce((s, r) => s + f(r), 0) / rows.length) * 10) / 10
+
+  // Top symptoms across the window
+  const counts = new Map<string, number>()
+  for (const r of rows) {
+    for (const tag of r.symptoms.split(',').map((s) => s.trim()).filter(Boolean)) {
+      counts.set(tag, (counts.get(tag) || 0) + 1)
+    }
+  }
+  const topSymptoms = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([tag, n]) => ({ tag, days: n }))
+
+  // Consecutive-day streak (most recent → backwards)
+  let streak = 0
+  {
+    const daySet = new Set(rows.map((r) => r.day))
+    const base = new Date(`${todayISTStr()}T00:00:00.000Z`)
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(base.getTime() - i * 86400000).toISOString().slice(0, 10)
+      if (daySet.has(d)) streak++
+      else if (i > 0) break // gap — streak ends (today itself may be pending)
+    }
+  }
+
+  return {
+    ok: true,
+    result: {
+      type: 'get_my_symptom_log',
+      title: `${rows.length} din ka symptom diary`,
+      data: {
+        days: rows.map((r) => ({
+          day: r.day,
+          mood: r.mood,
+          moodFace: MOOD_FACES[r.mood] || '😐',
+          energy: r.energy,
+          symptoms: r.symptoms,
+          note: r.note,
+        })),
+        summary: {
+          daysLogged: rows.length,
+          avgMood: avg((r) => r.mood),
+          avgEnergy: avg((r) => r.energy),
+          topSymptoms,
+          streak,
+        },
+      },
+    },
+  }
+}
+
+// ─── Tool 8 (P3): prepare_check_in (validate → CONFIRM card, NO write) ──────
+
+/**
+ * Symptom-tag whitelist-ish normalizer: accepts a comma/space separated string
+ * OR an array from the model. Tags are lowercased, trimmed, deduped, capped at
+ * 6, each ≤24 chars. Empty input → empty list (symptoms are optional).
+ */
+function normalizeSymptomTags(v: unknown): string[] {
+  const raw: string[] = Array.isArray(v)
+    ? v.map((s) => String(s))
+    : typeof v === 'string'
+      ? v.split(/[,;]/)
+      : []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (let tag of raw) {
+    tag = tag.trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 24)
+    if (tag && !seen.has(tag)) {
+      seen.add(tag)
+      out.push(tag)
+    }
+    if (out.length >= 6) break
+  }
+  return out
+}
+
+function clampInt(v: unknown, min: number, max: number): number | null {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return null
+  const i = Math.round(n)
+  return i >= min && i <= max ? i : null
+}
+
+async function prepareCheckIn(
+  userId: string,
+  args: Record<string, unknown>
+): Promise<ToolOutcome> {
+  const mood = clampInt(args.mood, 1, 5)
+  const energy = clampInt(args.energy, 1, 5)
+  const symptoms = normalizeSymptomTags(args.symptoms)
+  const note = typeof args.note === 'string' ? args.note.trim().slice(0, 300) : ''
+
+  if (mood === null) {
+    return {
+      ok: false,
+      error: 'CHECKIN_MOOD_MISSING — mood 1 se 5 ke beech chahiye (1 = bahut low, 5 = bahut achha). Pehle patient se poochh lijiye "aaj mood kaisa hai", phir dobara call karein.',
+    }
+  }
+  if (energy === null) {
+    return {
+      ok: false,
+      error: 'CHECKIN_ENERGY_MISSING — energy bhi 1 se 5 ke beech chahiye (1 = thak gaya, 5 = full energized). Patient se poochh kar complete karein.',
+    }
+  }
+
+  // Today's existing row (upsert semantics — resubmitting a day UPDATES it)
+  const today = todayISTStr()
+  const existing = await db.atursevaCheckIn.findUnique({
+    where: { userId_day: { userId, day: today } },
+  })
+
+  return {
+    ok: true,
+    result: {
+      type: 'prepare_check_in',
+      title: existing
+        ? 'Aaj ka check-in update karein'
+        : 'Aaj ka check-in confirm karein',
+      data: {
+        day: today,
+        dayLabel: dateLabel(today),
+        mood,
+        moodFace: MOOD_FACES[mood] || '😐',
+        energy,
+        symptoms,
+        note,
+        updating: !!existing,
+        existing: existing
+          ? { mood: existing.mood, energy: existing.energy, symptoms: existing.symptoms, note: existing.note }
+          : null,
+      },
+    },
+  }
+}
+
 // ─── Dispatcher ─────────────────────────────────────────────────────────────
 
 export async function executeTool(
@@ -670,6 +838,10 @@ export async function executeTool(
       return findNearbyDoctors(userId, call.args, ctx)
     case 'prepare_booking':
       return prepareBooking(userId, call.args)
+    case 'get_my_symptom_log':
+      return getMySymptomLog(userId, call.args)
+    case 'prepare_check_in':
+      return prepareCheckIn(userId, call.args)
     default:
       return {
         ok: false,
@@ -686,9 +858,16 @@ export const TOOL_CATALOGUE = `TOOLS — jab live data chahiye to SIRF inhi ko u
 4. get_doctor_slots — kisi doctor ke free slots (args: {doctorId, date? "YYYY-MM-DD"}) — "slots dikhao", "kab milenge". Patient date na bataye ya "koi bhi/aaj/kal" bole to date omit karke DIRECTLY call karein — system agli available date khud la degi. Date ke liye mat poochhein.
 5. find_nearby_doctors — GPS location se PAAS ke doctors (args: {specialization?, query?}) — "paas ke doctor", "nearby doctor"; patient ke shared GPS se distance ke hisaab se
 6. prepare_booking — booking ka CONFIRM CARD banata hai (args: {doctorId, date "YYYY-MM-DD", timeSlot "HH:MM" 24h, mode "InPerson"|"VideoCall", disease}) — SIRF tab jab patient ne doctor + date + slot + reason clearly chun liya ho. Ye book NAHI karta — patient card par Confirm button dabayega tabhi booking hogi.
+7. get_my_symptom_log — pichhle 14 din ke check-ins + mood/energy/symptom trend (args: {}) — "mera symptom log", "tabiyat ka trend", "kal se kaisa feel hua"
+8. prepare_check_in — aaj ka check-in CONFIRM CARD banata hai (args: {mood 1-5, energy 1-5, symptoms? "comma,tags", note?}) — jab patient mood/tabiyat/symptoms bataye ya check-in maange. Ye save NAHI karta — patient card par button dabayega tabhi save hoga (din me kabhi bhi update ho sakta hai).
 
 BOOKING FLOW (important):
 - Patient doctor chune → get_doctor_slots chalayein → slots card dikhega → patient slot chune (reason na ho to pehle poochh lein: "kis wajah se?") → prepare_booking chalayein → confirm card patient ko dikh raha hoga → bolein "Confirm kar dijiye".
 - CRITICAL: card sirf TOOL CALL se banta hai. "main card dikha rahi hoon" / "confirm card taiyaar hai" jaisa PROSE likhna USELESS hai — patient ko kuch nahi dikhega. Jab patient ne slot + reason dono clearly de diye, aapka POORA jawab SIRF ye line honi chahiye: [[TOOL]]{"tool":"prepare_booking","args":{...}} (doctorId/date/timeSlot/mode/disease ke saath). Prose iske baad system khud handle karega.
 - Booking tab maani jaati hai jab BOOKING CREATED confirm ho jaye (patient ne button dabaya). Tab tak "book ho gaya" KABHI mat bolo — sirf "confirm kar dijiye, main book kar dungi".
-- Booking cancel karne ke liye appointments page par jaane ko bolein — aap cancel NAHI kar sakti.`
+- Booking cancel karne ke liye appointments page par jaane ko bolein — aap cancel NAHI kar sakti.
+
+CHECK-IN FLOW (daily diary):
+- "aaj ka check-in", "tabiyat kaisi hai" + patient mood/symptoms bataye → prepare_check_in chalayein (mood + energy zaroori; symptoms comma-tags me; note optional). Card par patient khud Save karega.
+- "mera symptom log / trend / kal se kaisa raha" → get_my_symptom_log chalayein.
+- DATA BLOCK me aaj ka check-in PENDING ho to patient ko EK baar gently nudge kar sakte hain (din me ek hi baar — spam nahi). Logged ho to seedha baat karein, dobara save karwana zaroori nahi.`

@@ -13,7 +13,7 @@
  */
 
 import { db } from '@/lib/db'
-import { istDateRange } from '@/lib/date-utils'
+import { istDateRange, todayISTStr } from '@/lib/date-utils'
 import { buildSevikaContext } from '@/lib/sevika/chat'
 
 export interface AtursevaContext {
@@ -34,7 +34,7 @@ export async function buildAtursevaContext(userId: string): Promise<AtursevaCont
   const sevika = await buildSevikaContext(userId)
   const { start, end } = istDateRange(new Date().toISOString().slice(0, 10))
 
-  const [upcoming, todayQueue] = await Promise.all([
+  const [upcoming, todayQueue, todayCheckIn] = await Promise.all([
     db.booking.findMany({
       where: {
         userId,
@@ -54,6 +54,9 @@ export async function buildAtursevaContext(userId: string): Promise<AtursevaCont
       },
       include: { doctor: { select: { specialization: true, user: { select: { name: true } } } } },
       orderBy: { tokenOrder: 'asc' },
+    }),
+    db.atursevaCheckIn.findUnique({
+      where: { userId_day: { userId, day: todayISTStr() } },
     }),
   ])
 
@@ -87,6 +90,19 @@ export async function buildAtursevaContext(userId: string): Promise<AtursevaCont
     )
   } else {
     lines.push("TODAY'S TOKEN: aaj ka token abhi assign nahi hua hai (ya aaj koi appointment nahi).")
+  }
+
+  // Daily check-in / symptom diary status (Phase 3)
+  if (todayCheckIn) {
+    const bits = [
+      `mood ${todayCheckIn.mood}/5`,
+      `energy ${todayCheckIn.energy}/5`,
+      todayCheckIn.symptoms ? `symptoms: ${todayCheckIn.symptoms}` : 'koi symptom nahi',
+    ]
+    if (todayCheckIn.note) bits.push(`note: "${todayCheckIn.note}"`)
+    lines.push(`TODAY'S CHECK-IN (logged): ${bits.join(', ')}.`)
+  } else {
+    lines.push("TODAY'S CHECK-IN: PENDING — aaj ka check-in abhi nahi hua hai (din me ek baar gently nudge kar sakte hain).")
   }
 
   lines.push('')
