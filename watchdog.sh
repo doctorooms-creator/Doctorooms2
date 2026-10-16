@@ -54,4 +54,14 @@ while true; do
     log "Port 3005 DOWN — starting notification service"
     start_service /home/z/my-project/mini-services/notification-service "Notification service"
   fi
+
+  # Realtime service (merged chat+notif, :3006 — Aturseva proactive pushes)
+  if ! is_port_up 3006; then
+    log "Port 3006 DOWN — starting realtime service"
+    (
+      cd /home/z/my-project/mini-services/realtime-service
+      setsid bash -c 'exec env PORT=3006 bun --hot index.ts' > service.log 2>&1 < /dev/null &
+    )
+    sleep 10
+  fi
 done

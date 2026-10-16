@@ -7989,3 +7989,19 @@ Stage Summary:
 - Two P0s found+fixed this phase: realtime-service whitelist (emits silently 400ing) and str/asString crash — both documented above for the next agent
 - Tools now 8; card types 10; event vocabulary +1 (aturseva-push whitelisted in BOTH app and realtime service)
 - Next executable (Phase 4 per plan §5): report/lab explainers grounded in own reports; diet nudge scheduling; weekly report in-chat
+
+---
+Task ID: aturseva-agent-phase-3-stability
+Agent: Main (Z.ai Code)
+Task: Post-Phase-3 stability — root-cause the mid-QA dev-server deaths and arm auto-recovery.
+
+Work Log:
+- dmesg evidence: kernel OOM-killer took next-server (anon-rss ~2.0GB, heap cap 1792MB + webpack workers + agent-browser chrome exceeded the 4GB container during compile-heavy QA)
+- Browser session closed after QA (frees ~600MB); dev server restarted via start-all.sh (nohup bg pattern — manual setsid one-liners get reaped by bash-tool cleanup, ALWAYS use start-all.sh)
+- watchdog.sh (project's own 60s revive loop) armed via direct `setsid bash -c 'exec bash watchdog.sh'` (it self-loops — wrapping it in another while-loop stacks instances; killed the accidental double)
+- watchdog.sh GAP FIXED: it revived only :3000/:3004/:3005 (old services) — added the :3006 realtime-service revival block (Aturseva proactive pushes depend on it) + restarted watchdog to load the new script (PID 8289)
+- Verified: :3000 → 200, :3006 health ok, watchdog log ticking
+
+Stage Summary:
+- OOM root-caused + mitigated (browser freed, watchdog armed for BOTH app and realtime service); Phase 3 code unchanged
+- Ops rule for next agents: dev-server unexplained 000s → check dmesg for OOM + watchdog.log; never manual-restart with bare setsid one-liners
