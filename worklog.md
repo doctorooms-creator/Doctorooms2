@@ -7933,3 +7933,29 @@ Stage Summary:
 - KEY LESSON (worklog-worthy): NEVER inject assistant-role format notes into LLM history — models copy output formats they "own"; user-role system notes are the safe channel (same as TOOL RESULTs)
 - PENDING: browser E2E QA once :3000 revives (book-through-chat click path, GPS chip, badge, mobile 390) — revive watcher armed; next session/cron should verify + fix any frontend compile issue tsc would have caught
 - Next executable (Phase 3 per plan §5): proactive watcher (status changes → conversation message + toast), daily check-in, symptom diary
+
+---
+Task ID: aturseva-agent-phase-2-browser-qa
+Agent: Main (Z.ai Code)
+Task: Complete the PENDING Phase 2 browser E2E QA (blocked last session by the io_uring sandbox incident) — full click-path verification of booking-through-chat, GPS nearby, unread badge, FAB sheet, mobile viewport — after full environment recovery.
+
+Work Log:
+- SANDBOX RECOVERY (documented recurring pattern, worklog lines 4802/4943/6343/7768/7862): hard-reset killed all processes, wiped node_modules/ (0 entries incl. all 3 mini-services), deleted db/custom.db, reset .env to template (custom.db path + placeholder secrets, REALTIME_PORT gone). /tmp/revive.sh gone too.
+- Reinstalled: bun install main (975 pkgs) + realtime-service (74) + chat-service (59) + notification-service (22); prisma client regenerated via db push
+- .env rewritten: generated NEXTAUTH_SECRET (openssl rand -hex 32 — app + realtime-service share it; realtime falls back to a DIFFERENT dev string, so the placeholder would have broken socket JWT auth), NOTIFICATION_SERVICE_URL→:3006, REALTIME_PORT=3006
+- DB restored: bunx prisma db push + bun prisma/seed.ts → 3 doctors (Rajesh/Cardio/Mumbai, Priya/Dermat/Delhi, Ortho/Pune) + schedules + 11 bookings + patients incl rahul@patient.com/123456 (fresh Aturseva thread, lastReadAt column present). NOTE: prisma/db/dev.db is a stale leftover — active DB is db/custom.db per .env
+- Servers started via bash start-all.sh (Next.js :3000 1792MB heap, realtime :3006, setsid double-fork); both green; socket.io handshake via gateway verified (curl /socket.io/?EIO=4&XTransformPort=3006 → sid OK)
+- BACKEND RE-SMOKE (curl, rahul session): search_doctors card → get_doctor_slots card (Fri 17 free) → prepare_booking confirm card → POST /api/dashboard/patient/aturseva/book 201 (APT-1792124188999-1s7p, skin rash, 16 Oct 11:20, Pending, ₹600)
+- BROWSER E2E (agent-browser, golden path): login (dev role card → /api/dev-login) → /dashboard/patient/aturseva renders FULL thread history incl all 4 card types → clicked "Sat, 17 Oct ke free slots dekhein" otherDays chip → NEW slots card rendered live (handleCardSend works) → clicked 10:40 slot chip → prepare_booking CONFIRM CARD rendered → clicked "Booking confirm karein" → booking_created card appeared → DB row APT-1792124340403-r8tl (Sat 17 Oct 10:40, skin check, Pending, "Booked via Aturseva chat") — ENTIRE booking created through UI clicks ✅
+- GPS NEARBY E2E: agent-browser geolocation permission denied by context → mocked navigator.geolocation.getCurrentPosition via eval (19.076,72.8777 Mumbai) → toggled 📍 chip off/on → coords chip "📍 19.076" + toast → "ab paas ke doctors dikhao" → NearbyDoctorsCardBody with Dr. Rajesh Sharma + reply "sirf 5.9 km door hai" (haversine) + ₹800. Also verified graceful no-location fallback (model asks for 📍 chip, no card)
+- UNREAD BADGE E2E: navigated to /dashboard/patient away from chat → curl-generated new aturseva reply (unread API = 1) → sidebar link became "Aturseva — AI Sahayika 1" after 60s poll (badge render verified) → visited chat page (markRead=1) → unread API = 0 → badge gone ✅
+- SOCKET THROUGH GATEWAY: direct :3000 origin times out (engine.io /socket.io/ path 404 on Next.js — test artifact, real users go via gateway); on http://localhost:81 origin "[useSocket] Connected" with ZERO timeout warnings
+- FAB SHEET: on /dashboard/patient clicked "Aturseva se baat karein" → sheet opens with compact slot-chip cards (Fri+Sat) from the shared thread ✅
+- MOBILE: viewport 390x844 chat page renders (qa-p2-06)
+- dev.log clean during entire QA (all 200s, no errors); screenshots saved to download/aturseva-qa/qa-p2-01..07
+
+Stage Summary:
+- PHASE 2 NOW FULLY CLOSED: backend (curl E2E) + frontend (browser E2E click-path) both verified after environment recovery; the pending browser-QA item from the io_uring incident is DONE
+- Recovery runbook confirmed (5th occurrence): bun install ×4 services → .env rewrite (real NEXTAUTH_SECRET!) → prisma db push + seed → start-all.sh → gateway socket check
+- Booking safety rail intact in UI: prepare_booking card → explicit Confirm tap → 201 → booking_created card; unread badge + GPS nearby + FAB all work in browser
+- Next executable (Phase 3 per plan §5): proactive watcher (status changes → conversation message + toast), daily check-in, symptom diary
