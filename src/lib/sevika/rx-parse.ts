@@ -1,10 +1,11 @@
 /**
  * Sevika — AI Nurse: photo prescription parser (AI-NURSE-PLAN.md §2.1 + §2.4 #1).
  *
- * Server-only. ONE VLM call (z-ai-web-dev-sdk createVision) reads a paper-Rx
- * photo or medicine-strip photo and returns a DRAFT medicine list for the
- * patient to review. Nothing here writes to the DB — the patient must confirm
- * each row in the UI before schedules are created (doctor-confirm flow per plan).
+ * Server-only. ONE vision call (via the app-wide provider: SDK in sandbox,
+ * OpenAI-compatible public provider in production) reads a paper-Rx photo or
+ * medicine-strip photo and returns a DRAFT medicine list for the patient to
+ * review. Nothing here writes to the DB — the patient must confirm each row
+ * in the UI before schedules are created (doctor-confirm flow per plan).
  *
  * Safety rails:
  *  - The model is told to write "unreadable" rather than guess — and we drop
@@ -13,6 +14,8 @@
  *    schedule engine itself only takes 1/0 slot flags.
  *  - Hard caps: max 12 medicines, duration ≤ 30 days, all strings trimmed.
  */
+
+import { visionCompletion } from '@/lib/ai/provider'
 
 export interface ParsedMedicineDraft {
   name: string
@@ -35,18 +38,6 @@ export interface RxParseResult {
 export interface RxParseFailure {
   ok: false
   reason: string // human-readable Hinglish reason for the UI
-}
-
-let zaiPromise: Promise<typeof import('z-ai-web-dev-sdk').default> | null = null
-
-async function getLLM() {
-  if (!zaiPromise) {
-    zaiPromise = (async () => {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default
-      return ZAI.create()
-    })()
-  }
-  return zaiPromise
 }
 
 // ─── Prompt ────────────────────────────────────────────────────────────────
@@ -146,21 +137,16 @@ export async function parseRxPhoto(
   }
 
   try {
-    const zai = await getLLM()
-    const completion = await zai.chat.completions.createVision({
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: buildParsePrompt() },
-            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
-          ],
-        },
-      ],
-      thinking: { type: 'disabled' },
-    })
+    const content = await visionCompletion([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: buildParsePrompt() },
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}` } },
+        ],
+      },
+    ])
 
-    const content = completion.choices[0]?.message?.content
     if (typeof content !== 'string' || !content.trim()) {
       return { ok: false, reason: 'Photo padhne me dikkat aayi — ek baar phir try karein.' }
     }

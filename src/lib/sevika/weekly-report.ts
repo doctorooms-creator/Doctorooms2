@@ -13,6 +13,7 @@
 
 import { db } from '@/lib/db'
 import { todayISTRange } from '@/lib/date-utils'
+import { completeChat } from '@/lib/ai/provider'
 import { computeAdherence } from './schedule'
 
 export interface WeekDayStat {
@@ -111,18 +112,6 @@ const FALLBACK_NARRATIVES = (score: number, name: string): string => {
   return `${firstName}, is hafte kai doses miss ho gayi. Chinta mat kijiye — main roz yaad dilati rahungi, hum sudhar lenge. 🩺`
 }
 
-let zaiPromise: Promise<typeof import('z-ai-web-dev-sdk').default> | null = null
-
-async function getLLM() {
-  if (!zaiPromise) {
-    zaiPromise = (async () => {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default
-      return ZAI.create()
-    })()
-  }
-  return zaiPromise
-}
-
 async function generateNarrative(
   userId: string,
   patientName: string,
@@ -138,19 +127,14 @@ async function generateNarrative(
   ].join('\n')
 
   try {
-    const zai = await getLLM()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are Sevika, a warm Indian nurse writing a patient\'s weekly medicine report card. You narrate ONLY the given numbers in caring Hinglish (2-3 short lines, max 45 words). You NEVER suggest dose changes, new medicines, or medical advice. No emojis other than one at most. Output plain text only.',
-        },
-        { role: 'user', content: `Write the weekly report card narration from this data:\n${statsBlock}` },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    const text = completion.choices[0]?.message?.content
+    const text = await completeChat([
+      {
+        role: 'system',
+        content:
+          'You are Sevika, a warm Indian nurse writing a patient\'s weekly medicine report card. You narrate ONLY the given numbers in caring Hinglish (2-3 short lines, max 45 words). You NEVER suggest dose changes, new medicines, or medical advice. No emojis other than one at most. Output plain text only.',
+      },
+      { role: 'user', content: `Write the weekly report card narration from this data:\n${statsBlock}` },
+    ])
     if (typeof text === 'string' && text.trim().length > 10) {
       return { narrative: text.trim().slice(0, 400), ai: true }
     }

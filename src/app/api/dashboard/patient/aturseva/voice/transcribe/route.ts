@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod/v4'
 import { requireRole } from '@/lib/api-auth'
-import { transcribeAudio } from '@/lib/aturseva/llm-provider'
+import { transcribeAudio } from '@/lib/ai/provider'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'

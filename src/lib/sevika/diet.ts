@@ -1,9 +1,10 @@
 /**
  * Sevika — AI Nurse: diet layer (AI-NURSE-PLAN.md §2.4 touchpoint #2).
  *
- * Server-only wrapper around z-ai-web-dev-sdk. ONE LLM call generates a
- * 7-day Indian diet card grounded in the patient's ACTIVE medicine list.
- * The output is structured JSON stored in SevikaDietPlan.planJson.
+ * ONE LLM call (via the app-wide provider: SDK in sandbox, OpenAI-compatible
+ * public provider in production) generates a 7-day Indian diet card grounded
+ * in the patient's ACTIVE medicine list. The output is structured JSON
+ * stored in SevikaDietPlan.planJson.
  *
  * Safety rails (from the plan):
  *  - The LLM only SUGGESTS food; it never mentions dose changes.
@@ -12,6 +13,7 @@
  */
 
 import { db } from '@/lib/db'
+import { completeChat } from '@/lib/ai/provider'
 
 export interface DietDay {
   morning: string
@@ -45,18 +47,6 @@ const FALLBACK_PLAN: DietPlanData = {
     note: 'Din me 8-10 glass paani; dawai hamesha doctor ke bataye time pe.',
   })),
   fallback: true,
-}
-
-let zaiPromise: Promise<typeof import('z-ai-web-dev-sdk').default> | null = null
-
-async function getLLM() {
-  if (!zaiPromise) {
-    zaiPromise = (async () => {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default
-      return ZAI.create()
-    })()
-  }
-  return zaiPromise
 }
 
 function buildDietPrompt(medicines: string[], patientName: string): string {
@@ -142,19 +132,14 @@ export async function generateDietPlan(userId: string): Promise<GenerateDietResu
   }
 
   try {
-    const zai = await getLLM()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You are Sevika, a caring Indian nurse. You output ONLY valid JSON diet plans. You never give medical dosing advice.',
-        },
-        { role: 'user', content: buildDietPrompt(medicines, user?.name || 'Patient') },
-      ],
-      thinking: { type: 'disabled' },
-    })
-    const content = completion.choices[0]?.message?.content
+    const content = await completeChat([
+      {
+        role: 'system',
+        content:
+          'You are Sevika, a caring Indian nurse. You output ONLY valid JSON diet plans. You never give medical dosing advice.',
+      },
+      { role: 'user', content: buildDietPrompt(medicines, user?.name || 'Patient') },
+    ])
     const parsed = typeof content === 'string' ? extractJson(content) : null
     if (parsed) {
       plan = parsed

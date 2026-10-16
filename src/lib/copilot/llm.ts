@@ -1,32 +1,24 @@
 /**
  * Dr. Copilot — LLM layer (L3: context firewall)
  *
- * Server-only wrapper around z-ai-web-dev-sdk. The system prompt bakes in
- * the isolation rules: the model is told it has NO access beyond the data
- * block prepared by the scoped repo (L2), and that data for patients not
- * treated by this doctor simply does not exist.
+ * The system prompt bakes in the isolation rules: the model is told it has
+ * NO access beyond the data block prepared by the scoped repo (L2), and that
+ * data for patients not treated by this doctor simply does not exist.
+ *
+ * All model I/O is delegated to the app-wide provider layer
+ * (`@/lib/ai/provider`): z-ai-web-dev-sdk in the sandbox, any
+ * OpenAI-compatible public provider (LLM_* env vars) in production.
  *
  * No client code may import this module (server-only by convention and by
  * placement under src/lib/copilot, consumed only by API routes).
  */
 
 import type { CopilotCtx } from './guard'
+import { completeChat, streamChatCompletion } from '@/lib/ai/provider'
 
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
-}
-
-let zaiPromise: Promise<typeof import('z-ai-web-dev-sdk').default> | null = null
-
-async function getLLM() {
-  if (!zaiPromise) {
-    zaiPromise = (async () => {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default
-      return ZAI.create()
-    })()
-  }
-  return zaiPromise
 }
 
 /**
@@ -60,53 +52,14 @@ export function buildSystemPrompt(ctx: CopilotCtx, dataBlock: string): string {
 
 /** Non-streaming completion — used by the intent router (fast, JSON output). */
 export async function chatComplete(messages: LLMMessage[]): Promise<string> {
-  const zai = await getLLM()
-  const completion = await zai.chat.completions.create({
-    messages,
-    thinking: { type: 'disabled' },
-  })
-  const content = completion.choices[0]?.message?.content
-  return typeof content === 'string' ? content : ''
+  return completeChat(messages)
 }
 
 /**
  * Streaming completion — yields text deltas.
- * The SDK returns an async iterable of SSE-encoded byte chunks
- * ("data: {json}\\n\\n"); we parse and surface only content deltas.
+ * Delegates to the app-wide provider (SDK SSE stream in sandbox, OpenAI-
+ * compatible stream in production — same delta shape either way).
  */
 export async function* streamChat(messages: LLMMessage[]): AsyncGenerator<string> {
-  const zai = await getLLM()
-  const res = await zai.chat.completions.create({
-    messages,
-    stream: true,
-    thinking: { type: 'disabled' },
-  })
-
-  if (res && typeof (res as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
-    let buffer = ''
-    for await (const chunk of res as AsyncIterable<Uint8Array>) {
-      const text = typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk)
-      buffer += text
-      // SSE frames are separated by newlines; process every complete line.
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (!payload || payload === '[DONE]') continue
-        try {
-          const json = JSON.parse(payload)
-          const delta: string = json?.choices?.[0]?.delta?.content ?? json?.choices?.[0]?.message?.content ?? ''
-          if (delta) yield delta
-        } catch {
-          // partial/keepalive line — ignore
-        }
-      }
-    }
-  } else {
-    // Fallback: non-streaming response object
-    const content = (res as { choices?: { message?: { content?: string } }[] })?.choices?.[0]?.message?.content
-    if (content) yield content
-  }
+  yield* streamChatCompletion(messages)
 }

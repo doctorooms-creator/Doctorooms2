@@ -211,61 +211,16 @@ export function buildSevikaSystemPrompt(patientName: string, dataBlock: string):
   ].join('\n')
 }
 
-// ─── LLM plumbing (same SSE protocol as copilot/llm.ts) ────────────────────
+// ─── LLM plumbing (delegates to the app-wide provider: SDK in sandbox,
+// OpenAI-compatible public provider on production — same delta shape) ─────
 
-let zaiPromise: Promise<typeof import('z-ai-web-dev-sdk').default> | null = null
-
-async function getLLM() {
-  if (!zaiPromise) {
-    zaiPromise = (async () => {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default
-      return ZAI.create()
-    })()
-  }
-  return zaiPromise
-}
+import { streamChatCompletion } from '@/lib/ai/provider'
 
 /**
  * Streaming completion — yields text deltas.
- * The SDK returns an async iterable of SSE-encoded byte chunks
- * ("data: {json}\n\n"); we parse and surface only content deltas.
  */
 export async function* streamSevikaChat(
   messages: SevikaChatMessage[]
 ): AsyncGenerator<string> {
-  const zai = await getLLM()
-  const res = await zai.chat.completions.create({
-    messages,
-    stream: true,
-    thinking: { type: 'disabled' },
-  })
-
-  if (res && typeof (res as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
-    let buffer = ''
-    for await (const chunk of res as AsyncIterable<Uint8Array>) {
-      const text = typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk)
-      buffer += text
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (!payload || payload === '[DONE]') continue
-        try {
-          const json = JSON.parse(payload)
-          const delta: string =
-            json?.choices?.[0]?.delta?.content ?? json?.choices?.[0]?.message?.content ?? ''
-          if (delta) yield delta
-        } catch {
-          // partial/keepalive line — ignore
-        }
-      }
-    }
-  } else {
-    // Fallback: non-streaming response object
-    const content = (res as { choices?: { message?: { content?: string } }[] })?.choices?.[0]
-      ?.message?.content
-    if (content) yield content
-  }
+  yield* streamChatCompletion(messages)
 }

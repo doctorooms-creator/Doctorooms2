@@ -23,9 +23,11 @@
 The public `api.z.ai` rejects the sandbox JWT (401). This is a platform boundary: the SDK is
 a sandbox dev tool, not a production API.
 
-**The fix is already deployed** (`src/lib/aturseva/llm-provider.ts`): the app now supports any
-OpenAI-compatible public provider via env vars — chat streaming, TTS, and ASR all switch
-automatically. The sandbox keeps using the SDK (zero behavior change there).
+**The fix is already deployed** (`src/lib/ai/provider.ts` — app-wide provider layer):
+the app now supports any OpenAI-compatible public provider via env vars. **ALL AI
+modules switch automatically together** — Aturseva chat, Sevika (chat / diet plan /
+weekly report / Rx-photo vision), Dr. Copilot (chat + intent router), TTS, and ASR.
+The sandbox keeps using the SDK (zero behavior change there).
 
 ### Owner steps (Vercel Dashboard → doctorooms-hms → Settings → Environment Variables):
 
@@ -34,6 +36,7 @@ automatically. The sandbox keeps using the SDK (zero behavior change there).
 | `LLM_BASE_URL` | e.g. `https://api.z.ai/api/paas/v4` (z.ai open platform) or any OpenAI-compatible base |
 | `LLM_API_KEY` | your API key from that provider |
 | `LLM_MODEL` | e.g. `glm-4.6` (z.ai) or the provider's model id |
+| `LLM_VISION_MODEL` | optional — multimodal model for image understanding (Rx photos). e.g. `glm-4.5v`; defaults to `LLM_MODEL` when unset. Only needed if the chat model is text-only. |
 
 Optional (voice mode on prod — without these, chat works but 🔊/🎤 degrade gracefully):
 
@@ -46,6 +49,14 @@ Optional (voice mode on prod — without these, chat works but 🔊/🎤 degrade
 | `ASR_BASE_URL` | OpenAI-compatible base with `/audio/transcriptions` |
 | `ASR_API_KEY` | provider key |
 | `ASR_MODEL` | e.g. `whisper-1` |
+
+Optional (patient-education illustrations — Copilot Phase E, not yet wired to a route):
+
+| Env var | Value |
+|---|---|
+| `IMG_BASE_URL` | OpenAI-compatible base with `/images/generations` |
+| `IMG_API_KEY` | provider key |
+| `IMG_MODEL` | e.g. provider's image model id |
 
 **Then redeploy** (Dashboard → Deployments → latest → ⋯ → Redeploy — no CLI token needed;
 env vars only take effect on a new deployment). Verify:

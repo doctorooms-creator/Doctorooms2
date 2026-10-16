@@ -18,7 +18,7 @@
  */
 
 import { executeTool, TOOL_CATALOGUE, type ActionResult, type ToolCall, type ToolContext } from './tools'
-import { streamChatCompletion } from './llm-provider'
+import { streamChatCompletion } from '@/lib/ai/provider'
 
 export interface AtursevaLLMMessage {
   role: 'system' | 'user' | 'assistant'
@@ -128,7 +128,7 @@ export function parseToolCall(raw: string): ToolCall | null {
   return null
 }
 
-// ─── LLM plumbing (delegates to llm-provider: SDK in sandbox, OpenAI-compatible
+// ─── LLM plumbing (delegates to ai/provider: SDK in sandbox, OpenAI-compatible
 // public provider in production via LLM_* env vars) ──────────────────────────
 
 async function* streamLLM(messages: AtursevaLLMMessage[]): AsyncGenerator<string> {
