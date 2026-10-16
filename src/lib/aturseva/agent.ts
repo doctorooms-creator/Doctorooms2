@@ -18,6 +18,7 @@
  */
 
 import { executeTool, TOOL_CATALOGUE, type ActionResult, type ToolCall, type ToolContext } from './tools'
+import { streamChatCompletion } from './llm-provider'
 
 export interface AtursevaLLMMessage {
   role: 'system' | 'user' | 'assistant'
@@ -127,55 +128,11 @@ export function parseToolCall(raw: string): ToolCall | null {
   return null
 }
 
-// ─── LLM plumbing (same singleton + SSE protocol as sevika/chat.ts) ─────────
-
-let zaiPromise: Promise<typeof import('z-ai-web-dev-sdk').default> | null = null
-
-async function getLLM() {
-  if (!zaiPromise) {
-    zaiPromise = (async () => {
-      const ZAI = (await import('z-ai-web-dev-sdk')).default
-      return ZAI.create()
-    })()
-  }
-  return zaiPromise
-}
+// ─── LLM plumbing (delegates to llm-provider: SDK in sandbox, OpenAI-compatible
+// public provider in production via LLM_* env vars) ──────────────────────────
 
 async function* streamLLM(messages: AtursevaLLMMessage[]): AsyncGenerator<string> {
-  const zai = await getLLM()
-  const res = await zai.chat.completions.create({
-    messages,
-    stream: true,
-    thinking: { type: 'disabled' },
-  })
-
-  if (res && typeof (res as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
-    let buffer = ''
-    for await (const chunk of res as AsyncIterable<Uint8Array>) {
-      const text = typeof chunk === 'string' ? chunk : new TextDecoder().decode(chunk)
-      buffer += text
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-      for (const line of lines) {
-        const trimmed = line.trim()
-        if (!trimmed.startsWith('data:')) continue
-        const payload = trimmed.slice(5).trim()
-        if (!payload || payload === '[DONE]') continue
-        try {
-          const json = JSON.parse(payload)
-          const delta: string =
-            json?.choices?.[0]?.delta?.content ?? json?.choices?.[0]?.message?.content ?? ''
-          if (delta) yield delta
-        } catch {
-          // partial/keepalive line — ignore
-        }
-      }
-    }
-  } else {
-    const content = (res as { choices?: { message?: { content?: string } }[] })?.choices?.[0]
-      ?.message?.content
-    if (content) yield content
-  }
+  yield* streamChatCompletion(messages)
 }
 
 // ─── Turn runner ────────────────────────────────────────────────────────────

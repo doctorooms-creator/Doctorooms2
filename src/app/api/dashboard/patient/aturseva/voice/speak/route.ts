@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod/v4'
 import { requireRole } from '@/lib/api-auth'
+import { synthesizeSpeech } from '@/lib/aturseva/llm-provider'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -123,19 +124,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const ZAI = (await import('z-ai-web-dev-sdk')).default
-    const zai = await ZAI.create()
-
-    const response = await zai.audio.tts.create({
-      input: speechText,
-      voice: 'tongtong',
-      speed: 1.0,
-      response_format: 'wav',
-      stream: false,
-    })
-
-    const arrayBuffer = await response.arrayBuffer()
-    const buffer = canonicalizeWav(Buffer.from(new Uint8Array(arrayBuffer)))
+    // Provider abstraction: SDK in sandbox, OpenAI-compatible /audio/speech
+    // endpoint in production (TTS_* env vars).
+    const raw = await synthesizeSpeech({ text: speechText, voice: 'tongtong', responseFormat: 'wav' })
+    const buffer = canonicalizeWav(raw)
     if (buffer.length === 0) {
       throw new Error('Empty TTS buffer')
     }

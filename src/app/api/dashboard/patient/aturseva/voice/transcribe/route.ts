@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod/v4'
 import { requireRole } from '@/lib/api-auth'
+import { transcribeAudio } from '@/lib/aturseva/llm-provider'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -51,12 +52,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const ZAI = (await import('z-ai-web-dev-sdk')).default
-    const zai = await ZAI.create()
-
-    const result = await zai.audio.asr.create({
-      file_base64: parsed.data.audio,
-    })
+    // Provider abstraction: SDK in sandbox, OpenAI-compatible
+    // /audio/transcriptions endpoint in production (ASR_* env vars).
+    const result = await transcribeAudio(parsed.data.audio)
 
     const text = typeof result?.text === 'string' ? result.text.trim() : ''
     return Response.json({ success: true, text })
