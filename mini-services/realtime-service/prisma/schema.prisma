@@ -7,10 +7,11 @@ generator client {
 }
 
 datasource db {
-  // Dev sandbox: SQLite (DATABASE_URL=file:...db/custom.db).
-  // Prod (Supabase/Render): flip provider to "postgresql" — schema has zero
-  // Json fields / @db.* attrs / arrays, so it is fully portable both ways.
-  provider = "sqlite"
+  // SINGLE DATABASE directive (owner): Supabase PostgreSQL everywhere —
+  // sandbox dev AND production (Vercel app + Render realtime) all point at
+  // the same Supabase project. The old SQLite sandbox era is retired.
+  // Schema has zero Json fields / @db.* attrs / arrays — fully portable.
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
