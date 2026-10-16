@@ -8061,3 +8061,22 @@ Stage Summary:
 - KEY LESSONS: (1) TTS WAV has a lying RIFF size + AIGC chunk — canonicalize with a bounds-clamped chunk walk, play via WebAudio; (2) refetch replaces streaming bubble ids — use sentinel ids for post-done UI state; (3) headless Chromium <audio> can't decode WAV but decodeAudioData can — fake mics via MediaStreamDestination
 - Known limits: ASR garbles Hinglish phonetics (English-leaning model) — mitigated by the review-before-send UX; TTS generation is slow (~4-13s for long replies) — indicator shows late but works; FAB sheet has no voice controls yet (future)
 - Next executable candidates (owner decision): WhatsApp/SMS channels (external gateway needed); receptionist booking-flows unification (audit ISSUE 5); FAB sheet voice; doctor-side care log visibility; Aturseva voice onboarding hint
+
+---
+Task ID: sandbox-restore-6-and-vercel-answer
+Agent: Main (Z.ai Code)
+Task: User asked "Vercel pe live ho gya?" — answered NO (sandbox Preview Panel only; SQLite file DB + long-running realtime socket service are the Vercel blockers; migration path = Vercel + Neon/Turso hosted DB + Render for realtime, pending owner decision). Meanwhile the sandbox had its 6th hard reset — full recovery + post-restore verification.
+
+Work Log:
+- 6th hard reset discovered: all node_modules gone (main + mini-services), db/custom.db deleted, .env reset to placeholder NEXTAUTH_SECRET (would break socket JWT), all processes dead (:3000/:3006 down, Caddy :81 → 502)
+- Recovery per runbook: bun install main (975 pkgs, 13.5s) + realtime-service (74 pkgs, 4.1s) → .env rewritten with fresh `openssl rand -hex 32` NEXTAUTH_SECRET + REALTIME_PORT=3006 + NOTIFICATION_SERVICE_URL=http://localhost:3006 → mkdir -p db && bunx prisma db push && bun prisma/seed.ts (3 doctors, 11 bookings, lab reports, diet plan, 5-day check-in history, seedPhase4) → bash start-all.sh (start-all timed out at 120s but double-fork survived; services verified up after compile)
+- All 8 previous cron jobs found DISABLED ("Disabled due to exec limits exceeded") → created fresh 15-min webDevReview cron job_id 463248 (kind webDevReview, fixed_rate 900s, tz Asia/Calcutta, priority 10) with mandatory task description + Phase 5+ project context + hard-reset runbook + Vercel-deployment note
+- Watchdog re-armed via double-fork setsid (PID 1599)
+- BROWSER E2E post-restore (agent-browser, gateway :81 origin): landing renders clean (title "Aturseva — See the doctor. Aturseva stays.") → dev-login Rahul Verma (patient card) → /dashboard/patient → /dashboard/patient/aturseva: sidebar "Aturseva — AI Sahayika 2" unread badge live, 🍛 lunch diet-nudge card in thread (Phase 4 proactive rail delivering), ALL Phase 5 voice controls render (mic "Bol kar message likhein", TTS toggle "Aturseva ke jawab bol kar sunein", per-bubble "Ye message bol kar sunein"), GPS chip, Phase 5 nav entries (My Bills/Insurance/Consents) present, ZERO console errors → LIVE CHAT TEST: sent "Mera booking approve hua?" → grounded tool reply rendered (1 upcoming — 19 Oct 2026 09:30 "Approve ka intezaar" + history 5 Oct Complete) → dev.log POST /api/dashboard/patient/aturseva/chat 200, no error lines → browser closed after QA (OOM discipline)
+- QA evidence: download/aturseva-qa/qa-restore-01-landing.png + qa-restore-02-aturseva.png
+
+Stage Summary:
+- Sandbox fully recovered from 6th hard reset; Phases 1–5 all remain CLOSED and browser-verified working post-restore (booking tool rail + proactive diet nudge + voice UI all live on a fresh seeded DB)
+- Deployment status clarified for owner: NOT on Vercel — app is live only via the sandbox Preview Panel; public hosting requires migration (Vercel + hosted Postgres/Turso + Render for the realtime socket service) — owner decision pending
+- Fresh webDevReview cron 463248 active; watchdog armed (60s revive for :3000/:3006); git tree clean (only .zscripts/dev.pid modified; no code changes this session)
+- Next executable candidates unchanged (owner decision): WhatsApp/SMS channels, receptionist booking-flows unification (audit ISSUE 5), FAB sheet voice controls, doctor-side care log visibility, deployment migration prep
