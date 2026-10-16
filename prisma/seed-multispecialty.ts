@@ -23,7 +23,23 @@ function parseOpdTimings(opdTimings: string): { day: string; startTime: string; 
   // Parse time: "10:00-1:00" or "10:00-13:00"
   const [startStr, endStr] = timePart.split('-')
   const startTime = padTime(startStr)
-  const endTime = padTime(endStr)
+  let endTime = padTime(endStr)
+
+  // Indian OPD timings use 12-hour notation for the end ("10:00-1:00" = 10 AM–1 PM).
+  // If the padded end is not after the start, interpret it as PM (+12h) so the
+  // schedule generates slots (slot-inventory returns [] when end <= start —
+  // this exact bug shipped 115 zero-slot schedules to prod before the fix).
+  {
+    const toMin = (t: string) => {
+      const [h, m] = t.split(':').map(Number)
+      return h * 60 + m
+    }
+    if (toMin(endTime) <= toMin(startTime)) {
+      const [h, m] = endTime.split(':').map(Number)
+      const pmEnd = `${String(h + 12).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      if (toMin(pmEnd) > toMin(startTime)) endTime = pmEnd
+    }
+  }
 
   // Parse days: "Mon/Wed/Fri" (slash = explicit list) or "Mon-Sat" (dash = range)
   const dayOrder = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']

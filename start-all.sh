@@ -19,6 +19,18 @@ is_port_up() {
   ss -tln 2>/dev/null | grep -q ":$1 "
 }
 
+# ─────────────────────────────────────────────────────────────────────────────
+# SINGLE-DB directive: force .env values to win over inherited platform env.
+# The sandbox shell exports a stale SQLite DATABASE_URL at the platform level
+# (file:...db/custom.db); without this block children would inherit it and
+# ignore the Supabase URL in .env (Next.js dotenv never overrides process env).
+# ─────────────────────────────────────────────────────────────────────────────
+if [ -f /home/z/my-project/.env ]; then
+  set -a
+  . /home/z/my-project/.env
+  set +a
+fi
+
 start_service() {
   local dir="$1" log="$2" cmd="$3" port="$4" name="$5"
   if is_port_up "$port"; then

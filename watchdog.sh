@@ -17,6 +17,14 @@ log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> /home/z/my-project/watchdog.log
 }
 
+# SINGLE-DB directive: force .env to win over inherited platform env
+# (stale SQLite DATABASE_URL is exported at the platform shell level).
+if [ -f /home/z/my-project/.env ]; then
+  set -a
+  . /home/z/my-project/.env
+  set +a
+fi
+
 start_next() {
   ( cd /home/z/my-project && setsid bash -c \
     'exec env NODE_OPTIONS=--max-old-space-size=1792 node node_modules/next/dist/bin/next dev -p 3000 --webpack' \
@@ -43,24 +51,17 @@ while true; do
     sleep 20
   fi
 
-  # Chat service
-  if ! is_port_up 3004; then
-    log "Port 3004 DOWN — starting chat service"
-    start_service /home/z/my-project/mini-services/chat-service "Chat service"
-  fi
-
-  # Notification service
-  if ! is_port_up 3005; then
-    log "Port 3005 DOWN — starting notification service"
-    start_service /home/z/my-project/mini-services/notification-service "Notification service"
-  fi
-
   # Realtime service (merged chat+notif, :3006 — Aturseva proactive pushes)
+  # Via start.sh so it sources ../../.env (DB URL + secrets) properly.
+  # NOTE: the legacy chat-service (:3004) and notification-service (:3005)
+  # are RETIRED (merged into realtime-service). Their folders have empty
+  # node_modules after sandbox resets — spawning them is a guaranteed
+  # crash-loop, so those revive blocks were REMOVED.
   if ! is_port_up 3006; then
     log "Port 3006 DOWN — starting realtime service"
     (
       cd /home/z/my-project/mini-services/realtime-service
-      setsid bash -c 'exec env PORT=3006 bun --hot index.ts' > service.log 2>&1 < /dev/null &
+      setsid bash -c 'exec bash start.sh' > service.log 2>&1 < /dev/null &
     )
     sleep 10
   fi

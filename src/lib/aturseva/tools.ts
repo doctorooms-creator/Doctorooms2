@@ -372,6 +372,27 @@ async function getDoctorSlots(
     return { ok: false, error: 'DOCTOR_NOT_FOUND — ye doctor abhi available nahi hai.' }
   }
 
+  // DATE GUARD: the LLM occasionally hallucinates past years ("2024-10-21")
+  // or far-future dates. Silently obeying wastes a whole turn (the patient
+  // clicks a slot chip, then prepare_booking rejects the past date). Reject
+  // here with a corrective hint so the model retries with the auto-pick.
+  if (dateArg) {
+    const today = todayISTStr()
+    const maxDate = nextDates(8).pop() || today
+    if (dateArg < today) {
+      return {
+        ok: false,
+        error: `DATE_IN_PAST — "${dateArg}" beet chuki hai. Aaj ${today} hai. date argument KO CHHOD DEIN (auto-pick agli available date khud dhoondh lega) ya aaj ke baad ki valid date use karein.`,
+      }
+    }
+    if (dateArg > maxDate) {
+      return {
+        ok: false,
+        error: `DATE_TOO_FAR — "${dateArg}" window se bahar hai (aaj se 7 din tak hi slots dikh sakte hain). date argument chhod dein ya ${today} ke aas-paas ki date use karein.`,
+      }
+    }
+  }
+
   const candidates = dateArg
     ? [dateArg]
     : nextDates(7) // auto: today → +6, first bookable day wins
