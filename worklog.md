@@ -8208,3 +8208,21 @@ Stage Summary:
 - Patient identity = User row (no Patient table); mobile number = linkage key (OTP-ready)
 - Audit found 12 real bugs/gaps (patient diet page 401s + shape mismatch; consents sign staff-only; settingsJson cosmetic vs NotificationPreference; no pagination UIs; no delete-confirm on health records; browser print flows; Razorpay web-only)
 - NO code modified. Deliverables: PATIENT-MODULE-AUDIT.md (root) + this entry. Next phase (owner-driven): Stitch UI design → RN app build reusing same backend
+
+---
+Task ID: patient-test-credentials
+Agent: Main (Z.ai Code)
+Task: User asked for patient login credentials to test. Verified both QA patient accounts LIVE against prod API.
+
+Work Log:
+- App :3000/:3006 still DOWN (reset #8 unrecovered: node_modules wiped, .env reset to SQLite template, no db/ dir)
+- Searched disk exhaustively for Vercel token / DATABASE_URL recovery: bash history, ~/.vercel, ~/.config/vercel, upload/, scripts/, .zscripts/ — ALL gone (token was session-only). Sandbox restore remains BLOCKED until owner re-pastes Vercel token or Supabase DATABASE_URL
+- Discovered BOTH cron jobs (463779, 463761) are DISABLED ("exec limits exceeded") — no auto-QA/self-heal running; explains why reset #8 was never auto-recovered
+- Git archaeology of mystery commits 7529b0f/fe69182: BENIGN (worklog append + .zscripts/dev.pid change, uuid auto-messages)
+- Verified prod (doctorooms-hms.vercel.app) is LIVE (login page 200)
+- API-verified BOTH patient logins on prod (200 + JWT): qa-recall-aiims4@test.dev / 123456 (= "Delhi Patient Four", userId cmusc1ndk002nrelp7osg0k5k — THE SAME user as the sandbox dev-login QA patient, richest Aturseva/Sevika data) and qa-mobile-app@doctorooms.test / QaMobile@123 ("QA Mobile Patient", clean-slate RN test account)
+
+Stage Summary:
+- Test credentials delivered (see PATIENT-APP-PROMPT.md lines 199-202 for the canonical RN QA account)
+- Sandbox restore still blocked on owner secrets (Vercel token or DATABASE_URL) — next session should request it if Preview Panel testing is needed
+- Crontab currently inert (both jobs disabled by exec limits) — do not rely on auto-QA until re-enabled
