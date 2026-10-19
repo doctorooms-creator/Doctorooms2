@@ -8189,3 +8189,22 @@ Stage Summary:
 - NO development performed (explicit owner instruction honored): no files changed, no deploys, no DB writes, git tree untouched this turn
 - Owner decision queue updated: (a) prod AI key choice — paid z.ai open platform glm-4.6 (recommended quality) vs FREE Cloudflare Workers AI catalog (zero-cost pilot, 10k neurons/day) vs other free tiers (Groq/Google AI Studio — same provider.ts pattern); (b) Render API key rnd_... still pending; (c) laya-mlx integration = DECLINED unless the owner reopens it with an actual Apple-Silicon host (e.g. a Mac mini server)
 - Next executable (no owner needed, unchanged): FAB sheet voice controls, prod LLM-fallback retry chip, Aturseva voice onboarding hint, doctor-side care log visibility, Copilot vision.ts route wiring (Phase E)
+
+---
+Task ID: patient-module-audit-for-rn
+Agent: Main (Z.ai Code)
+Task: User requested IN-DEPTH audit of the patient module (user-side workflow, features, use cases — only what works TODAY, no future features) to drive a Google Stitch React Native UI design. NO development allowed. Also analyze the uploaded CardioLife reference UI screenshot.
+
+Work Log:
+- Verified tool bridge alive; app :3000/:3006 still down post-reset (not needed for code audit — audit is static)
+- VLM-analyzed upload/Screenshot_20261019_123439_Instagram.jpg.jpeg → "CardioLife" 3-screen reference (dark onboarding hero / appointment dashboard with 4-tab bottom nav / doctor-detail with booking timeline); red theme — user will swap to Doctorooms teal + Aturseva logo
+- Launched 2 parallel Explore agents (very thorough): core module (dashboard/appointments/booking/bills/reports/health-records/medical-history/rx-access + 20 API routes) and secondary (sevika/aturseva/diet/notifications/feedback/insurance/consents/blog/profile/settings + auth flow + prisma schema + realtime arch)
+- Extracted Aturseva logo colors (monochrome currentColor; web theme teal #0d9488)
+- Discovered existing PATIENT-APP-PROMPT.md (300 lines, Expo plan) — backend already mobile-ready ("P5-MOBILE": login returns JWT for Bearer auth, all patient APIs accept it; socket-token endpoint exists)
+- Wrote comprehensive audit deliverable to PATIENT-MODULE-AUDIT.md (nav map, journey, feature inventory, status machines, can/cannot lists, 12 bugs/gaps, RN readiness table, 27-screen Stitch screen map + design tokens)
+
+Stage Summary:
+- Patient module = 17 nav sections + global AI-nurse FAB; flagship = Aturseva/Sevika (Hinglish SSE chat, 11 tools, voice ASR/TTS, photo-RX VLM, dawai adherence, diet plans, proactive pushes)
+- Patient identity = User row (no Patient table); mobile number = linkage key (OTP-ready)
+- Audit found 12 real bugs/gaps (patient diet page 401s + shape mismatch; consents sign staff-only; settingsJson cosmetic vs NotificationPreference; no pagination UIs; no delete-confirm on health records; browser print flows; Razorpay web-only)
+- NO code modified. Deliverables: PATIENT-MODULE-AUDIT.md (root) + this entry. Next phase (owner-driven): Stitch UI design → RN app build reusing same backend
