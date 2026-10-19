@@ -8226,3 +8226,18 @@ Stage Summary:
 - Test credentials delivered (see PATIENT-APP-PROMPT.md lines 199-202 for the canonical RN QA account)
 - Sandbox restore still blocked on owner secrets (Vercel token or DATABASE_URL) — next session should request it if Preview Panel testing is needed
 - Crontab currently inert (both jobs disabled by exec limits) — do not rely on auto-QA until re-enabled
+
+---
+Task ID: stitch-ui-brief
+Agent: Main (Z.ai Code)
+Task: User preparing to design the patient React Native app UI on Google Stitch — asked for ONE file containing the complete patient-side feature list, workings, and flows to feed Stitch.
+
+Work Log:
+- Built /home/z/my-project/STITCH-UI-BRIEF.md from the patient-module audit (grounded in real code, zero speculation)
+- Structure: (1) app identity, (2) full design system (teal #0d9488 tokens, typography, components, chat/voice affordances), (3) navigation architecture (5-tab bottom bar, Aturseva center tab elevated + global FAB), (4) 29 screen-by-screen Stitch-ready specs (each block = self-contained prompt: purpose, layout, elements, states, actions), (5) 13 complete step-by-step user flows (booking golden path, live queue, video, doctor chat, AI daily loop, voice, photo-RX, lab results, records, consent, bill pay, insurance, self-serve), (6) status→color mapping table for all 8 status machines, (7) global elements (FAB, realtime toasts, skeletons), (8) hard constraints (8 patient-cannot rules — no reschedule, no OPD online pay, AI never auto-writes etc.), (9) Hinglish copy tone examples
+- Excluded: all technical/backend content (API routes, auth internals, bugs) — pure user-side design language for a design tool
+
+Stage Summary:
+- STITCH-UI-BRIEF.md = single hand-off file for Google Stitch (English, design-tool friendly; PATIENT-MODULE-AUDIT.md remains the engineering reference)
+- User next step: design screens on Stitch section-by-section (feed Section 2 design system first, then screen blocks from Section 4), validate against Section 5 flows
+- No development performed (owner's explicit instruction — analysis/design docs only)
