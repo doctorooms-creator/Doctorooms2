@@ -13,8 +13,14 @@
  *     • letters → patient-name search (autocomplete cards) — ignoring the
  *                 suggestions books a Quick walk-in with the typed name
  *
- *   DEPARTMENT / DOCTOR: single tap chips — auto-locked when only 1 exists
+ *   DEPARTMENT / DOCTOR: single tap chips — auto-locked when only 1 exists;
+ *                         otherwise the desk remembers the LAST-USED pairing
+ *                         (per receptionist, persisted in User.settingsJson)
+ *                         and pre-selects it with a "last used" hint
  *   EMERGENCY: always-visible 1-tap toggle
+ *   AUTO-PRINT: optional toggle — prints every token slip automatically the
+ *               moment a booking confirms (hidden same-origin iframe → the
+ *               print-token page prints itself; survives popup blockers)
  *   SUBMIT: "Add to Queue" — Enter anywhere submits
  *   AUTO-RESET: after booking, token flashes ~5s, then the form silently
  *               clears and focus returns to the smart field (zero button
@@ -39,6 +45,7 @@ import {
   ClipboardCheck,
   Eye,
   Heart,
+  History,
   ListOrdered,
   Loader2,
   MapPin,
@@ -169,6 +176,13 @@ const statusColors: Record<string, string> = {
 
 const AUTO_RESET_MS = 5000
 
+/** Per-receptionist desk memory (User.settingsJson.receptionBookingPrefs) */
+type BookingPrefs = {
+  departmentId?: string
+  doctorId?: string
+  autoPrint?: boolean
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────
 
 export default function ReceptionistHomePage() {
@@ -199,6 +213,27 @@ export default function ReceptionistHomePage() {
 
   // ── Result flash ──
   const [result, setResult] = useState<BookingResult | null>(null)
+
+  // ── Desk memory: last-used dept/doctor + auto-print (persisted per receptionist) ──
+  const [autoPrint, setAutoPrint] = useState(false)
+  const [deptFromPrefs, setDeptFromPrefs] = useState(false) // shows "last used" hint
+  const prefsApplied = useRef(false)
+  const { data: prefsData } = useQuery<{ prefs: BookingPrefs }>({
+    queryKey: ['booking-prefs'],
+    queryFn: () =>
+      fetch('/api/dashboard/receptionist/booking-preferences')
+        .then((r) => (r.ok ? r.json() : { prefs: {} as BookingPrefs }))
+        .catch(() => ({ prefs: {} as BookingPrefs })),
+    staleTime: Infinity,
+    retry: 1,
+  })
+  const savePrefs = useCallback((updates: BookingPrefs) => {
+    fetch('/api/dashboard/receptionist/booking-preferences', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    }).catch(() => {}) // desk memory is best-effort, never blocks a booking
+  }, [])
 
   // ── Data: stats / schedule / live queue ──
   const { data: stats } = useQuery<ReceptionistStats>({
@@ -283,6 +318,27 @@ export default function ReceptionistHomePage() {
     }
   }, [departmentDoctors, doctorId])
 
+  // ── Desk memory: apply last-used department + doctor ONCE after schedule loads.
+  // (Founder's single-option auto-lock above still wins for 1-dept/1-doctor setups —
+  // same value anyway; for multi-option desks this pre-selects yesterday's pairing
+  // so the regular booking is dept-less: type mobile → complaint → Enter.) ──
+  useEffect(() => {
+    if (prefsApplied.current || !isHospitalMode || scheduleLoading || !prefsData) return
+    prefsApplied.current = true
+    const prefs = prefsData.prefs
+    if (typeof prefs.autoPrint === 'boolean') setAutoPrint(prefs.autoPrint)
+    if (prefs.departmentId && departments.length > 1) {
+      const dept = departments.find((d) => d.department.id === prefs.departmentId)
+      if (dept) {
+        setDepartmentId(dept.department.id)
+        setDeptFromPrefs(true)
+        if (prefs.doctorId && dept.doctors.some((doc) => doc.id === prefs.doctorId)) {
+          setDoctorId(prefs.doctorId)
+        }
+      }
+    }
+  }, [isHospitalMode, scheduleLoading, prefsData, departments])
+
   // ── Submit (declared BEFORE derived validation to avoid TDZ) ──
   const createMutation = useMutation({
     mutationFn: async (payload: Record<string, unknown>): Promise<BookingResult> => {
@@ -305,6 +361,27 @@ export default function ReceptionistHomePage() {
       )
       queryClient.invalidateQueries({ queryKey: ['walkin-queue'] })
       queryClient.invalidateQueries({ queryKey: ['receptionist-stats'] })
+      // Desk memory: remember this desk's dept/doctor pairing (best-effort)
+      if (isHospitalMode && departmentId) {
+        savePrefs({ departmentId, doctorId: doctorId || undefined })
+      }
+      // Auto-print: hidden same-origin iframe — the print-token page prints itself,
+      // so this survives popup blockers (no window.open outside a user gesture).
+      if (autoPrint && data.booking.id) {
+        const iframe = document.createElement('iframe')
+        iframe.src = `/bookings/print-token/${data.booking.id}`
+        iframe.title = 'Token slip print'
+        iframe.setAttribute('aria-hidden', 'true')
+        iframe.style.position = 'fixed'
+        iframe.style.right = '0'
+        iframe.style.bottom = '0'
+        iframe.style.width = '1px'
+        iframe.style.height = '1px'
+        iframe.style.opacity = '0'
+        iframe.style.border = '0'
+        iframe.onload = () => setTimeout(() => iframe.remove(), 6000)
+        document.body.appendChild(iframe)
+      }
       setTimeout(() => resultCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80)
     },
     onError: (err: Error) => toast.error(err.message),
@@ -571,6 +648,11 @@ export default function ReceptionistHomePage() {
                     </Button>
                   </div>
                   <p className="text-center text-xs text-muted-foreground">
+                    {autoPrint && (
+                      <span className="mr-1 inline-flex items-center gap-1 font-medium text-teal-600 dark:text-teal-400">
+                        <Printer className="h-3 w-3" /> slip sent to printer ·
+                      </span>
+                    )}
                     Auto-resetting in {resetCountdown}s — you can keep working, just start typing
                     <span className="sr-only">. Press escape to reset now.</span>
                   </p>
@@ -622,7 +704,7 @@ export default function ReceptionistHomePage() {
                         inputMode={isDigitMode ? 'numeric' : 'text'}
                         placeholder="e.g. 9876543210 or Ramesh…"
                         disabled={!!selectedPatient && !!selectedPatient.mobileNo}
-                        className="h-12 pl-9 pr-10 text-base font-medium disabled:cursor-default disabled:opacity-100"
+                        className="h-12 pl-9 pr-10 text-base font-medium transition-shadow focus-visible:border-teal-400 focus-visible:ring-teal-400/50 disabled:cursor-default disabled:opacity-100"
                         aria-label="Patient mobile number or name search"
                         aria-expanded={showMatches && matches.length > 0}
                         role="combobox"
@@ -810,11 +892,27 @@ export default function ReceptionistHomePage() {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <Label className="text-xs">Department *</Label>
-                        {departments.length === 1 && (
+                        {departments.length === 1 ? (
                           <Badge variant="outline" className="h-5 gap-1 px-1.5 text-[10px] text-teal-600 dark:text-teal-400">
                             <CheckCircle2 className="h-3 w-3" /> auto-selected
                           </Badge>
-                        )}
+                        ) : deptFromPrefs ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Clear the remembered pairing for this desk
+                              setDeptFromPrefs(false)
+                              setDepartmentId('')
+                              setDoctorId('')
+                              savePrefs({ departmentId: '', doctorId: '' }) // '' = explicit clear
+                            }}
+                            title="Clear remembered department (click to pick fresh)"
+                            className="inline-flex h-5 items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-1.5 text-[10px] font-medium text-violet-600 transition-colors hover:bg-violet-100 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-400 dark:hover:bg-violet-900/40"
+                          >
+                            <History className="h-3 w-3" /> last used
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        ) : null}
                       </div>
                       {scheduleLoading ? (
                         <Skeleton className="h-10 w-full" />
@@ -830,6 +928,7 @@ export default function ReceptionistHomePage() {
                                 onClick={() => {
                                   setDepartmentId(d.department.id)
                                   setDoctorId('') // cascade reset
+                                  setDeptFromPrefs(false) // manual pick overrides memory
                                 }}
                                 aria-pressed={active}
                                 className={cn(
@@ -925,20 +1024,41 @@ export default function ReceptionistHomePage() {
                       />
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setIsEmergency((v) => !v)}
-                        aria-pressed={isEmergency}
-                        className={cn(
-                          'flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-semibold transition-all',
-                          isEmergency
-                            ? 'border-rose-500 bg-rose-500 text-white shadow-sm'
-                            : 'border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/40'
-                        )}
-                      >
-                        <Siren className="h-4 w-4" />
-                        Emergency{isEmergency ? ' — queue top' : ''}
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsEmergency((v) => !v)}
+                          aria-pressed={isEmergency}
+                          className={cn(
+                            'flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-semibold transition-all',
+                            isEmergency
+                              ? 'border-rose-500 bg-rose-500 text-white shadow-sm'
+                              : 'border-rose-200 text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/40'
+                          )}
+                        >
+                          <Siren className="h-4 w-4" />
+                          Emergency{isEmergency ? ' — queue top' : ''}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = !autoPrint
+                            setAutoPrint(next)
+                            savePrefs({ autoPrint: next })
+                          }}
+                          aria-pressed={autoPrint}
+                          title="Automatically print every token slip the moment a booking is confirmed"
+                          className={cn(
+                            'flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm font-medium transition-all',
+                            autoPrint
+                              ? 'border-teal-500 bg-teal-600 text-white shadow-sm'
+                              : 'border-input text-muted-foreground hover:border-teal-300 hover:bg-teal-50/40 hover:text-foreground dark:hover:border-teal-700'
+                          )}
+                        >
+                          <Printer className="h-4 w-4" />
+                          Auto-print{autoPrint ? ' on' : ''}
+                        </button>
+                      </div>
                       {isHospitalMode && selectedDoctor && (
                         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Wallet className="h-3.5 w-3.5" />

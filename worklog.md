@@ -8488,3 +8488,32 @@ Stage Summary:
 - CODE IS PROVEN GOOD — the entire One-Form feature set works end-to-end (all 3 booking paths + auto-lock + auto-reset + charge stamp + notifications). Zero code defects found.
 - THE ONLY BLOCKER IS THE DEPLOY: prod runs a pre-10:52 build. User must deploy from THEIR Vercel (auto-deploy off, sandbox has no token): Vercel dashboard → doctorooms-hms → Deployments → cancel any stuck build → Redeploy latest commit (or pull + `vercel --prod` locally). After deploy: SW v3 self-heals stale browsers; one hard refresh recommended.
 - Sandbox facts for future sessions: prod DB unreachable from sandbox (password unknown; old project deleted); use scripts/sandbox-sqlite.sh for any DB-backed E2E; NEVER commit while sqlite schema is swapped; dev-login works after seeding (no password needed); seeded prod creds rina.reception@zydus.com/Staff@123 remain valid ON PROD for read-only verification.
+
+---
+Task ID: desk-memory-autoprint
+Agent: Main (Z.ai Code)
+Task: Continue from self-test verdict — implement next-phase backlog: per-receptionist default dept/doctor memory + auto-print token option + polish (user: "start from where you left the last development").
+
+Work Log:
+- Deploy-truth re-verified at session start: prod STILL on old build (patient-search 404 authed, sw.js v2, CDN age ~8h) — and found the DEFINITIVE root cause: GitHub repo has ZERO webhooks (GET /repos/doctorooms-creator/Doctorooms2/hooks → []). The Vercel GitHub-integration webhook is gone, so NO push can ever auto-deploy. Owner must redeploy from Vercel dashboard (or reconnect the Git integration).
+- Environment recovery after sandbox reset: node_modules wiped again → bun install ×2 (main + realtime), start-all.sh, realtime :3006 restarted. .env had been reset to SQLite placeholder → restored Seoul pooler URL.
+- Created fresh 15-min webDevReview cron (job 472363, Asia/Calcutta, priority 10) — previous 3 all disabled by exec limits.
+- NEW FEATURE 1 — Desk memory (per-receptionist default dept/doctor):
+  * New API /api/dashboard/receptionist/booking-preferences (GET/PUT) storing {departmentId, doctorId, autoPrint} in User.settingsJson.receptionBookingPrefs (merge-write; '' = explicit clear; follows patient/settings route pattern)
+  * One-form home: after schedule loads, pre-selects the last-used dept+doctor pairing (skipped for single-option desks where founder's auto-lock already wins) with a violet "last used ✕" pill next to the Department label — click ✕ clears selection + memory; manual chip pick overrides memory
+  * On booking success the current dept/doctor pairing is persisted (fire-and-forget)
+- NEW FEATURE 2 — Auto-print token:
+  * "Auto-print" toggle chip beside Emergency (teal when on, persisted in same prefs)
+  * On booking success: hidden same-origin iframe loads /bookings/print-token/{id} — that page already prints itself; iframe approach survives popup blockers (no window.open outside user gesture); iframe auto-removed after 6s
+  * Result flash shows "slip sent to printer ·" status when enabled; Print Token button remains as manual backup
+- Polish: smart-field focus ring (teal), auto-print chip styling, Emergency row now wraps 3 items cleanly, docblock updated with new behaviors
+- E2E (sandbox sqlite flow — scripts/sandbox-sqlite.sh worked as designed; tmp-scripts seeds recreated after reset):
+  * Zydus (2 depts): booking CARD-001 (Suresh) → settingsJson persisted {dept,doctor} → page reload → Cardiology + Dr. Amit PRE-SELECTED with "last used" pill ✓ → toggle Auto-print on → persisted ✓ → booking CARD-002 (Kavita quick) → hidden iframe attached with print-token URL + "slip sent to printer" shown ✓ → "last used ✕" click → dept cleared + DB prefs now {autoPrint:true} only ✓
+  * Rajesh Clinic regression (1 dept/1 doctor): auto-lock unaffected (auto-selected ×2), Auto-print default off, GEN-001 booked fine ✓
+  * dev.log clean; bun run lint clean; desktop+mobile screenshots (/tmp/desktop-desk-memory.png, /tmp/mobile-desk-memory.png)
+- Restored deploy state before commit: postgres schemas checked out, prisma generate, .env → Seoul pooler; git tree carries ONLY the feature diff.
+
+Stage Summary:
+- Booking Desk now learns the receptionist's routine: regular desk pairing pre-selected on login/reload (2 taps saved per booking for multi-dept hospitals), optional zero-touch token printing for desk-printer clinics, memory is per-user and per-device-independent.
+- Feature E2E-verified in both hospital (multi-dept) and clinic (single-dept) modes; single-option auto-lock regression passed.
+- STILL the #1 open item: prod deploy missing (severed GitHub webhook — owner action required). All new features ride the same pending deploy; once the owner redeploys, everything ships together.
