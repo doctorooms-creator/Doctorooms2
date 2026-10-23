@@ -16,15 +16,20 @@
  *                              devices. SSE/copilot streams are POST → already
  *                              excluded by the GET-only gate.
  *
- * UPDATE FLOW: new SW installs → waits (no auto skipWaiting) → the app's
- * ServiceWorkerRegistrar shows an "Update available — Refresh" toast → user
- * accepts → posts SKIP_WAITING → controllerchange → page reloads once.
+ * UPDATE FLOW (v3, Oct 2026): installs call skipWaiting() immediately and
+ * activate purges every cache that doesn't match the current VERSION — safe
+ * because HTML navigations are network-first, so a freshly-activated worker
+ * can never serve a stale page. The previous "user approves via toast" flow
+ * was broken in practice: the toast never shipped, so new workers sat in the
+ * waiting state forever while the old worker kept serving stale HTML —
+ * receptionists were locked onto an old build even after deploys. v3
+ * self-heals every browser on its next visit.
  *
  * Push handlers are wired for Phase P3 (web-push) — inert until a
  * push subscription exists.
  */
 
-const VERSION = 'v2'
+const VERSION = 'v3'
 const IS_DEV = new URL(self.location.href).searchParams.has('dev')
 const STATIC_CACHE = `doctorooms-static-${VERSION}`
 const RUNTIME_CACHE = `doctorooms-runtime-${VERSION}`
@@ -46,7 +51,10 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => cache.addAll(PRECACHE))
   )
-  // No auto-skipWaiting: the user approves updates via the in-app toast.
+  // v3: activate immediately. Navigations are network-first, so taking over
+  // can never serve stale HTML — and waiting would strand users on old
+  // builds (the bug this version exists to fix).
+  self.skipWaiting()
 })
 
 self.addEventListener('activate', (event) => {

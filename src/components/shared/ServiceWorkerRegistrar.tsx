@@ -3,12 +3,25 @@
 import { useEffect } from 'react'
 
 /**
- * Registers the PWA service worker at /sw.js.
+ * Registers the PWA service worker at /sw.js and keeps the app
+ * self-updating across deploys.
  *
- * The service worker is only built for production (`next build` emits sw.js
- * from src/app/sw.ts). In dev mode the file is not served, so every page load
- * produced a console error + a 404 request. We now skip registration in dev
- * and also probe the file first, so a missing /sw.js never logs an error.
+ * WHY THE AUTO-UPDATE FLOW EXISTS (v3, Oct 2026): sw.js previously relied on
+ * an in-app "Update available" toast that never shipped. New workers sat in
+ * the `waiting` state forever while the old worker kept serving stale HTML —
+ * users stayed locked on an old build even after production deploys.
+ *
+ * Current flow:
+ *   1. register('/sw.js')
+ *   2. if a worker is ALREADY waiting (stuck from an earlier deploy) →
+ *      post SKIP_WAITING to it now
+ *   3. watch `updatefound` → new worker reaches `installed` → post
+ *      SKIP_WAITING (sw.js v3 also self-skips, older ones need the nudge)
+ *   4. on `controllerchange` → reload the page ONCE so the fresh build boots
+ *
+ * The service worker is only built for production (`next dev` doesn't emit
+ * it). We skip registration in dev and probe the file first, so a missing
+ * /sw.js never logs an error.
  */
 export function ServiceWorkerRegistrar() {
   useEffect(() => {
@@ -17,23 +30,52 @@ export function ServiceWorkerRegistrar() {
     if (process.env.NODE_ENV !== 'production') return
 
     let cancelled = false
+    let reloaded = false
+    // Only reload when this page was already controlled by a worker (i.e. an
+    // UPDATE just took over). First-ever registration doesn't need a reload.
+    const wasControlled = !!navigator.serviceWorker.controller
 
-    // Probe /sw.js before registering to avoid noisy console errors
+    const nudgeWaitingWorker = (reg: ServiceWorkerRegistration) => {
+      const worker = reg.waiting || reg.installing
+      if (worker) {
+        worker.postMessage({ type: 'SKIP_WAITING' })
+      }
+    }
+
+    const onControllerChange = () => {
+      if (reloaded || cancelled || !wasControlled) return
+      reloaded = true
+      // Fresh build is now controlling this page — boot it once, cleanly.
+      window.location.reload()
+    }
+
+    // Attach BEFORE registering so a fast takeover is never missed
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+
     fetch('/sw.js', { method: 'HEAD' })
       .then((res) => {
-        if (cancelled) return
-        if (!res.ok) {
-          console.log('SW skipped: /sw.js not available')
-          return
+        if (cancelled || !res.ok) return undefined
+        return navigator.serviceWorker.register('/sw.js')
+      })
+      .then((reg) => {
+        if (!reg || cancelled) return
+
+        // Case 1 — a worker from a previous deploy is already waiting:
+        // activate it immediately (self-heal stuck browsers).
+        if (reg.waiting && navigator.serviceWorker.controller) {
+          nudgeWaitingWorker(reg)
         }
-        return navigator.serviceWorker
-          .register('/sw.js')
-          .then((reg) => {
-            console.log('SW registered:', reg.scope)
+
+        // Case 2 — watch for updates discovered on later navigations.
+        reg.addEventListener('updatefound', () => {
+          const incoming = reg.installing
+          if (!incoming) return
+          incoming.addEventListener('statechange', () => {
+            if (incoming.state === 'installed' && navigator.serviceWorker.controller) {
+              nudgeWaitingWorker(reg)
+            }
           })
-          .catch((err) => {
-            console.log('SW registration failed:', err)
-          })
+        })
       })
       .catch(() => {
         /* network unavailable — retry on next load */
@@ -41,6 +83,7 @@ export function ServiceWorkerRegistrar() {
 
     return () => {
       cancelled = true
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
     }
   }, [])
 
