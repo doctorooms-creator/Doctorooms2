@@ -8645,3 +8645,32 @@ Work Log:
 Stage Summary:
 - FIX BATCH FULLY SHIPPED TO PROD: two-box form, no complaint, tokens on every approve path, FIFO queue, video badges, Rx "Token:" label, patient spinner fix, clinic walk-in ReferenceError fix — all live at doctorooms-hms.vercel.app.
 - Next backlog candidates: kiosk-mode one-form, dark-mode Booking Desk polish, print-token from Queue rows, patient-module audit (12), doctor-side care log, walk-in/express redirect page deletion, "Rx No" on prescription print (if pharmacy/insurance need arises).
+
+---
+Task ID: reallife-e2e-day
+Agent: Main (Z.ai Code)
+Task: User asked: "real life senario banao khudse aek hospital kese chalta hai real life me and real life wali testing start kro dekho bugs jo bhi hai kya hai" — build a self-designed realistic hospital day and E2E-test it to find bugs.
+
+Work Log:
+- Environment: Supabase circuit-breaker blocked → switched to sandbox SQLite (scripts/sandbox-sqlite.sh, prisma generate re-run after timeout); realtime-service :3006 socket.io reinstalled.
+- Seeded "Shree Care Multispeciality Hospital, Maninagar Ahmedabad" (tmp-scripts/seed-reallife.ts): 2 depts (GEN ₹500 / CARD ₹800), Dr. Anita Sharma + Dr. Vikram Mehta + schedules, receptionist Rina Patel, returning patients Suresh 9876500011 / Priya 9876500022 / Aarthi 9876500033 with past-visit history. IDs in /tmp/reallife-seed.json.
+- ACT 1 (front desk): two-box form E2E green — mobile 9876500011 → autofill "Suresh Yadav · 52y · 1 past visit" + Enter → GEN-001; NEW patient Ramesh Kumar → auto-register → GEN-002; family booking Kamla Devi (daughter's mobile) → GEN-003. Auto-reset form keeps desk pace.
+- ACT 2 (home bookings via patient API): Aarthi InPerson + Priya VideoCall 12:00 → both Pending.
+- ACT 3 (approvals): Pending-Bookings page Approve → GEN-004 (video) + GEN-005 issued; VIDEO badge renders in reception live queue (fix-batch item 5 verified live).
+- ACT 4 (doctor OPD): queue FIFO, video card "Start Video Call" → Jitsi room opens + booking flips Visited; Rx wizard full 8-step run (complaints→vitals→tables→medicines→advice→finish), Save & Print → print view shows "Token: GEN-001" (label fix verified).
+- ACT 5 (patient view): queue card PERFECT — token GEN-005, #4 in queue, "3 patients ahead", ~30 min est, Currently Serving GEN-004, progress bar 14% (audit Issue 1 fix confirmed end-to-end).
+- EDGE: emergency walk-in → EMR-006 jumps to #1; doctor No-show (two-click arm+confirm) removes patient; patient self-cancel works with confirm dialog.
+- 🐛 CRITICAL BUG FOUND (PDF-audit Issue 4 NOT actually fixed by previous batch): consultation lifecycle broken — (a) /api/prescription/init did NOT touch booking status, so patient stayed "Approve (waiting)" DURING the whole consultation; (b) /api/prescription/[id]/finalize stamped 'Visited' at Save & Print and NOTHING ever set 'Finish' automatically — the only Finish button lives on the doctor Appointments page (never clicked in a real OPD) and reception's VALID_TRANSITIONS had Visited: [] (desk couldn't close stuck patients). Patients would pile up "In OPD" all day.
+- FIX A: init route now flips Approve→Visited when wizard opens (In OPD badge appears during consultation) + fires consultation_started + notifyApproachingPatient (moved from finalize).
+- FIX B: finalize (Save & Print) now stamps booking 'Finish' — queue slot frees at print; fires consultation_completed + notifyNextPatient ("your turn" to next patient).
+- FIX C: receptionist status route VALID_TRANSITIONS Visited → ['Finish','NoShow'] + STATUS_MESSAGES.Finish added; reception Appointments page gains "Complete Visit" action (icon button + confirm dialog + toast) on In-Consultation rows.
+- Dev-server OOM-killed 4× during heavy route compiles (2.6GB next-server vs 4GB sandbox RAM) — restarts survived; webpack disk cache made re-compiles fast. Environment limitation, not an app bug.
+- Minor notes: patient-side API still stamps legacy APT- appointmentNo (display-only); name field accepts digits (test typo "Harish Patel58" saved silently); useSocket websocket warnings in sandbox are benign (polling fallback).
+- RE-VERIFICATION after fixes (fresh booking): Call Next → status Visited DURING consultation ✓; Save & Print → auto-Finish ✓; print Token: GEN-001 ✓; notifications "Consultation Started" + "Consultation Complete" both created ✓; reception Live Queue → 0 waiting / 1 completed today ✓ (no stuck patients).
+- bun run lint CLEAN; schema restored to postgres (deploy-schema-restore.sh) before commit; sandbox sqlite + tmp-scripts NOT committed.
+
+Stage Summary:
+- Full real-life hospital day simulated green: walk-in desk → tokens → FIFO queue w/ video badge → doctor OPD → video consult room → Rx print → auto-finish → patient queue card → emergency/no-show/cancel edges.
+- THE critical find: consultation lifecycle (In OPD → auto-Finish) was broken in 3 places; fixed via init/finalize/reception-escape-hatch triad. Lifecycle now: Approve → Call Next (Visited/In OPD) → Save & Print (Finish, slot freed, next patient notified).
+- Verified: lint clean, E2E green on fixed flow, notifications firing at both transitions.
+- Prod push follows this commit (auto-deploy on Git reconnect).

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/api-auth'
 import { db } from '@/lib/db'
-import { sendQueueNotification, notifyApproachingPatient } from '@/lib/queue-notifications'
+import { sendQueueNotification, notifyNextPatient } from '@/lib/queue-notifications'
 import { emitNotification } from '@/lib/emit-notification'
 
 export async function POST(
@@ -55,9 +55,16 @@ export async function POST(
     })
 
     // ── P4-G: critical writes in ONE transaction ──
-    // Prescription → Active (+ next visit) and booking → Visited commit
+    // Prescription → Active (+ next visit) and booking → Finish commit
     // atomically; a failure can never leave the Rx finalized while the
-    // booking still shows Approve (or vice-versa).
+    // booking still shows an active consultation status (or vice-versa).
+    //
+    // Real-life consultation lifecycle (PDF-audit Issue 4 root fix):
+    // 'Save & Print' is the moment the patient LEAVES with the printed Rx —
+    // the booking must close ('Finish') so the live queue / TV board /
+    // reception desk immediately free the slot. The transient 'Visited'
+    // ("In OPD") state is stamped when the wizard OPENS (see
+    // /api/prescription/init), not when it closes.
     await db.$transaction([
       db.prescription.update({
         where: { id },
@@ -68,20 +75,25 @@ export async function POST(
       }),
       db.booking.update({
         where: { id: prescription.bookingId },
-        data: { status: 'Visited' },
+        data: { status: 'Finish' },
       }),
     ])
 
     // ── P4-G: fire-and-forget tail (never blocks the print) ──
-    // Queue notifications (patient-side "consultation started" + approaching
-    // alert), department name lookup and the Rx #50 celebration are all
-    // side-effects the doctor must NOT wait for — the old route awaited the
-    // two notification sends inline before responding. Errors are swallowed
-    // individually so one failing side-effect can't kill the rest.
+    // Queue notifications (patient-side "consultation complete" + next
+    // patient "your turn"), department name lookup and the Rx #50 celebration
+    // are all side-effects the doctor must NOT wait for — the old route
+    // awaited the two notification sends inline before responding. Errors
+    // are swallowed individually so one failing side-effect can't kill the rest.
     void (async () => {
       try {
-        if (bookingBeforeUpdate && bookingBeforeUpdate.status === 'Approve') {
-          // Booking has no `department` relation — fetch the name inline.
+        // Consultation just COMPLETED (any pre-finalize active state counts:
+        // normal flow = 'Visited' set by wizard init; legacy/edge = 'Approve'
+        // if the wizard was opened before the init fix deployed).
+        if (
+          bookingBeforeUpdate &&
+          ['Visited', 'Approve'].includes(bookingBeforeUpdate.status)
+        ) {
           let departmentName: string | null = null
           if (bookingBeforeUpdate.departmentId) {
             const dept = await db.department.findUnique({
@@ -92,7 +104,7 @@ export async function POST(
           }
 
           const doctorName = doctor.user.name.replace('Dr. ', '')
-          await sendQueueNotification('consultation_started', {
+          await sendQueueNotification('consultation_completed', {
             bookingId: bookingBeforeUpdate.id,
             doctorId: doctor.id,
             patientUserId: bookingBeforeUpdate.userId,
@@ -100,7 +112,9 @@ export async function POST(
             tokenNumber: bookingBeforeUpdate.tokenNumber,
             departmentName,
           })
-          await notifyApproachingPatient(
+          // The consultation slot just freed — tell the very next waiting
+          // patient it's their turn.
+          await notifyNextPatient(
             doctor.id,
             bookingBeforeUpdate.tokenOrder,
             bookingBeforeUpdate.bookingDate
@@ -147,7 +161,7 @@ export async function POST(
         id,
         status: 'Active',
         nextVisit: nextVisit || null,
-        bookingStatus: 'Visited',
+        bookingStatus: 'Finish',
       },
     })
   } catch (error) {

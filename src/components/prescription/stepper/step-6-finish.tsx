@@ -130,8 +130,8 @@ export function Step6Finish({ onPrint }: { onPrint: (rxId: string) => void }) {
               }
             : old
       )
-      // Booking moved to Visited — refresh the caches that render it so
-      // dashboards/dialogs never show a stale status after the consult.
+      // Booking moved to Finish (consultation complete) — refresh the caches
+      // that render it so dashboards/dialogs never show a stale status.
       queryClient.invalidateQueries({ queryKey: ['booking', bookingId] })
       queryClient.invalidateQueries({ queryKey: ['doctor-queue'] })
       queryClient.invalidateQueries({ queryKey: ['doctor-stats'] })

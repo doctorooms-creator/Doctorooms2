@@ -113,7 +113,7 @@ export default function ReceptionistAppointmentsPage() {
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | 'extend' | 'visited' | null>(null)
+  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | 'extend' | 'visited' | 'complete' | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailTab, setDetailTab] = useState('details')
@@ -157,6 +157,8 @@ export default function ReceptionistAppointmentsPage() {
         Canceled: 'Appointment rejected',
         Extend: 'Appointment extended',
         Visited: 'Appointment marked as visited',
+        Finish: 'Visit completed — queue slot freed',
+        NoShow: 'Marked as no-show',
       }
       toast.success(toastMap[variables.status] || 'Appointment updated')
     },
@@ -165,7 +167,7 @@ export default function ReceptionistAppointmentsPage() {
     },
   })
 
-  const handleStatusAction = (id: string, action: 'approve' | 'reject' | 'extend' | 'visited') => {
+  const handleStatusAction = (id: string, action: 'approve' | 'reject' | 'extend' | 'visited' | 'complete') => {
     setSelectedId(id)
     setConfirmAction(action)
     setConfirmOpen(true)
@@ -178,6 +180,7 @@ export default function ReceptionistAppointmentsPage() {
         reject: 'Canceled',
         extend: 'Extend',
         visited: 'Visited',
+        complete: 'Finish',
       }
       statusMutation.mutate({
         id: selectedId,
@@ -435,6 +438,23 @@ export default function ReceptionistAppointmentsPage() {
                             </Button>
                           </div>
                         )}
+                        {/* Real-life consultation lifecycle (PDF-audit Issue 4):
+                            "In Consultation" rows need a desk-side escape hatch
+                            to close the visit if the doctor's Save & Print never
+                            landed (crash / stepped out / legacy flow). */}
+                        {appt.status === 'Visited' && (
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/50"
+                              onClick={() => handleStatusAction(appt.id, 'complete')}
+                              title="Complete Visit"
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </motion.tr>
                   )
@@ -568,6 +588,7 @@ export default function ReceptionistAppointmentsPage() {
               {confirmAction === 'reject' && 'Reject Appointment'}
               {confirmAction === 'extend' && 'Extend Appointment'}
               {confirmAction === 'visited' && 'Mark as Visited'}
+              {confirmAction === 'complete' && 'Complete Visit'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {confirmAction === 'approve' &&
@@ -578,6 +599,8 @@ export default function ReceptionistAppointmentsPage() {
                 'Are you sure you want to extend this appointment? The patient will be notified.'}
               {confirmAction === 'visited' &&
                 'Are you sure you want to mark this appointment as visited? The patient will be notified.'}
+              {confirmAction === 'complete' &&
+                'Close this consultation as completed? The queue slot frees immediately and the patient is notified.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -592,13 +615,16 @@ export default function ReceptionistAppointmentsPage() {
                 (confirmAction === 'extend') &&
                   'bg-violet-600 hover:bg-violet-700',
                 (confirmAction === 'visited') &&
-                  'bg-teal-600 hover:bg-teal-700'
+                  'bg-teal-600 hover:bg-teal-700',
+                (confirmAction === 'complete') &&
+                  'bg-emerald-600 hover:bg-emerald-700'
               )}
             >
               {confirmAction === 'approve' && 'Approve'}
               {confirmAction === 'reject' && 'Reject'}
               {confirmAction === 'extend' && 'Extend'}
               {confirmAction === 'visited' && 'Mark Visited'}
+              {confirmAction === 'complete' && 'Complete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

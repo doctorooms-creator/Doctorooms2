@@ -8,7 +8,12 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   Extend: ['Approve', 'Canceled'],
   // Phase 4: reception can also mark a confirmed patient as a no-show.
   Approve: ['Visited', 'Canceled', 'NoShow'],
-  Visited: [],
+  // Real-life consultation lifecycle (PDF-audit Issue 4): reception must be
+  // able to close a consultation that the doctor left dangling in the
+  // transient "In OPD" state (e.g. Rx printed via a legacy flow, doctor
+  // stepped out, or the wizard crashed before finalize). 'Finish' frees the
+  // live-queue slot; 'NoShow' covers "patient walked out mid-consultation".
+  Visited: ['Finish', 'NoShow'],
   Canceled: [],
   Finish: [],
 }
@@ -38,6 +43,11 @@ const STATUS_MESSAGES: Record<string, { title: string; patientMsg: string; docto
     title: 'Missed Appointment',
     patientMsg: 'You were marked as a no-show for your appointment. Please rebook if needed.',
     doctorMsg: 'A booking has been marked as a no-show.',
+  },
+  Finish: {
+    title: 'Consultation Completed',
+    patientMsg: 'Your consultation is complete. Prescription (if any) is available in your appointments.',
+    doctorMsg: 'A booking has been closed as completed.',
   },
 }
 
