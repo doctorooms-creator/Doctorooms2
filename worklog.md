@@ -8417,3 +8417,27 @@ Stage Summary:
 - PROD LIVE: doctorooms-hms.vercel.app now runs the One-Form Booking Home + nav unification
 - User-facing resolution: receptionist logs in → lands directly ON the booking form (no clicks); sidebar 'New Appointment' muscle-memory entry removed; legacy wizard clearly labeled 'Advanced Booking' with a banner pointing back to the Booking Desk for everyday walk-ins
 - All verification green: E2E booking loop, lint, VLM visual QA (desktop+mobile), prod smoke
+
+---
+Task ID: sw-stale-cache-fix
+Agent: Main (Z.ai Code)
+Task: User still saw the OLD home page after prod deploy — second root-cause + fix (browser-side staleness).
+
+Work Log:
+- VLM-analyzed user's 2nd screenshot: URL correct (/dashboard/receptionist) but OLD monitoring dashboard + OLD sidebar ("New Appointment") — prod build was new (patient-search=401) → problem was INSIDE the user's browser
+- Root cause found in PWA layer: public/sw.js v2 relied on an in-app "Update available" toast that never shipped → new service workers sat in `waiting` state forever; old SW kept serving stale build to the user; src/app/sw.ts (v1, SWR-on-everything) made it worse for browsers that still run it
+- Fixes shipped (commit 5468523):
+  * public/sw.js → v3: skipWaiting() on install (safe — navigations are network-first), activate purges ALL non-v3 caches
+  * ServiceWorkerRegistrar.tsx → true auto-update flow: nudge ALREADY-waiting workers (self-heal stuck browsers), watch updatefound→installed→SKIP_WAITING, controllerchange→single reload; no reload on first-ever registration
+  * src/app/sw.ts synced to v3 strategy (mirror of public/sw.js; fixed a nav-HTML-caching mistake before commit)
+- E2E (dev, agent-browser) logged in as SUNITA — the actual user from the PDFs (Rajesh Clinic, 1 dept General Medicine + 1 doctor Rajesh ₹300):
+  * One-form home renders perfectly in her EXACT setup: General Medicine + Dr. Rajesh chips AUTO-LOCKED (founder rule #2 verified in user's real configuration), ₹300 fee chip, Emergency, Add to Queue
+  * Quick booking flow: name-only → Enter → POST /bookings 201, token GEN-002, auto-reset fired
+  * Test data cleaned from shared prod Supabase: GEN-002 booking + OPD bill + 1 notification deleted
+- Deploy watch: 4 rapid pushes (1669a96→5468523, 11:06–11:24) queued sequential Vercel builds (Hobby concurrency=1); v3 deployment confirmed NOT yet live at 11:45 (prod sw.js still v2, prod login chunks still contain old registrar without controllerchange/updatefound strings); polling continues
+
+Stage Summary:
+- SECOND root cause of "same old page" resolved: PWA service worker stranded users on stale builds — v3 self-heals every browser on next visit (auto-skipWaiting + waiting-worker nudge + single reload)
+- User's exact account setup (Sunita@Rajesh Clinic: 1 dept, 1 doctor) E2E-verified against the one-form home — auto-lock works, booking works, queue token GEN-002 issued correctly
+- PENDING: v3 deploy to go live on Vercel (build queue); verify /sw.js serves VERSION='v3' then tell user to do one hard refresh
+- Guidance for user: Ctrl+Shift+R once; after v3 is live even a normal reload suffices and future deploys self-apply
