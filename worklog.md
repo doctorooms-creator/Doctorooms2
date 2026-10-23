@@ -8371,3 +8371,32 @@ Stage Summary:
 - New reusable API patient-search with visit intelligence (regulars-first ranking)
 - Old dashboard's monitoring features preserved in compact form (stat pills, today's appointments, queue rail)
 - Next-phase candidates: dark-mode polish pass, per-receptionist default dept/doctor memory (DB), print-token auto-popup option, kiosk-mode variant of the one-form
+
+---
+Task ID: nav-unification-prod-deploy
+Agent: Main (Z.ai Code)
+Task: User reported "same old form still showing" — root-cause + fix + prod deploy of the One-Form Booking Home.
+
+Work Log:
+- VLM-analyzed user's screenshot: they were on doctorooms-hms.vercel.app/dashboard/receptionist/booking (PROD + LEGACY 3-step wizard via sidebar "New Appointment")
+- Root cause 1 (primary): redesign commit 656a990 was NEVER pushed to origin/main → Vercel prod still ran the old build
+- Root cause 2 (UX): sidebar "New Appointment" pointed to the legacy wizard (kept as "Advanced Booking") — receptionist muscle-memory landed on the old form
+- Fixed src/lib/sidebar-config.ts: receptionist nav reorganized — "Booking Desk" (CalendarPlus, href /dashboard/receptionist) is now the FIRST entry; "New Appointment"→/booking entry REMOVED; legacy wizard demoted to "Advanced Booking" (CalendarDays) below Family Access
+- Fixed dashboard-header.tsx route titles: '/dashboard/receptionist' → 'Booking Desk', '/dashboard/receptionist/booking' → 'Advanced Booking'
+- Legacy /booking page: renamed h1 to "Advanced Booking", subtitle now "Future slots, express auto-doctor and video consults", added teal context banner at top ("Everyday walk-in? The Booking Desk (one smart form, auto-reset) is faster…") with "Open Booking Desk" button → /dashboard/receptionist; updated file docblock
+- Retargeted retired routes: walk-in & express pages now redirect to /dashboard/receptionist (one-form home) instead of /booking
+- Home page footer link text: "open full desk →" → "Advanced Booking →"
+- E2E VERIFIED via agent-browser (dev-login Rina Patel @ Zydus):
+  * /dashboard/receptionist renders "Booking Desk" one-form (smart field "e.g. 9876543210 or Ramesh…", dept chips, doctor cascade w/ fees, Emergency, Add to Queue, Live Queue rail) ✓
+  * Sidebar: Booking Desk | Appointments | … | Advanced Booking | Reports — no "New Appointment" entry ✓
+  * Advanced Booking page: banner + renamed header + "Open Booking Desk" button navigates back to one-form ✓
+  * FULL booking loop: typed 9876500001 → Suresh Kumar card auto-locked → Cardiology → Dr. Amit Shah (₹800) → complaint → Enter → POST /bookings 201 (token CARD-001, ₹800 charge stamped) → auto-reset fired (smart field empty again) ✓
+  * VLM visual QA desktop + mobile (390px): clean, no overflow/overlap defects on both pages ✓
+  * bun run lint: CLEAN (0 errors)
+- Cleaned E2E test data: CARD-001 booking + its OPD bill deleted from dev DB
+- PUSHED origin/main (55cfbbf..1669a96) — Vercel auto-deploy triggered; prod now gets: One-Form home + patient-search API + nav unification + Advanced Booking banner
+
+Stage Summary:
+- "Same old form" complaint RESOLVED: (1) prod had stale build — now deployed; (2) nav muscle-memory fixed — every path (sidebar New Appointment muscle-memory→gone, walk-in/express redirects, home) now lands on the One-Form Booking Desk
+- Receptionist booking surface is now UNAMBIGUOUS: ONE default (one-form home) + ONE clearly-labeled exception (Advanced Booking for future slots/express/video)
+- Remaining watch item: verify Vercel deploy completed (poll prod URL); confirm with user on next check-in
