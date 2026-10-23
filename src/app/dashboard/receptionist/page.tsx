@@ -79,11 +79,11 @@ interface ReceptionistStats {
   }[]
   departments?: {
     id: string
-    name: string
-    shortCode: string
-    icon: string
-    todayCount: number
-    activeDoctors: number
+    name?: string
+    shortCode?: string
+    icon?: string
+    todayCount?: number
+    activeDoctors?: number
   }[]
 }
 
@@ -237,7 +237,7 @@ export default function ReceptionistDashboardPage() {
           <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
             {stats.departments.map((dept, i) => {
               const color = departmentColors[i % departmentColors.length]
-              const DeptIcon = departmentIconMap[dept.shortCode.toUpperCase()] || Building2
+              const DeptIcon = departmentIconMap[dept.shortCode?.toUpperCase() || ''] || Building2
               return (
                 <motion.div
                   key={dept.id}
@@ -262,10 +262,10 @@ export default function ReceptionistDashboardPage() {
                           'inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase',
                           color.badge
                         )}>
-                          {dept.shortCode}
+                          {dept.shortCode || 'OPD'}
                         </span>
                       </div>
-                      <p className="mt-3 truncate text-sm font-bold">{dept.name}</p>
+                      <p className="mt-3 truncate text-sm font-bold">{dept.name || 'Department'}</p>
                       <div className="mt-2 space-y-0.5">
                         <p className="text-xs text-muted-foreground">
                           <span className="font-medium text-foreground">{dept.todayCount}</span> patients today

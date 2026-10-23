@@ -86,6 +86,47 @@ export async function GET(req: NextRequest) {
         _count: true,
       })
 
+      // ── Enrich departments for the dashboard cards (crash fix: the page
+      // expects id/name/shortCode/todayCount/activeDoctors — previously the
+      // API only returned {departmentId, count}, so dept.shortCode was
+      // undefined and .toUpperCase() crashed the whole dashboard in
+      // Hospital Mode) ──
+      const deptIds = deptCounts.map((d) => d.departmentId).filter((id): id is string => !!id)
+      const [deptInfos, activeDoctorLinks] = await Promise.all([
+        db.department.findMany({
+          where: { id: { in: deptIds } },
+          select: { id: true, name: true, shortCode: true, icon: true },
+        }),
+        db.doctorHospital.findMany({
+          where: { hospitalId: receptionist.hospitalId, status: 'Active' },
+          select: { departmentId: true },
+        }),
+      ])
+      const deptInfoMap = new Map(deptInfos.map((d) => [d.id, d]))
+      const activeDoctorsByDept = new Map<string, number>()
+      for (const link of activeDoctorLinks) {
+        if (!link.departmentId) continue
+        activeDoctorsByDept.set(
+          link.departmentId,
+          (activeDoctorsByDept.get(link.departmentId) || 0) + 1
+        )
+      }
+      const departments = deptCounts
+        .map((d) => {
+          const info = d.departmentId ? deptInfoMap.get(d.departmentId) : undefined
+          return {
+            id: d.departmentId || 'unassigned',
+            name: info?.name || 'General OPD',
+            shortCode: info?.shortCode || 'OPD',
+            icon: info?.icon || '',
+            todayCount: d._count,
+            activeDoctors: d.departmentId
+              ? activeDoctorsByDept.get(d.departmentId) || 0
+              : hospitalDoctors.length,
+          }
+        })
+        .filter((d) => d.todayCount > 0)
+
       return NextResponse.json({
         todayAppointments,
         todayVisited,
@@ -101,7 +142,7 @@ export async function GET(req: NextRequest) {
             }
           : null,
         doctor: null,
-        departments: deptCounts.map((d) => ({ departmentId: d.departmentId, count: d._count })),
+        departments,
         todayAppointmentsList: todayAppointmentsList.map((b) => ({
           id: b.id,
           appointmentNo: b.appointmentNo,

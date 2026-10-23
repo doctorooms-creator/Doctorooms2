@@ -31,11 +31,14 @@ import {
   Loader2,
   IndianRupee,
   Edit3,
+  KeyRound,
+  ChevronRight,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getAvatarDisplayUrl } from '@/lib/avatar-url'
+import { useRouter } from 'next/navigation'
 
 interface ProfileData {
   id: string
@@ -71,6 +74,7 @@ const statusColors: Record<string, string> = {
 }
 
 export default function ReceptionistProfilePage() {
+  const router = useRouter()
   const queryClient = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editOpen, setEditOpen] = useState(false)
@@ -305,6 +309,22 @@ export default function ReceptionistProfilePage() {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Security: Change Password (moved here from the sidebar per owner's PDF review) */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+        <Card className="cursor-pointer transition-colors hover:border-teal-300 dark:hover:border-teal-800" onClick={() => router.push('/dashboard/change-password')}>
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-rose-100 dark:bg-rose-900/40">
+              <KeyRound className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium">Change Password</p>
+              <p className="text-xs text-muted-foreground">Apna account password update karein</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </CardContent>
         </Card>
       </motion.div>

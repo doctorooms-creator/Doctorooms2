@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -55,6 +55,7 @@ interface DoctorProfile {
 export default function DoctorProfilePage() {
   const { user: _user } = useAuthStore()
   const queryClient = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [form, setForm] = useState<Partial<DoctorProfile> | null>(null)
 
@@ -77,6 +78,38 @@ export default function DoctorProfilePage() {
     },
     onError: () => toast.error('Failed to update profile'),
   })
+
+  const avatarMutation = useMutation({
+    mutationFn: (formData: FormData) =>
+      fetch('/api/doctor/avatar', {
+        method: 'POST',
+        body: formData,
+      }).then((r) => r.json()),
+    onSuccess: () => {
+      toast.success('Profile photo updated')
+      queryClient.invalidateQueries({ queryKey: ['doctor-profile'] })
+    },
+    onError: () => toast.error('Failed to upload photo'),
+  })
+
+  const handleAvatarClick = () => fileInputRef.current?.click()
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast.error('Only JPEG, PNG, WebP images allowed')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be under 2MB')
+      return
+    }
+    const formData = new FormData()
+    formData.append('avatar', file)
+    avatarMutation.mutate(formData)
+    e.target.value = ''
+  }
 
   const doctor = data?.doctor
   const displayData = form ?? doctor
@@ -140,18 +173,33 @@ export default function DoctorProfilePage() {
           <CardContent className="p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-4">
-                <div className="relative">
+                <div className="relative group">
                   <Avatar className="h-20 w-20">
                     <AvatarImage src={getAvatarDisplayUrl(doctor.profileImg)} />
                     <AvatarFallback className="text-2xl bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300">
                       {doctor.name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
-                  {isEditing && (
-                    <button className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-teal-600 text-white shadow-md hover:bg-teal-700 transition-colors">
-                      <Camera className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleAvatarClick}
+                    disabled={avatarMutation.isPending}
+                    className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-100"
+                    aria-label="Change profile photo"
+                  >
+                    {avatarMutation.isPending ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                    ) : (
+                      <Camera className="h-5 w-5 text-white" />
+                    )}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handleAvatarChange}
+                  />
                 </div>
                 <div>
                   <h2 className="text-xl font-bold">{doctor.name}</h2>

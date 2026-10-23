@@ -228,3 +228,48 @@ NEW APPOINTMENT (dashboard quick action + Appointments page button)
 ---
 
 *Grounded sources: PDF (4 issues) + VLM screenshot analysis + live code audit (sidebar-config.ts, receptionist/page.tsx:240, stats/route.ts:104, 3 booking pages ~3,500 lines + 3 POST APIs + token-utils/queue-ordering, doctor/patient profile pages, family-access client, avatar routes). Zero files modified.*
+
+---
+
+## PART D — FOUNDER-LEVEL SCENARIO ANALYSIS (owner input: 23 Oct 2026)
+**Owner's directives:** (1) Family Access KEEP. (2) Core flow = reception → department choose → associated doctor select → patient doctor ki queue mein. Uniform tokens — alag-alag type ke token uniformity todte hain, patient confuse hota hai. (3) Queue system aur baaki sab UNTOUCHED — production grade, saare scenarios.
+
+### Asli hospital founder ki nazar se — 7 scenarios jo design ko chalayenge
+
+| # | Scenario | Real-hospital behavior | System behavior (unified) |
+|---|---|---|---|
+| S1 | **Aam OPD walk-in** (subah ka rush) | Reception poochta hai kya dikhana hai → dept → us dept ka doctor → patient queue mein | Dept → Doctor (cascading) → aaj ki date → optional slot ya queue-tail → token slip |
+| S2 | **Bhaag-daad mode** (50-log line) | Faltu cheezein skip, jo doctor free hai wahan bhejo | Express toggle: sirf naam + dept → auto least-busy doctor → instant token print |
+| S3 | **Emergency** (chest pain) | Sabse pehle, seedha doctor ke paas | Emergency toggle → EMR-00X token, queue-top (existing behavior KEEP) |
+| S4 | **Advance booking** (phone/counter se kal ke liye) | Receipt abhi, token us din check-in pe | Date future + slot choose → booking ABHI confirm → **token abhi issue** (future counter window already sahi hai — token-utils line 39-42) → patient apne din pe queue mein slotted position |
+| S5 | **Cancel/No-show** | Token number gap reh jata hai (normal) | Counter max+1 chalta hai, reuse nahi — KABHI gap refill nahi (TV board stability) |
+| S6 | **2 receptionists same time** | Duplicate token kabhi nahi | Serializable tx + P2034 retry ×5 — walk-in route ka pattern SAB pe apply |
+| S7 | **Registered vs unregistered patient** | Purana patient → record link; naya → register; sirf naam bhi chale | Mobile lookup (auto) / Register New (User create) / Quick Name (guest) — teeno link modes |
+
+### Uniformity rules (LOCKED — ye todna nahi hai)
+1. **Ek hi token system:** `{DEPT-shortCode}-{NNN}` per-doctor-per-day (GEN-001, PEDI-002…) — **EMR- sirf emergency** (medical necessity, booking-type difference nahi). APT/DOC-/EXP- prefixes RETIRE — naya bookings ek hi appointmentNo generator pe.
+2. **Har confirmed booking = token.** Reception bookings (aaj ya future) ko ab bhi token nahi milta tha — ye hi asli non-uniformity thi. Fix: sab unified POST bookings token payengi.
+3. **Queue UNTOUCHED:** slotAwareSort (emergency → slotted → unslotted), queue-updated events, TV board, print queue, doctor queue view — zero logic change. Naye bookings bas sahi fields (tokenNumber, tokenOrder, appointmentCharge, bookingMode) ke saath aayenge.
+4. **Charge ALWAYS stamped** (express mein null reh jata tha — billing bug fix).
+5. **Notifications ALWAYS** (patient + doctor + queue-updated emit) — teeno modes mein.
+
+### Final design — "Ek Booking Desk, teen modes"
+
+```
+NEW APPOINTMENT (sidebar top + dashboard quick action + Appointments page button)
+STEP 1 — PATIENT: [📱 Mobile Lookup] [➕ Register New] [⚡ Quick Name]
+STEP 2 — CORE (owner ka flow): Department → associated Doctor (cascading select)
+STEP 3 — WHEN: Date (default: aaj)
+   ├── "Aaj — Queue mein daalo" (default) → optional slot grid + queue-tail + emergency toggle
+   ├── "Aaj — Express" (S2 speed) → doctor auto-assign hide, disease optional → PRINT TOKEN CTA
+   └── "Future date — Slot book" (S4) → calendar + SlotGrid + conflict-guard
+RESULT: token slip (har mode mein printable) + queue mein entry + notifications
+```
+- **Appointments page** = management list (tabs/filters/approvals/chat) — booking dialog HATADO, button naya flow kholta hai
+- **Queue page + Print Queue + TV board** = as-is (owner: "queue wala system sahi se kaam karna chahiye")
+- **Walk-in + Express pages** = retire (modes ban chuke hain); routes 1 release redirect ke saath
+
+### Execution note
+Phase 2 (booking unification) implement karne se PEHLE ye founder design owner ko dikhana — is turn mein Phase 0/1/3 (low-risk approved fixes) + ye doc deliver ho rahi hai. Phase 2 next turn mein full E2E ke saath.
+
+**Family Access: REVISION** — owner ne KEEP bola. Sidebar entry bhi rahegi. Koi fold nahi, koi delete nahi. Phase 1 se Family Access removal HATA DIYA gaya hai.
