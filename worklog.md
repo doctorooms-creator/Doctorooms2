@@ -8626,3 +8626,22 @@ Stage Summary:
 - All 4 PDF issues + 2-box form + video requirement shipped and E2E-verified: every approve path stamps a token (online+video+walk-in uniform), queue is pure FIFO, video patients badged, complaint is the doctor's job only, patient side shows position or honest token-pending.
 - Clinic walk-in ReferenceError (pre-existing since P2) fixed — clinic-mode bookings were 500ing on the branch that ran when no departmentId was sent.
 - Pushed to origin/main → Vercel auto-deploys (webhook reconnected earlier).
+
+---
+Task ID: pdf-fix-batch-prod-verify
+Agent: Main (Z.ai Code)
+Task: Push 5eb95ef → Vercel auto-deploy → full PROD verification of the fix batch.
+
+Work Log:
+- Push auto-deployed (Git webhook working): confirmed via new appointments tab labels "In Consultation"/"Completed" on prod
+- PROD E2E (rina.reception@zydus.com, Zydus hospital mode):
+  * Two-box form LIVE: "Mobile number" + "Patient name" comboboxes; chief complaint field GONE
+  * Mobile 9876543299 → "QA Mobile Patient" auto-locked ("Existing patient verified", name box auto-filled, 1 past visit)
+  * Cardiology → Dr. Amit Shah → Enter → BOOKING CONFIRMED with token CARD-002 (no complaint needed) → live queue #1
+  * Cleanup: booking rejected via Appointments dialog → queue back to "Queue is empty"; Canceled count 2 (both QA records)
+  * Console: zero app errors (only known socket-timeout warnings on prod)
+- Screenshots: /tmp/prod-twobox-final.png
+
+Stage Summary:
+- FIX BATCH FULLY SHIPPED TO PROD: two-box form, no complaint, tokens on every approve path, FIFO queue, video badges, Rx "Token:" label, patient spinner fix, clinic walk-in ReferenceError fix — all live at doctorooms-hms.vercel.app.
+- Next backlog candidates: kiosk-mode one-form, dark-mode Booking Desk polish, print-token from Queue rows, patient-module audit (12), doctor-side care log, walk-in/express redirect page deletion, "Rx No" on prescription print (if pharmacy/insurance need arises).
