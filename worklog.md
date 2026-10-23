@@ -8536,3 +8536,29 @@ Stage Summary:
 - USER ACTION PATH given (Hinglish, click-by-click): Vercel → Projects → doctorooms-hms → Settings → Git → connect doctorooms-creator/Doctorooms2 (main); then tell me → I push a trigger commit → build goes green → hard refresh (Ctrl+Shift+R); explicit warning: "Redeploy" button would only rebuild the OLD 1397ae5 — useless for new code
 - Everything else is green locally: code E2E-proven, lint clean, origin/main synced (594ed31), cron watcher live (472411)
 
+
+---
+Task ID: prod-deploy-success-e2e
+Agent: Main (Z.ai Code)
+Task: User reconnected Vercel Git integration ("ho gya hai connect" + screenshot). Triggered deploy, watched it go live, and ran full E2E verification of the One-Form Booking Desk ON PRODUCTION.
+
+Work Log:
+- VLM-analyzed user's screenshot: Vercel project settings → Git → doctorooms-creator/Doctorooms2 now shows "Connected just now" (Disconnect button visible, integration toggles on) — webhook restored
+- Pushed trigger commit b9cdf6d ("git-reconnect trigger") → polled prod: sw.js flipped v2→v3 (7293B→7781B) at ~199s — NEW BUILD LIVE
+- PROD E2E via agent-browser (login rina.reception@zydus.com):
+  * NEW Booking Desk renders: sidebar "Booking Desk" first, no "New Appointment", "Advanced Booking" demoted; header h1 "Booking Desk"; 11 dept chips (Zydus mode); Emergency + Auto-print toggles; Advanced Booking → link; Live Queue rail
+  * patient-search API: 200 application/json with session (was HTML 404 pre-deploy) — real patients returned (QA Mobile Patient 9876543299, Vikram Recent 9876500011)
+  * GOLDEN PATH (returning patient): typed 9876543299 → "QA Mobile Patient" auto-locked with "Existing patient verified" badge → Cardiology chip → doctor cascade w/ fees (Dr. Amit Shah ₹800 / Dr. Priya Patel ₹500) → complaint → Add to Queue → BOOKING CONFIRMED: TOKEN CARD-001, Queue #1, charge ₹800 stamped, Live Queue updated instantly, auto-reset countdown visible, Print Token button present
+  * React-strict note for future E2E: input.fill via eval doesn't trigger React onChange reliably — use agent-browser keyboard type on focused input (native setter trick alone wasn't enough; real keystrokes were)
+  * CLEANUP: rejected BRK-20261024-0001 via Appointments page (title='Reject' icon button → alertdialog → confirm Reject); queue back to 0 waiting/"Queue is empty"; canceled count 1 (only QA record); real data untouched (Delhi Patient Four still pending=1)
+  * Desk-memory VERIFIED on prod by accident: VLM reviewing mobile screenshot spotted the "last used" pill — Cardiology+Dr. Amit auto-pre-selected after reload (booking-preferences API persisted the pairing)
+  * Mobile 390px: all elements present, VLM confirms clean layout, no overlap/cut-off, touch targets adequate
+  * Console: ZERO errors; warnings only (metadataBase localhost, THREE.Clock deprec, [useSocket] timeout — realtime :3006 is sandbox-only, app degrades to polling on prod; pre-existing, not deploy-related)
+- Screenshots: /tmp/prod-booking-e2e.png (token flash), /tmp/prod-bookingdesk-final.png (clean queue), /tmp/prod-bookingdesk-mobile.png
+
+Stage Summary:
+- MILESTONE: THE DEPLOY BLOCKER IS DEAD. Git integration restored by owner → trigger push → build live in ~3.5 min. EVERYTHING is now on prod: One-Form Booking Desk, nav unification, SW v3 self-heal, desk memory, auto-print toggle.
+- Prod E2E fully green: login, patient lookup/lock, dept/doctor cascade, booking, token, charge stamp, live queue, auto-reset, desk memory, mobile layout, queue cleanup — all verified against the REAL prod DB.
+- User-facing guidance: one hard refresh (Ctrl+Shift+R) to bust the old SW cache; SW v3 will self-heal all future deploys automatically.
+- Known prod limitations (non-blocking): realtime websocket absent on Vercel (socket timeouts in console, app falls back to polling — candidate future fix: disable socket on prod or host realtime); metadataBase warning (cosmetic).
+- Next-phase backlog candidates: kiosk-mode one-form, dark-mode Booking Desk polish, print-token from Queue page rows, patient-module audit (12 items), doctor-side care log visibility, walk-in/express redirect page deletion.
