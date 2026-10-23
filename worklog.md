@@ -8535,3 +8535,4 @@ Stage Summary:
 - Screenshot decoded for user: red errors = old "my-project" rows, ignorable; the REAL issue = newest deployment is old commit 1397ae5 — new code has never been built by Vercel because the GitHub→Vercel webhook is severed
 - USER ACTION PATH given (Hinglish, click-by-click): Vercel → Projects → doctorooms-hms → Settings → Git → connect doctorooms-creator/Doctorooms2 (main); then tell me → I push a trigger commit → build goes green → hard refresh (Ctrl+Shift+R); explicit warning: "Redeploy" button would only rebuild the OLD 1397ae5 — useless for new code
 - Everything else is green locally: code E2E-proven, lint clean, origin/main synced (594ed31), cron watcher live (472411)
+
