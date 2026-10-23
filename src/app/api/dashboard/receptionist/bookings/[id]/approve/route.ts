@@ -164,7 +164,7 @@ export async function PATCH(
         }
       }
       if (departmentId) {
-        const token = await generateTokenNumber(booking.doctorId, departmentId)
+        const token = await generateTokenNumber(booking.doctorId, departmentId, booking.bookingDate)
         tokenNumber = token.tokenNumber
         tokenOrder = token.tokenOrder
       }

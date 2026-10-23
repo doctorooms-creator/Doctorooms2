@@ -109,3 +109,55 @@ export async function generateTokenNumber(
     generateTokenNumberTx(tx, doctorId, departmentId, bookingDate, options)
   )
 }
+
+/**
+ * Centralized token stamping (PDF-audit fix, Issue 3): EVERY path that moves
+ * a booking into 'Approve' must leave it with a queue token — walk-in POST,
+ * Pending-Bookings /approve, Appointments-page /status, and the doctor-side
+ * status route all funnel through here. Idempotent: bookings that already
+ * carry a token are returned untouched. The counter window is the booking's
+ * OWN date (future-dated bookings consume their own day's counter).
+ *
+ * Department resolution mirrors the /approve route: use the stamped
+ * departmentId when present, else the doctor's primary Active hospital link
+ * (clinic bookings get e.g. GEN → SHARMA-0XX via their doctor's link).
+ * Returns null only when no department can be resolved (no Active link) —
+ * callers treat that as "token still pending" rather than failing the
+ * approval itself.
+ */
+export async function ensureBookingToken(booking: {
+  id: string
+  doctorId: string
+  departmentId?: string | null
+  hospitalId?: string | null
+  bookingDate: Date
+  tokenNumber?: string | null
+  tokenOrder?: number | null
+  isEmergency?: boolean | null
+}): Promise<{ tokenNumber: string; tokenOrder: number } | null> {
+  if (booking.tokenNumber && (booking.tokenOrder ?? 0) > 0) return null
+
+  let departmentId = booking.departmentId || undefined
+  if (!booking.hospitalId || !departmentId) {
+    const primaryLink = await db.doctorHospital.findFirst({
+      where: { doctorId: booking.doctorId, status: 'Active' },
+      orderBy: { createdAt: 'asc' },
+      select: { departmentId: true },
+    })
+    if (!primaryLink?.departmentId) return null
+    departmentId = departmentId || primaryLink.departmentId
+  }
+  if (!departmentId) return null
+
+  const token = await generateTokenNumber(
+    booking.doctorId,
+    departmentId,
+    booking.bookingDate,
+    { emergency: !!booking.isEmergency }
+  )
+  await db.booking.update({
+    where: { id: booking.id },
+    data: { tokenNumber: token.tokenNumber, tokenOrder: token.tokenOrder },
+  })
+  return token
+}

@@ -152,7 +152,10 @@ export default function PatientDashboardPage() {
     })),
   })
 
-  // Build a map of bookingId -> queueInfo
+  // Build a map of bookingId -> queueInfo + which fetches have FINISHED
+  // (a loaded-but-null result must show a "token pending" note — the old UI
+  // treated both loading and finished-no-token as "Loading queue…" forever,
+  // which hung the card whenever a booking never got a token).
   const queueMap = useMemo(() => {
     const map = new Map<string, QueueInfo | null>()
     queueableBookings.forEach((appt, idx) => {
@@ -162,6 +165,13 @@ export default function PatientDashboardPage() {
       }
     })
     return map
+  }, [queueableBookings, queueResults])
+  const queueFetchLoaded = useMemo(() => {
+    const loaded = new Set<string>()
+    queueableBookings.forEach((appt, idx) => {
+      if (queueResults[idx]?.isSuccess) loaded.add(appt.id)
+    })
+    return loaded
   }, [queueableBookings, queueResults])
 
   if (isLoading) {
@@ -293,10 +303,17 @@ export default function PatientDashboardPage() {
                             </div>
                           )}
                           {appt.status === 'Approve' && !queueInfo && appt.hospitalId && queueableBookings.some((q) => q.id === appt.id) && (
-                            <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Loading queue…
-                            </div>
+                            queueFetchLoaded.has(appt.id) ? (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3" />
+                                Token pending — clinic will assign your queue number
+                              </div>
+                            ) : (
+                              <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Loading queue…
+                              </div>
+                            )
                           )}
                         </div>
                         <div className="hidden sm:flex flex-col items-end gap-1">

@@ -97,8 +97,12 @@ const tabs = [
   { value: 'all', label: 'All' },
   { value: 'Pending', label: 'Pending' },
   { value: 'Approve', label: 'Approved' },
-  { value: 'Visited', label: 'Visited' },
-  { value: 'Finish', label: 'Finished' },
+  // 'Visited' is the TRANSIENT in-consultation state (doctor pressed
+  // "Call Next"); 'Finish' is the completed visit — labels match the
+  // doctor/queue pages so reception stops hunting for "visited" patients
+  // in the wrong tab (owner PDF-audit feedback).
+  { value: 'Visited', label: 'In Consultation' },
+  { value: 'Finish', label: 'Completed' },
   { value: 'Canceled', label: 'Canceled' },
 ]
 

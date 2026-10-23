@@ -12,6 +12,7 @@ import {
   MapPin,
   RefreshCw,
   AlertCircle,
+  Video,
 } from 'lucide-react'
 import { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,6 +55,7 @@ interface QueueItem {
   timeSlot: string
   status: string
   bookingType: string
+  bookingMode?: string | null
   createdAt: string
   doctorId: string
   doctorName: string
@@ -189,7 +191,17 @@ function QueueItemRow({ item, index }: { item: QueueItem; index: number }) {
 
       {/* Patient name */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{item.patientName}</p>
+        <p className="text-sm font-medium truncate">
+          {item.patientName}
+          {item.bookingMode === 'VideoCall' && (
+            <span
+              title="Video consultation — patient is at home"
+              className="ml-1.5 inline-flex items-center gap-0.5 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 align-middle text-[9px] font-semibold uppercase tracking-wide text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
+            >
+              <Video className="h-2.5 w-2.5" /> Video
+            </span>
+          )}
+        </p>
         {item.disease && (
           <p className="text-xs text-muted-foreground truncate max-w-[200px]">{item.disease}</p>
         )}

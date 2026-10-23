@@ -400,7 +400,10 @@ export function PrescriptionPrintView({ data, onClose, onPrint, autoPrint = true
                 </div>
                 {patient.id && (
                   <div>
-                    <span style={{ color: COLORS.gray500 }}>Patient ID: </span>
+                    {/* "Token" (owner decision): this value is the same-day
+                        queue token (GEN-001 etc.) which RESETS daily — honest
+                        label instead of "Patient ID" which implied permanence. */}
+                    <span style={{ color: COLORS.gray500 }}>Token: </span>
                     <span style={{ fontWeight: 700, color: COLORS.teal, letterSpacing: '0.3px' }}>{patient.id}</span>
                   </div>
                 )}

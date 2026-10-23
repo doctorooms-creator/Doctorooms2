@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth, RECEPTION_ROLES } from '@/lib/api-auth'
+import { ensureBookingToken } from '@/lib/token-utils'
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   Pending: ['Extend', 'Visited', 'Approve', 'Canceled'],
@@ -77,6 +78,13 @@ export async function PATCH(
       },
     })
 
+    // PDF-audit fix (Issue 3): this route is reached from the Appointments
+    // page's Approve action — previously it ONLY flipped the status, so
+    // bookings approved here entered the queue with NO token (the patient
+    // dashboard then hung on "Loading queue…" and the live-queue rail fell
+    // back to the appointmentNo tail). Centralized stamping guarantees the
+    // token on every approve path.
+
     if (!booking) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     }
@@ -115,6 +123,23 @@ export async function PATCH(
       },
     })
 
+    // Approve via this route must ALSO stamp the queue token (centralized
+    // guarantee — same as the Pending-Bookings /approve route).
+    let stampedToken: string | null = null
+    if (status === 'Approve') {
+      const token = await ensureBookingToken({
+        id: booking.id,
+        doctorId: booking.doctorId,
+        departmentId: booking.departmentId,
+        hospitalId: booking.hospitalId,
+        bookingDate: booking.bookingDate,
+        tokenNumber: booking.tokenNumber,
+        tokenOrder: booking.tokenOrder,
+        isEmergency: booking.isEmergency,
+      })
+      stampedToken = token?.tokenNumber ?? booking.tokenNumber ?? null
+    }
+
     // Send notifications
     const messages = STATUS_MESSAGES[status]
     const doctorName = booking.doctor?.user?.name || 'Unknown'
@@ -125,7 +150,7 @@ export async function PATCH(
         data: {
           userId: booking.userId,
           title: messages.title,
-          message: `${messages.patientMsg} (Dr. ${doctorName}, ${bookingDate})`,
+          message: `${messages.patientMsg} (Dr. ${doctorName}, ${bookingDate}).${stampedToken ? ` Token: ${stampedToken}.` : ''}`,
         },
       })
     }
@@ -144,6 +169,7 @@ export async function PATCH(
       booking: {
         id: updatedBooking.id,
         status: updatedBooking.status,
+        tokenNumber: stampedToken,
       },
     })
   } catch (error) {

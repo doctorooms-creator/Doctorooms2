@@ -8597,3 +8597,32 @@ Work Log:
 Stage Summary:
 - VIDEO CONSULT IS ALREADY TOKEN+QUEUE-DESIGNED — no new architecture needed; it inherits the same fixes queued for walk-ins.
 - Confirmed dev batch (user-approved "sab kuch sahi hai" + video requirement): 2-box name+mobile form, remove chief-complaint field, centralized token stamping on ALL approve paths (+bookingDate fix), queue order decision (user leans FIFO), video badge in queue UIs, Rx print "Patient ID"→"Token" label, patient queue-card spinner-vs-null fix, "Visited" tab semantics.
+
+---
+Task ID: pdf-audit-fix-batch
+Agent: Main (Z.ai Code)
+Task: User approved the full fix batch ("Go ahead") from the PDF audit + two-box form request. Implemented + E2E-verified all 8 fixes.
+
+Work Log:
+- FIX 1 (Token centralization): new ensureBookingToken() in src/lib/token-utils.ts (idempotent, dept fallback via doctorHospital, booking's-own-date counter); wired into receptionist /status route (Approve) + doctor /status route (Approve); /approve route now passes booking.bookingDate (future-date counter bug); status responses return tokenNumber
+- FIX 2 (FIFO): slotAwareSort rewritten — emergency tier first, then pure arrival order (tokenOrder asc, createdAt tiebreak); slotted-first Mode 2 REMOVED (owner: first-come-first-served; slots are display-only)
+- FIX 3 (Two-box form): Booking Desk smart field → separate Mobile + Name boxes; mobile 10-digit exact-match auto-locks + name auto-fills; name autocomplete dropdown (arrows+Enter pick); new mobile+name → register (age/gender inline); name-only → quick entry; shared combobox keyboard nav
+- FIX 4 (Complaint removed): field + state + validation deleted from form; walk-in POST route disease now optional ('' default); submit no longer requires it
+- FIX 5 (Video badges): Booking Desk live-queue rail + full Queue page show emerald "VIDEO" chip for bookingMode VideoCall (QueueItem.bookingMode added to both interfaces)
+- FIX 6 (Rx print): "Patient ID:" → "Token:" (print-view.tsx) — honest label for daily-resetting queue token
+- FIX 7 (Patient spinner): "Loading queue…" now only while fetch in-flight; loaded-but-no-token shows "Token pending — clinic will assign your queue number"
+- FIX 8 (Labels): appointments tabs Visited→"In Consultation", Finish→"Completed"; Booking Desk stat "visited"→"in OPD"
+- BONUS BUG (found by E2E): clinic-mode walk-in POST had ReferenceError `doctorId is not defined` (route.ts:334, undeclared var — 500 on EVERY clinic walk-in since P2); fixed to finalDoctorId. Also Enter-submit was broken by disabled patient boxes → global Enter handler added (guard: no dropdown open, canSubmit, not pending)
+- E2E (sandbox sqlite, Rajesh Clinic 1-dept/1-doctor + Suresh 9876500001):
+  * Two-box render ✓ no complaint field ✓ auto-lock + name auto-fill ✓ Enter→GEN-001 (existing) ✓ name-only→GEN-002 (quick) ✓ new mobile+name→GEN-003 (register) ✓
+  * Patient online booking (Pending, no token) → Appointments-page Approve → GEN-004 assigned via the FIXED /status path ✓ patient dashboard "Your Position #1 · You are next!" ✓
+  * Video booking → approve via /status API → GEN-005 ✓ queue shows VIDEO chip ✓
+  * FIFO verified on reception Queue page AND doctor dashboard: GEN-001→002→003→004→005 (slotted online booking did NOT jump the queue) ✓
+  * Doctor Call Next → GEN-001 "In Consultation" (doctor side) + appointments tab "In Consultation 1" + queue badge ✓
+  * Screenshots captured; dev.log clean; lint clean
+- Restored deploy state (postgres schema + Seoul .env); tmp seeds deleted
+
+Stage Summary:
+- All 4 PDF issues + 2-box form + video requirement shipped and E2E-verified: every approve path stamps a token (online+video+walk-in uniform), queue is pure FIFO, video patients badged, complaint is the doctor's job only, patient side shows position or honest token-pending.
+- Clinic walk-in ReferenceError (pre-existing since P2) fixed — clinic-mode bookings were 500ing on the branch that ran when no departmentId was sent.
+- Pushed to origin/main → Vercel auto-deploys (webhook reconnected earlier).

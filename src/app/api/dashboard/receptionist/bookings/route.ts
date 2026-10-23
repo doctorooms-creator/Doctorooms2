@@ -119,9 +119,8 @@ export async function POST(req: NextRequest) {
     if (!patientName?.trim()) {
       return NextResponse.json({ error: 'Patient name is required' }, { status: 400 })
     }
-    if (visitMode === 'walkin' && !disease?.trim()) {
-      return NextResponse.json({ error: 'Disease/Reason is required for walk-in bookings' }, { status: 400 })
-    }
+    // Chief complaint is now OPTIONAL at the desk (owner decision): the
+    // doctor records it in the Rx wizard. disease defaults to '' below.
     if ((patientMode === 'existing' || patientMode === 'register') && !trimmedMobile) {
       return NextResponse.json(
         { error: 'Mobile number is required to look up / register a patient' },
@@ -331,8 +330,10 @@ export async function POST(req: NextRequest) {
       doctorFees = doctor.fees ?? 0
       // Clinic doctors carry their department via the primary Active hospital
       // link (token prefix + context), like the legacy walk-in route.
+      // (Fix: this lookup used the undeclared `doctorId` — a ReferenceError
+      // that 500'd every clinic-mode walk-in booking on this branch.)
       const primaryLink = await db.doctorHospital.findFirst({
-        where: { doctorId, status: 'Active' },
+        where: { doctorId: finalDoctorId, status: 'Active' },
         orderBy: { createdAt: 'asc' },
         select: { hospitalId: true, departmentId: true },
       })

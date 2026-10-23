@@ -7,23 +7,27 @@
  * The receptionist's #1 job is registering patients. This home page IS the
  * booking form — no navigation, no mode picking, no scrolling marathon:
  *
- *   SMART FIELD (one input, the system decides):
- *     • digits  → mobile lookup → existing patient auto-fills (locked card)
- *                 10 digits + no match → new-patient name row (auto register)
- *     • letters → patient-name search (autocomplete cards) — ignoring the
- *                 suggestions books a Quick walk-in with the typed name
+ *   TWO PATIENT BOXES (owner decision, Oct 2026 — replaces the single smart
+ *   field): 1 = Mobile number, 2 = Patient name.
+ *     • Mobile typed (exact 10-digit match) → existing patient auto-locks,
+ *       name box auto-fills
+ *     • Name typed → autocomplete dropdown → pick → mobile auto-fills
+ *     • Mobile (new) + name → new-patient register (age/gender optional row)
+ *     • Name only → quick walk-in, no account needed
  *
  *   DEPARTMENT / DOCTOR: single tap chips — auto-locked when only 1 exists;
  *                         otherwise the desk remembers the LAST-USED pairing
  *                         (per receptionist, persisted in User.settingsJson)
  *                         and pre-selects it with a "last used" hint
+ *   COMPLAINT: none — the doctor records it in the Rx wizard (owner
+ *              decision; removes double entry at the desk)
  *   EMERGENCY: always-visible 1-tap toggle
  *   AUTO-PRINT: optional toggle — prints every token slip automatically the
  *               moment a booking confirms (hidden same-origin iframe → the
  *               print-token page prints itself; survives popup blockers)
  *   SUBMIT: "Add to Queue" — Enter anywhere submits
  *   AUTO-RESET: after booking, token flashes ~5s, then the form silently
- *               clears and focus returns to the smart field (zero button
+ *               clears and focus returns to the mobile box (zero button
  *               presses between patients — reception has no time).
  *
  * Advanced flows (express auto-doctor, future slot booking, video consult)
@@ -55,11 +59,11 @@ import {
   Printer,
   RotateCcw,
   Scissors,
-  Search,
   Siren,
   Stethoscope,
   UserRound,
   Users,
+  Video,
   Wallet,
   X,
   Zap,
@@ -116,6 +120,7 @@ interface QueueItem {
   doctorName: string
   tokenNumber: string | null
   queuePosition: number
+  bookingMode?: string | null
 }
 
 interface ReceptionistStats {
@@ -187,28 +192,28 @@ type BookingPrefs = {
 
 export default function ReceptionistHomePage() {
   const queryClient = useQueryClient()
-  const smartInputRef = useRef<HTMLInputElement>(null)
-  const complaintInputRef = useRef<HTMLInputElement>(null)
+  const smartInputRef = useRef<HTMLInputElement>(null) // mobile box
   const nameInputRef = useRef<HTMLInputElement>(null)
   const resultCardRef = useRef<HTMLDivElement>(null)
   const autoResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [resetCountdown, setResetCountdown] = useState(0)
 
-  // ── Smart field state ──
-  const [smart, setSmart] = useState('')
+  // ── Two-box patient state (owner decision, PDF follow-up): one box for
+  // MOBILE, one for NAME. Either box finds an existing patient; the other
+  // auto-fills on lock. New patient = mobile + name typed by reception. ──
+  const [mobile, setMobile] = useState('')
+  const [nameQ, setNameQ] = useState('')
   const [selectedPatient, setSelectedPatient] = useState<PatientMatch | null>(null)
   const [showMatches, setShowMatches] = useState(false)
   const [highlightIndex, setHighlightIndex] = useState(0)
 
   // ── New-patient fields (register / quick) ──
-  const [newName, setNewName] = useState('')
   const [newAge, setNewAge] = useState('')
   const [newGender, setNewGender] = useState('')
 
   // ── Visit fields ──
   const [departmentId, setDepartmentId] = useState('')
   const [doctorId, setDoctorId] = useState('')
-  const [disease, setDisease] = useState('')
   const [isEmergency, setIsEmergency] = useState(false)
 
   // ── Result flash ──
@@ -273,16 +278,23 @@ export default function ReceptionistHomePage() {
     () => departmentDoctors.find((d) => d.id === doctorId) ?? null,
     [departmentDoctors, doctorId]
   )
-  // ── Smart search (debounced by react-query key) ──
-  const trimmedSmart = smart.trim()
-  const isDigitMode = trimmedSmart.length > 0 && /^[0-9]+$/.test(trimmedSmart)
-  const searchReady = !selectedPatient && trimmedSmart.length >= 2 && !result
+  // ── Patient search (debounced by react-query key) ──
+  // Mobile box wins when filled (digits → exact-lookup flow); otherwise the
+  // name box drives the search (letters → name autocomplete).
+  const trimmedMobile = mobile.trim()
+  const trimmedNameQ = nameQ.trim()
+  const searchQ = trimmedMobile.length >= 3
+    ? trimmedMobile
+    : trimmedNameQ.length >= 2
+      ? trimmedNameQ
+      : ''
+  const searchReady = !selectedPatient && !result && searchQ.length >= 2
 
   const { data: searchData, isFetching: searchLoading } = useQuery({
-    queryKey: ['patient-search', trimmedSmart],
+    queryKey: ['patient-search', searchQ],
     queryFn: async (): Promise<{ matches: PatientMatch[] }> => {
       const res = await fetch(
-        `/api/dashboard/receptionist/patient-search?q=${encodeURIComponent(trimmedSmart)}`
+        `/api/dashboard/receptionist/patient-search?q=${encodeURIComponent(searchQ)}`
       )
       if (!res.ok) return { matches: [] }
       return res.json()
@@ -294,15 +306,14 @@ export default function ReceptionistHomePage() {
 
   // Auto-select an EXACT mobile match (the "one keystroke flow" for regulars)
   useEffect(() => {
-    if (!isDigitMode || trimmedSmart.length < 10 || selectedPatient || searchLoading) return
-    const exact = matches.filter((m) => m.mobileNo === trimmedSmart)
+    if (trimmedMobile.length < 10 || selectedPatient || searchLoading) return
+    const exact = matches.filter((m) => m.mobileNo === trimmedMobile)
     if (exact.length === 1) {
       setSelectedPatient(exact[0])
+      setNameQ(exact[0].name) // name box auto-fills on mobile lock
       setShowMatches(false)
-      // Nudge focus to the next empty required field
-      setTimeout(() => complaintInputRef.current?.focus(), 60)
     }
-  }, [isDigitMode, trimmedSmart, matches, selectedPatient, searchLoading])
+  }, [trimmedMobile, matches, selectedPatient, searchLoading])
 
   // ── Auto-lock single department / single doctor (founder rule) ──
   useEffect(() => {
@@ -388,8 +399,8 @@ export default function ReceptionistHomePage() {
   })
 
   // ── Derived mode + validation (createMutation already declared above) ──
-  const mobileForSubmit = selectedPatient?.mobileNo ?? (isDigitMode && trimmedSmart.length >= 10 ? trimmedSmart : '')
-  const effectiveName = selectedPatient?.name ?? (isDigitMode ? newName.trim() : trimmedSmart)
+  const mobileForSubmit = selectedPatient?.mobileNo ?? (trimmedMobile.length >= 10 ? trimmedMobile : '')
+  const effectiveName = selectedPatient?.name ?? trimmedNameQ
   const patientMode: 'existing' | 'register' | 'quick' = selectedPatient
     ? 'existing'
     : mobileForSubmit
@@ -397,7 +408,6 @@ export default function ReceptionistHomePage() {
       : 'quick'
 
   const missingName = !effectiveName
-  const missingDisease = !disease.trim()
   const missingVisit = isHospitalMode
     ? !departmentId
       ? 'Select department'
@@ -406,12 +416,13 @@ export default function ReceptionistHomePage() {
         : null
     : null
   const canSubmit =
-    !missingName && !missingDisease && !missingVisit && !createMutation.isPending && !result
+    !missingName && !missingVisit && !createMutation.isPending && !result
 
   const handleSubmit = useCallback(() => {
     if (result) return
     if (missingName) {
-      if (isDigitMode) {
+      if (mobileForSubmit) {
+        // New mobile typed but the name box is still empty → register needs a name
         toast.error('Enter the patient name')
         nameInputRef.current?.focus()
       } else {
@@ -422,11 +433,6 @@ export default function ReceptionistHomePage() {
     }
     if (missingVisit) {
       toast.error(missingVisit)
-      return
-    }
-    if (missingDisease) {
-      toast.error('Enter the chief complaint (required for walk-in)')
-      complaintInputRef.current?.focus()
       return
     }
     createMutation.mutate({
@@ -441,9 +447,11 @@ export default function ReceptionistHomePage() {
       visitDate: undefined, // server defaults to today
       bookingMode: 'InPerson',
       isEmergency,
-      disease: disease.trim(),
+      // Chief complaint is the DOCTOR's job in the Rx wizard (owner
+      // decision) — reception never types it at the desk.
+      disease: '',
     })
-  }, [result, missingName, missingVisit, missingDisease, isDigitMode, patientMode, effectiveName, mobileForSubmit, selectedPatient, newGender, newAge, isHospitalMode, departmentId, doctorId, isEmergency, disease, createMutation])
+  }, [result, missingName, missingVisit, mobileForSubmit, patientMode, effectiveName, selectedPatient, newGender, newAge, isHospitalMode, departmentId, doctorId, isEmergency, createMutation])
 
   // ── AUTO-RESET: silent loop back to a fresh form (founder: no button press) ──
   const resetForm = useCallback(() => {
@@ -453,14 +461,13 @@ export default function ReceptionistHomePage() {
     }
     setResult(null)
     setResetCountdown(0)
-    setSmart('')
+    setMobile('')
+    setNameQ('')
     setSelectedPatient(null)
     setShowMatches(false)
     setHighlightIndex(0)
-    setNewName('')
     setNewAge('')
     setNewGender('')
-    setDisease('')
     setIsEmergency(false)
     // department / doctor survive — they are the desk's default context
     queryClient.removeQueries({ queryKey: ['patient-search'] })
@@ -495,32 +502,72 @@ export default function ReceptionistHomePage() {
         resetForm()
         return
       }
+      // Enter ANYWHERE submits — the locked patient boxes are disabled and
+      // browsers skip disabled inputs during implicit form submission, so
+      // the global listener is what keeps the one-Enter booking alive.
+      // Guarded: not while the match dropdown is open (Enter there picks
+      // the highlighted patient, handled by the combobox input itself).
+      if (
+        e.key === 'Enter' &&
+        !result &&
+        !showMatches &&
+        !createMutation.isPending &&
+        canSubmit
+      ) {
+        e.preventDefault()
+        handleSubmit()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [result, resetForm])
+  }, [result, resetForm, showMatches, canSubmit, handleSubmit, createMutation])
 
-  // ── Smart field handlers ──
-  const onSmartChange = (value: string) => {
-    // Pure digits → mobile-lookup mode; any letters → patient-name mode.
-    // The search API treats both — the smart field never blocks typing.
-    setSmart(value)
+  // ── Two-box handlers ──
+  // Shared combobox keyboard nav — ArrowUp/Down cycle the match list,
+  // Enter picks the highlighted match (any other Enter falls through to the
+  // form's submit handler = booking).
+  const onSearchBoxKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showMatches || matches.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightIndex((i) => (i + 1) % matches.length)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightIndex((i) => (i - 1 + matches.length) % matches.length)
+    } else if (e.key === 'Enter' && highlightIndex >= 0 && matches[highlightIndex]) {
+      e.preventDefault()
+      pickMatch(matches[highlightIndex])
+    }
+  }
+
+  const onMobileChange = (value: string) => {
+    // Digits only — a mobile box never needs letters.
+    const digits = value.replace(/[^0-9]/g, '').slice(0, 10)
+    setMobile(digits)
     if (selectedPatient) setSelectedPatient(null) // editing again → unlock
-    setShowMatches(value.trim().length >= 2)
+    setShowMatches(digits.trim().length >= 3)
+    setHighlightIndex(0)
+  }
+
+  const onNameChange = (value: string) => {
+    setNameQ(value)
+    // Editing the name of a locked patient re-opens the search (Change flow)
+    if (selectedPatient) setSelectedPatient(null)
+    setShowMatches(mobile.trim().length < 3 && value.trim().length >= 2)
     setHighlightIndex(0)
   }
 
   const pickMatch = (m: PatientMatch) => {
     setSelectedPatient(m)
-    setSmart(m.mobileNo || m.name)
+    setMobile(m.mobileNo || '')
+    setNameQ(m.name)
     setShowMatches(false)
-    setTimeout(() => complaintInputRef.current?.focus(), 60)
   }
 
   const clearPatient = () => {
     setSelectedPatient(null)
-    setSmart('')
-    setNewName('')
+    setMobile('')
+    setNameQ('')
     setNewAge('')
     setNewGender('')
     setTimeout(() => smartInputRef.current?.focus(), 40)
@@ -562,7 +609,10 @@ export default function ReceptionistHomePage() {
           </Badge>
           <Badge variant="secondary" className="gap-1.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
             <CheckCircle2 className="h-3.5 w-3.5" />
-            {stats?.todayVisited ?? 0} visited
+            {/* 'Visited' status = currently in consultation (transient);
+                completed visits land in 'Finish' — labelled honestly so the
+                desk stops expecting finished patients here. */}
+            {stats?.todayVisited ?? 0} in OPD
           </Badge>
           <Badge variant="secondary" className="gap-1.5 bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400">
             <ClipboardCheck className="h-3.5 w-3.5" />
@@ -670,122 +720,152 @@ export default function ReceptionistHomePage() {
                   }}
                   className="space-y-4"
                 >
-                  {/* SMART FIELD */}
-                  <div className="relative">
-                    <Label htmlFor="smart-field" className="text-xs font-medium">
-                      Mobile number or patient name
-                    </Label>
-                    <div className="relative mt-1">
-                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        id="smart-field"
-                        ref={smartInputRef}
-                        autoFocus
-                        value={selectedPatient ? selectedPatient.mobileNo || selectedPatient.name : smart}
-                        onChange={(e) => onSmartChange(e.target.value)}
-                        onFocus={() => {
-                          if (!selectedPatient && smart.trim().length >= 2) setShowMatches(true)
-                        }}
-                        onBlur={() => setTimeout(() => setShowMatches(false), 180)}
-                        onKeyDown={(e) => {
-                          if (!showMatches || matches.length === 0) return
-                          if (e.key === 'ArrowDown') {
-                            e.preventDefault()
-                            setHighlightIndex((i) => (i + 1) % matches.length)
-                          } else if (e.key === 'ArrowUp') {
-                            e.preventDefault()
-                            setHighlightIndex((i) => (i - 1 + matches.length) % matches.length)
-                          } else if (e.key === 'Enter' && highlightIndex >= 0 && matches[highlightIndex]) {
-                            e.preventDefault()
-                            pickMatch(matches[highlightIndex])
-                          }
-                        }}
-                        type={isDigitMode ? 'tel' : 'text'}
-                        inputMode={isDigitMode ? 'numeric' : 'text'}
-                        placeholder="e.g. 9876543210 or Ramesh…"
-                        disabled={!!selectedPatient && !!selectedPatient.mobileNo}
-                        className="h-12 pl-9 pr-10 text-base font-medium transition-shadow focus-visible:border-teal-400 focus-visible:ring-teal-400/50 disabled:cursor-default disabled:opacity-100"
-                        aria-label="Patient mobile number or name search"
-                        aria-expanded={showMatches && matches.length > 0}
-                        role="combobox"
-                        aria-controls="smart-matches"
-                      />
-                      {selectedPatient ? (
-                        <button
-                          type="button"
-                          onClick={clearPatient}
-                          className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                          aria-label="Clear patient and start over"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      ) : searchLoading ? (
-                        <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-                      ) : (
-                        isDigitMode &&
-                        trimmedSmart.length === 10 &&
-                        matches.length === 0 && (
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                            New
-                          </span>
-                        )
-                      )}
-                    </div>
+                  {/* TWO-BOX PATIENT ROW (owner decision): 1 = Mobile, 2 = Name.
+    Either box can pull up an existing patient (mobile exact-lookup or
+    name autocomplete); picking a match locks the card and auto-fills
+    the other box. New patient = mobile + name typed by reception. */}
+<div className="relative">
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    {/* BOX 1 — MOBILE NUMBER */}
+    <div>
+      <Label htmlFor="patient-mobile" className="text-xs font-medium">
+        Mobile number
+      </Label>
+      <div className="relative mt-1">
+        <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          id="patient-mobile"
+          ref={smartInputRef}
+          autoFocus
+          value={selectedPatient ? selectedPatient.mobileNo || '' : mobile}
+          onChange={(e) => onMobileChange(e.target.value)}
+          onFocus={() => {
+            if (!selectedPatient && mobile.trim().length >= 3) setShowMatches(true)
+          }}
+          onBlur={() => setTimeout(() => setShowMatches(false), 180)}
+          onKeyDown={onSearchBoxKeyDown}
+          type="tel"
+          inputMode="numeric"
+          maxLength={10}
+          placeholder="9876543210"
+          disabled={!!selectedPatient && !!selectedPatient.mobileNo}
+          className="h-12 pl-9 pr-10 text-base font-medium tracking-wide transition-shadow focus-visible:border-teal-400 focus-visible:ring-teal-400/50 disabled:cursor-default disabled:opacity-100"
+          aria-label="Patient mobile number"
+          aria-expanded={showMatches && matches.length > 0}
+          role="combobox"
+          aria-controls="patient-matches"
+        />
+        {selectedPatient && selectedPatient.mobileNo ? (
+          <button
+            type="button"
+            onClick={clearPatient}
+            className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Clear patient and start over"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        ) : searchLoading && searchQ === trimmedMobile ? (
+          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+        ) : (
+          trimmedMobile.length === 10 &&
+          matches.length === 0 && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+              New
+            </span>
+          )
+        )}
+      </div>
+    </div>
 
-                    {/* Match dropdown (name / partial-mobile search) */}
-                    {showMatches && !selectedPatient && matches.length > 0 && (
-                      <motion.ul
-                        id="smart-matches"
-                        role="listbox"
-                        initial={{ opacity: 0, y: -4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border bg-popover shadow-lg"
-                      >
-                        {matches.map((m, i) => (
-                          <li key={m.id} role="option" aria-selected={i === highlightIndex}>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => {
-                                e.preventDefault() // keep input focus logic intact
-                                pickMatch(m)
-                              }}
-                              onMouseEnter={() => setHighlightIndex(i)}
-                              className={cn(
-                                'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
-                                i === highlightIndex ? 'bg-teal-50 dark:bg-teal-950/40' : 'hover:bg-muted/60'
-                              )}
-                            >
-                              <Avatar className="h-8 w-8 shrink-0">
-                                <AvatarImage src={getAvatarDisplayUrl(m.profileImg)} alt={m.name} />
-                                <AvatarFallback className="bg-teal-100 text-xs text-teal-700 dark:bg-teal-900 dark:text-teal-300">
-                                  {m.name.charAt(0)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-medium">{m.name}</span>
-                                <span className="block truncate text-xs text-muted-foreground">
-                                  {m.mobileNo || 'no mobile'} · {m.gender || '—'}
-                                  {m.age != null ? ` · ${m.age}y` : ''}
-                                </span>
-                              </span>
-                              <span className="shrink-0 text-right">
-                                <span className="block text-xs font-semibold text-teal-600 dark:text-teal-400">
-                                  {m.totalVisits > 0 ? `${m.totalVisits} visits` : '1st visit'}
-                                </span>
-                                {m.lastVisit && (
-                                  <span className="block text-[10px] text-muted-foreground">
-                                    last {new Date(m.lastVisit).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                                  </span>
-                                )}
-                              </span>
-                            </button>
-                          </li>
-                        ))}
-                      </motion.ul>
-                    )}
-                  </div>
+    {/* BOX 2 — PATIENT NAME */}
+    <div>
+      <Label htmlFor="patient-name" className="text-xs font-medium">
+        Patient name
+      </Label>
+      <div className="relative mt-1">
+        <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          id="patient-name"
+          ref={nameInputRef}
+          value={selectedPatient ? selectedPatient.name : nameQ}
+          onChange={(e) => onNameChange(e.target.value)}
+          onFocus={() => {
+            if (!selectedPatient && mobile.trim().length < 3 && nameQ.trim().length >= 2) setShowMatches(true)
+          }}
+          onBlur={() => setTimeout(() => setShowMatches(false), 180)}
+          onKeyDown={onSearchBoxKeyDown}
+          type="text"
+          placeholder="e.g. Ramesh — new or existing"
+          disabled={!!selectedPatient}
+          className="h-12 pl-9 pr-3 text-base font-medium transition-shadow focus-visible:border-teal-400 focus-visible:ring-teal-400/50 disabled:cursor-default disabled:opacity-100"
+          aria-label="Patient name"
+          aria-expanded={showMatches && matches.length > 0}
+          role="combobox"
+          aria-controls="patient-matches"
+        />
+        {selectedPatient && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" aria-label="Existing patient verified">
+            <CheckCircle2 className="h-4 w-4" />
+          </span>
+        )}
+      </div>
+    </div>
+  </div>
 
-                  {/* PATIENT CARD — existing (auto-filled, locked) */}
+  {/* Match dropdown (mobile partial OR name search — sits under the pair) */}
+  {showMatches && !selectedPatient && matches.length > 0 && (
+    <motion.ul
+      id="patient-matches"
+      role="listbox"
+      initial={{ opacity: 0, y: -4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border bg-popover shadow-lg"
+    >
+      {matches.map((m, i) => (
+        <li key={m.id} role="option" aria-selected={i === highlightIndex}>
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault() // keep input focus logic intact
+              pickMatch(m)
+            }}
+            onMouseEnter={() => setHighlightIndex(i)}
+            className={cn(
+              'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors',
+              i === highlightIndex ? 'bg-teal-50 dark:bg-teal-950/40' : 'hover:bg-muted/60'
+            )}
+          >
+            <Avatar className="h-8 w-8 shrink-0">
+              <AvatarImage src={getAvatarDisplayUrl(m.profileImg)} alt={m.name} />
+              <AvatarFallback className="bg-teal-100 text-xs text-teal-700 dark:bg-teal-900 dark:text-teal-300">
+                {m.name.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">{m.name}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {m.mobileNo || 'no mobile'} · {m.gender || '—'}
+                {m.age != null ? ` · ${m.age}y` : ''}
+              </span>
+            </span>
+            <span className="shrink-0 text-right">
+              <span className="block text-xs font-semibold text-teal-600 dark:text-teal-400">
+                {m.totalVisits > 0 ? `${m.totalVisits} visits` : '1st visit'}
+              </span>
+              {m.lastVisit && (
+                <span className="block text-[10px] text-muted-foreground">
+                  last {new Date(m.lastVisit).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                </span>
+              )}
+            </span>
+          </button>
+        </li>
+      ))}
+    </motion.ul>
+  )}
+</div>
+
+{/* PATIENT CARD — existing (auto-filled, locked) */}
                   {selectedPatient && (
                     <motion.div
                       initial={{ opacity: 0, y: -6 }}
@@ -827,29 +907,20 @@ export default function ReceptionistHomePage() {
                     </motion.div>
                   )}
 
-                  {/* NEW PATIENT ROW — mobile given, no match → register */}
-                  {!selectedPatient && isDigitMode && trimmedSmart.length >= 10 && matches.length === 0 && !searchLoading && (
+                  {/* NEW PATIENT ROW — mobile given (no match) → register.
+                      The NAME box above already carries the name; only the
+                      optional age/gender inline fields appear here. */}
+                  {!selectedPatient && trimmedMobile.length >= 10 && matches.length === 0 && !searchLoading && (
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       className="overflow-hidden"
                     >
                       <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">
-                        New patient — will be registered automatically with this mobile
+                        New patient — will be registered automatically with this mobile{trimmedNameQ ? '' : ' · type the name above'}
                       </p>
                       <div className="grid grid-cols-6 gap-2">
-                        <div className="col-span-6 sm:col-span-3">
-                          <Label htmlFor="new-name" className="text-xs">Patient name *</Label>
-                          <Input
-                            id="new-name"
-                            ref={nameInputRef}
-                            value={newName}
-                            onChange={(e) => setNewName(e.target.value)}
-                            placeholder="Full name"
-                            className="mt-1"
-                          />
-                        </div>
-                        <div className="col-span-2 sm:col-span-1">
+                        <div className="col-span-3 sm:col-span-2">
                           <Label htmlFor="new-age" className="text-xs">Age</Label>
                           <Input
                             id="new-age"
@@ -862,7 +933,7 @@ export default function ReceptionistHomePage() {
                             className="mt-1"
                           />
                         </div>
-                        <div className="col-span-4 sm:col-span-2">
+                        <div className="col-span-3 sm:col-span-2">
                           <Label htmlFor="new-gender" className="text-xs">Gender</Label>
                           <select
                             id="new-gender"
@@ -880,10 +951,10 @@ export default function ReceptionistHomePage() {
                     </motion.div>
                   )}
 
-                  {/* QUICK MODE HINT — name typed, no match picked */}
-                  {!selectedPatient && !isDigitMode && trimmedSmart.length >= 2 && matches.length === 0 && !searchLoading && (
+                  {/* QUICK MODE HINT — name typed (no mobile), no match picked */}
+                  {!selectedPatient && trimmedMobile.length === 0 && trimmedNameQ.length >= 2 && matches.length === 0 && !searchLoading && (
                     <p className="text-xs text-muted-foreground">
-                      Booking walk-in as <b>{trimmedSmart}</b> — quick entry, no account needed.
+                      Booking walk-in as <b>{trimmedNameQ}</b> — quick entry, no account needed.
                     </p>
                   )}
 
@@ -1007,22 +1078,9 @@ export default function ReceptionistHomePage() {
                     </div>
                   )}
 
-                  {/* COMPLAINT + EMERGENCY + SUBMIT */}
+                  {/* EMERGENCY + AUTO-PRINT + SUBMIT (no complaint — the
+                      doctor records it in the Rx wizard; owner decision) */}
                   <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
-                    <div>
-                      <Label htmlFor="complaint" className="text-xs">
-                        Chief complaint *
-                      </Label>
-                      <Input
-                        id="complaint"
-                        ref={complaintInputRef}
-                        value={disease}
-                        onChange={(e) => setDisease(e.target.value)}
-                        placeholder="Fever, chest pain, follow-up…"
-                        className="mt-1"
-                        aria-label="Chief complaint"
-                      />
-                    </div>
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -1150,7 +1208,17 @@ export default function ReceptionistHomePage() {
                       {q.tokenNumber || q.appointmentNo.slice(-4)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{q.patientName}</span>
+                      <span className="block truncate text-sm font-medium">
+                        {q.patientName}
+                        {q.bookingMode === 'VideoCall' && (
+                          <span
+                            title="Video consultation — patient is at home"
+                            className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-emerald-200 bg-emerald-50 px-1.5 py-0 align-middle text-[9px] font-semibold uppercase tracking-wide text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400"
+                          >
+                            <Video className="h-2.5 w-2.5" /> Video
+                          </span>
+                        )}
+                      </span>
                       <span className="block truncate text-[11px] text-muted-foreground">
                         {q.doctorName}
                         {q.disease ? ` · ${q.disease}` : ''}
