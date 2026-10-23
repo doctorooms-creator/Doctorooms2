@@ -8441,3 +8441,23 @@ Stage Summary:
 - User's exact account setup (Sunita@Rajesh Clinic: 1 dept, 1 doctor) E2E-verified against the one-form home — auto-lock works, booking works, queue token GEN-002 issued correctly
 - PENDING: v3 deploy to go live on Vercel (build queue); verify /sw.js serves VERSION='v3' then tell user to do one hard refresh
 - Guidance for user: Ctrl+Shift+R once; after v3 is live even a normal reload suffices and future deploys self-apply
+
+---
+Task ID: deploy-pipeline-stuck-report
+Agent: Main (Z.ai Code)
+Task: Get SW v3 live on Vercel prod — deploy pipeline found STUCK; documented + user action item created.
+
+Work Log:
+- Pushed SW v3 (5468523, 11:24), no-cache headers nudge (3d319c5, 12:01), main nudge (8a4064a, 12:14), diagnostic PR #1 (closed+cleaned after use)
+- Verified repeatedly across 60+ min: prod /sw.js still serves v2 (etag 033b28…, 7293B vs local v3 7781B), login-page chunk list UNCHANGED since 11:41, prod still serves OLD registrar (found "SW registered:" literal; new controllerchange/updatefound literals absent) → NO new deployment went live after ~11:24:55
+- Vercel platform status: all systems operational; GitHub push + PR flows fine (PR #1 created 201) but no Vercel bot activity on PR → build pipeline for this project stuck (likely a hung build holding the Hobby concurrency=1 slot; 4 rapid pushes 11:06–12:14 queued behind it)
+- Branch-alias probe (doctorooms-hms-main / -git-main .vercel.app) → 404 (not available)
+- No VERCEL_TOKEN available in sandbox (checked .env, shell profiles, ~/.vercel) → cannot query/cancel/redeploy via API or CLI
+- CONFIRMED AGAIN alongside: patient-search API still 401 → the One-Form redesign + nav unification deployment (live ~11:12–11:24) REMAINS live and healthy — ONLY the SW v3 fix deploy is pending
+- User-side workaround identified & communicated (works regardless of active SW version): close ALL Doctorooms tabs → reopen (releases old SW / lets waiting one activate); or DevTools → Application → Clear site data; hard refresh alone may not bypass an old SWR-style worker
+
+Stage Summary:
+- CODE COMPLETE: SW v3 + registrar auto-update + no-cache headers, all pushed to origin/main (HEAD 8a4064a); will deploy automatically whenever the Vercel pipeline unsticks
+- USER ACTION ITEM: Vercel dashboard → doctorooms-hms → Deployments → cancel any stuck/running build (or hit Redeploy on latest commit 8a4064a) — one click releases the queue
+- New page IS already live on prod; user's "same old page" = browser-side SW cache; close-tabs-and-reopen shows it immediately
+- Next session: verify sw.js v3 live (curl prod /sw.js | grep VERSION), then confirm user sees Booking Desk; if pipeline still stuck, escalate to owner with exact dashboard path
