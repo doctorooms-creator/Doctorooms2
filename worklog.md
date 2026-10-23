@@ -8400,3 +8400,20 @@ Stage Summary:
 - "Same old form" complaint RESOLVED: (1) prod had stale build — now deployed; (2) nav muscle-memory fixed — every path (sidebar New Appointment muscle-memory→gone, walk-in/express redirects, home) now lands on the One-Form Booking Desk
 - Receptionist booking surface is now UNAMBIGUOUS: ONE default (one-form home) + ONE clearly-labeled exception (Advanced Booking for future slots/express/video)
 - Remaining watch item: verify Vercel deploy completed (poll prod URL); confirm with user on next check-in
+
+---
+Task ID: prod-deploy-verify
+Agent: Main (Z.ai Code)
+Task: Verify Vercel prod deployment of the One-Form Booking Home + nav unification.
+
+Work Log:
+- Pushed 55cfbbf..28a7401 (3 commits: redesign 656a990 + nav unification 1669a96 + worklog 28a7401) to origin/main
+- Cleaned E2E residue from SHARED prod Supabase: 2 test notifications deleted (Registration Confirmed + New Patient Added for CARD-001)
+- Deploy marker probe: GET /api/dashboard/receptionist/patient-search?q=test on prod → 401 (route exists, auth-guarded) — old build returned 404 → NEW BUILD CONFIRMED LIVE within ~3 min of push
+- Prod smoke: / 200, /login 200, /dashboard/receptionist 307 (auth redirect — correct), /dashboard/receptionist/booking 307 (correct)
+- Created fresh 15-min webDevReview cron (job_id 471949, Asia/Calcutta, priority 10) — previous 2 jobs disabled by exec limits
+
+Stage Summary:
+- PROD LIVE: doctorooms-hms.vercel.app now runs the One-Form Booking Home + nav unification
+- User-facing resolution: receptionist logs in → lands directly ON the booking form (no clicks); sidebar 'New Appointment' muscle-memory entry removed; legacy wizard clearly labeled 'Advanced Booking' with a banner pointing back to the Booking Desk for everyday walk-ins
+- All verification green: E2E booking loop, lint, VLM visual QA (desktop+mobile), prod smoke
