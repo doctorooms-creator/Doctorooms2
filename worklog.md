@@ -8517,3 +8517,21 @@ Stage Summary:
 - Booking Desk now learns the receptionist's routine: regular desk pairing pre-selected on login/reload (2 taps saved per booking for multi-dept hospitals), optional zero-touch token printing for desk-printer clinics, memory is per-user and per-device-independent.
 - Feature E2E-verified in both hospital (multi-dept) and clinic (single-dept) modes; single-option auto-lock regression passed.
 - STILL the #1 open item: prod deploy missing (severed GitHub webhook — owner action required). All new features ride the same pending deploy; once the owner redeploys, everything ships together.
+
+---
+Task ID: vercel-deploy-guidance
+Agent: Main (Z.ai Code)
+Task: User pasted Vercel Deployments screenshot asking "kya krna hai samajh nahi aa rha hai" — analyze screenshot, verify prod truth, give owner exact click-path to unblock the pending deploy.
+
+Work Log:
+- VLM-analyzed the screenshot: Vercel account-level Deployments page (aditya-2b2c), filters Author=doctorooms-creator + Environment=Production + Status=Error; list shows 2 RED Error rows from Oct 16 belonging to a DIFFERENT project literally named "my-project" (commit 123918d) — stale noise, unrelated to doctorooms-hms; all doctorooms-hms rows are Ready/green; newest deployment = 1397ae5 "feat(reception): P2 booking unification" 9h ago = CURRENT PRODUCTION
+- Prod truth re-verified via curl: /sw.js → VERSION='v2', 7293B (old build, pre-5468523) → ALL new work (One-Form Booking Desk, nav unification, SW v3 self-heal, desk memory, auto-print) still NOT live; /login title renders fine (app healthy)
+- Pushed the 1 unpushed local commit (594ed31 checkpoint) → origin/main now == local HEAD; all code safely on GitHub
+- Fresh 15-min webDevReview cron created: job 472411 (Asia/Calcutta, priority 10) — previous 3 (471879/471935/471949) all disabled by exec limits; new job briefed with deploy-blocker context + sw.js v2/v3 probe instruction
+- Could NOT re-check GitHub webhook existence (git credential fill returns no token; gh CLI absent) — but prod sw.js=v2 is definitive: no new deploy has occurred
+- dev.log shows /api/dashboard/receptionist/walk-in 500 (Prisma connect fail) — expected: .env points to Seoul prod pooler whose password sandbox lacks; dev server itself healthy (GET / 200)
+
+Stage Summary:
+- Screenshot decoded for user: red errors = old "my-project" rows, ignorable; the REAL issue = newest deployment is old commit 1397ae5 — new code has never been built by Vercel because the GitHub→Vercel webhook is severed
+- USER ACTION PATH given (Hinglish, click-by-click): Vercel → Projects → doctorooms-hms → Settings → Git → connect doctorooms-creator/Doctorooms2 (main); then tell me → I push a trigger commit → build goes green → hard refresh (Ctrl+Shift+R); explicit warning: "Redeploy" button would only rebuild the OLD 1397ae5 — useless for new code
+- Everything else is green locally: code E2E-proven, lint clean, origin/main synced (594ed31), cron watcher live (472411)
