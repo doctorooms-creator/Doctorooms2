@@ -8337,3 +8337,37 @@ Stage Summary:
 - ANALYSIS-ONLY PHASE COMPLETE — zero code modified
 - Key finding: the redesign is primarily a FRONTEND re-architecture of the receptionist home page (flip from monitoring-dashboard to booking-desk) + 2 small backend additions (name-search endpoint, extended lookup payload); the heavy booking logic (tokens, linking, safety rails) is reusable as-is
 - Next phase (awaiting owner approval): implement One-Form home page per the delivered plan
+
+---
+Task ID: home-redesign-implementation
+Agent: Main (Z.ai Code)
+Task: Implement the "One-Form Booking Home" — complete redesign of the receptionist home page per founder's PDF requirement (2nd phase after analysis-only).
+
+Work Log:
+- Rewrote src/app/dashboard/receptionist/page.tsx (504 → ~1110 lines): monitoring-dashboard → booking-first desk
+- NEW backend: src/app/api/dashboard/receptionist/patient-search/route.ts — smart search (digits→mobileNo contains, letters→name contains), returns id/name/mobileNo/gender/age/lastVisit/totalVisits/profileImg, visit intelligence scoped to receptionist's desk (hospitalId or doctorId), regulars-first ranking, groupBy aggregation + latest-booking age lookup, take 8
+- Smart field UX: mobile 10-digit exact match auto-locks patient card; name search dropdown (keyboard ArrowUp/Down/Enter, avatar+visits+lastVisit); new mobile (no match) → inline name/age/gender register row; name-only → quick booking; mixed text handled
+- Dept/doctor as 1-tap chips; AUTO-LOCKED when only 1 exists (founder rule #2); doctor chips show fees; cascade reset on dept change
+- Emergency toggle always visible (founder rule #3); fee chip; "Add to Queue" submit with Enter (⏎ kbd hint)
+- AUTO-RESET loop (founder rule #1 core): after booking, token flash 5s with countdown text + Print Token + "Next patient (now)" buttons + Esc shortcut → silent reset → focus returns to smart field; dept/doctor SURVIVE reset as desk context
+- Live Queue rail: now-serving highlight (Visited), waiting list with tokens/status/queue positions, completed-today count, max-h-96 scroll, 20s refetch
+- Compact desk header: hospital card + 4 stat pills; Today's Appointments compact list below; "Advanced booking → open full desk" link to legacy booking page (kept per founder rule #1 decision)
+- Fixed in-session bugs: TDZ ordering (createMutation before canSubmit), resetForm declaration order (react-hooks/immutability), "Dr. Dr." duplicate prefix, removed dead code/unused imports
+- E2E VERIFIED via agent-browser (dev-login Rina Patel @ Zydus, hospital mode, 11 depts):
+  * Journey 1 mobile auto-fill: 9876500001 → Suresh Kumar card auto-locked, "1 past visit" shown ✓
+  * Journey 2 register: 9000011111 + name → auto-registered, token CARD-002 ✓
+  * Journey 3 quick: name-only → CARD-003 ✓
+  * Emergency toggle → EMR-004 at queue top #1 (emergency-first ordering live) ✓
+  * Enter-key submission from complaint field ✓; auto-reset fired without any button press ✓; desk context (Cardiology) survived reset ✓
+  * Queue rail live-updated after each booking (invalidation) ✓; patient-search API tested with real data ✓
+  * VLM visual QA (desktop + mobile screenshots): clean, no defects/overlaps ✓
+  * dev.log clean (all 200/201, no hydration errors); bun run lint CLEAN (0 errors)
+- Cleaned E2E test data: 4 test bookings + 1 auto-registered test user deleted from dev DB
+
+Stage Summary:
+- ONE-FORM HOME LIVE: receptionist's home page IS the booking form now — click-count for a walk-in dropped from ~8-10 clicks + 2 scrolls + 2 mode decisions to: type mobile/name → (auto-fill) → complaint → Enter. Returning patient = 2 actions.
+- Founder's 3 rules implemented exactly: (1) single auto-detecting form + auto-reset loop, (2) dept/doctor chips auto-selected when only 1 exists, (3) emergency toggle kept
+- Legacy booking page retained as "Advanced Booking" (future slots/express/video)
+- New reusable API patient-search with visit intelligence (regulars-first ranking)
+- Old dashboard's monitoring features preserved in compact form (stat pills, today's appointments, queue rail)
+- Next-phase candidates: dark-mode polish pass, per-receptionist default dept/doctor memory (DB), print-token auto-popup option, kiosk-mode variant of the one-form
