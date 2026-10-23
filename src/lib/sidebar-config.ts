@@ -1,6 +1,6 @@
 import {
   type LucideIcon,
-  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History, Gift, Megaphone, Sparkles,
+  LayoutDashboard, Users, Stethoscope, Building2, CalendarDays, CalendarPlus, FileText, MessageSquare, Settings, Pill, Clock, UserCircle, Images, PenSquare, Heart, Bell, UserPlus, KeyRound, IndianRupee, FlaskConical, PenLine, BarChart3, Printer, Shield, FolderOpen, Thermometer, CircleHelp, Lightbulb, Tag, Search, Table, ClipboardList, ListOrdered, Monitor, BedDouble, ArrowRightLeft, Activity, Tags, Wallet, CreditCard, Cross, Package, ShoppingCart, AlertTriangle, TrendingUp, TrendingDown, Receipt, LogOut, Utensils, Plus, ScrollText, FileSignature, ClipboardCheck, Zap, QrCode, Microscope, Handshake, FileCheck2, Upload, BookOpen, ListChecks, History, Gift, Megaphone, Sparkles,
 } from 'lucide-react'
 
 // NOTE: Megaphone = recall campaigns (dormant-patient WhatsApp growth engine).
@@ -178,10 +178,9 @@ export const sidebarConfig: RoleSidebarMap = {
   ],
   receptionist: [
     { label: 'Dashboard', href: '/dashboard/receptionist', icon: LayoutDashboard },
-    { label: 'Express Walk-in', href: '/dashboard/receptionist/express', icon: Zap },
+    { label: 'New Appointment', href: '/dashboard/receptionist/booking', icon: CalendarPlus },
     { label: 'Appointments', href: '/dashboard/receptionist/appointments', icon: CalendarDays },
     { label: 'Pending Bookings', href: '/dashboard/receptionist/pending-bookings', icon: Clock },
-    { label: 'Walk-in', href: '/dashboard/receptionist/walk-in', icon: UserPlus },
     { label: 'Queue', href: '/dashboard/receptionist/queue', icon: ListOrdered },
     { label: 'Print Queue', href: '/dashboard/receptionist/print-queue', icon: Printer },
     { label: 'Schedule', href: '/dashboard/receptionist/schedule', icon: Clock },

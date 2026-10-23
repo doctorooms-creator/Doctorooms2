@@ -1,29 +1,19 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Separator } from '@/components/ui/separator'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
 import {
   Table,
@@ -55,13 +45,10 @@ import {
   XCircle,
   X,
   Stethoscope,
-  Phone,
-  Loader2,
-  AlertTriangle,
-  UserPlus,
+  Printer,
   MessageCircle,
 } from 'lucide-react'
-import { format, differenceInYears } from 'date-fns'
+import { format } from 'date-fns'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AppointmentChat from '@/components/receptionist/appointment-chat'
 import { cn } from '@/lib/utils'
@@ -85,37 +72,7 @@ interface ReceptionistAppointment {
   disease: string
   bookingType: string
   createdAt: string
-}
-
-interface PatientLookupResult {
-  id: string
-  name: string
-  email: string
-  mobileNo: string
-  gender: string
-  status: string
-  visitCount: number
-  lastVisit: string | null
-  createdAt: string
-}
-
-// Shape returned by /api/dashboard/receptionist/schedule in hospital mode
-// (same endpoint the Walk-in page uses — doctors grouped by department)
-interface BookingScheduleDoctor {
-  id: string
-  name: string
-  profileImg: string | null
-  specialization: string
-  designation: string
-  fees: number
-}
-
-interface BookingScheduleData {
-  isHospitalMode?: boolean
-  departments?: Array<{
-    department: { id: string; name: string; shortCode: string; icon: string }
-    doctors: BookingScheduleDoctor[]
-  }>
+  tokenNumber?: string | null
 }
 
 const statusColors: Record<string, string> = {
@@ -145,53 +102,18 @@ const tabs = [
   { value: 'Canceled', label: 'Canceled' },
 ]
 
-const bloodGroupOptions = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
-
 export default function ReceptionistAppointmentsPage() {
+  const router = useRouter()
   const [statusFilter, setStatusFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
-  const [dialogOpen, setDialogOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | 'extend' | 'visited' | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailTab, setDetailTab] = useState('details')
   const [selectedAppt, setSelectedAppt] = useState<ReceptionistAppointment | null>(null)
-
-  // New appointment form state
-  const [formMobile, setFormMobile] = useState('')
-  const [formPatientName, setFormPatientName] = useState('')
-  const [formGender, setFormGender] = useState('')
-  const [formDob, setFormDob] = useState('')
-  const [formAge, setFormAge] = useState('')
-  const [formBloodGroup, setFormBloodGroup] = useState('')
-  const [formDisease, setFormDisease] = useState('')
-  const [formDate, setFormDate] = useState('')
-  const [formTime, setFormTime] = useState('')
-  const [formDescription, setFormDescription] = useState('')
-  const [formHeight, setFormHeight] = useState('')
-  const [formWeight, setFormWeight] = useState('')
-  const [formPhysicalHandicap, setFormPhysicalHandicap] = useState('No')
-  const [formRelationWithMe, setFormRelationWithMe] = useState('')
-  // Hospital-mode only: department + doctor selection
-  const [formDepartmentId, setFormDepartmentId] = useState('')
-  const [formDoctorId, setFormDoctorId] = useState('')
-
-  // Mobile lookup state
-  const [lookupStatus, setLookupStatus] = useState<'idle' | 'searching' | 'found' | 'not_found'>('idle')
-  const lookupDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Register dialog state
-  const [showRegisterDialog, setShowRegisterDialog] = useState(false)
-  const [regName, setRegName] = useState('')
-  const [regEmail, setRegEmail] = useState('')
-  const [regGender, setRegGender] = useState('')
-  const [regMobile, setRegMobile] = useState('')
-
-  // Already-booked count
-  const [bookedCount, setBookedCount] = useState<number | null>(null)
 
   const queryClient = useQueryClient()
 
@@ -208,92 +130,6 @@ export default function ReceptionistAppointmentsPage() {
         `/api/dashboard/receptionist/appointments?status=${statusFilter}&search=${encodeURIComponent(search)}${fromDate ? `&from=${fromDate}` : ''}${toDate ? `&to=${toDate}` : ''}`
       ).then((r) => r.json()),
     refetchInterval: 10000,
-  })
-
-  // Hospital mode: fetch departments + their doctors (same endpoint/pattern as
-  // the Walk-in page) so the New Appointment form can pick department & doctor.
-  // Only fetched when the appointments API reports hospital mode.
-  const isHospitalMode = !!data?.isHospitalMode
-  const { data: scheduleData, isLoading: scheduleLoading } = useQuery<BookingScheduleData>({
-    queryKey: ['receptionist-booking-schedule'],
-    queryFn: () => fetch('/api/dashboard/receptionist/schedule').then((r) => r.json()),
-    enabled: isHospitalMode,
-    staleTime: 5 * 60 * 1000,
-  })
-  const hospitalDepartments = scheduleData?.departments ?? []
-  const selectedDepartment = hospitalDepartments.find(
-    (g) => g.department.id === formDepartmentId
-  )
-  const departmentDoctors = selectedDepartment?.doctors ?? []
-  const selectedDoctor = departmentDoctors.find((d) => d.id === formDoctorId) || null
-
-  const createMutation = useMutation({
-    mutationFn: async (body: {
-      patientName: string
-      mobile: string
-      disease: string
-      date: string
-      time: string
-      description: string
-      gender: string
-      dateOfBirth: string
-      age: string
-      bloodGroup: string
-      weight: string
-      height: string
-      physicallyChallenged: string
-      relationWithMe: string
-      departmentId?: string
-      doctorId?: string
-    }) => {
-      const res = await fetch('/api/dashboard/receptionist/appointments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json().catch(() => ({}))
-      // A 400/500 still resolves the fetch — only treat a real success as
-      // success so we never show a false "created" toast again.
-      if (!res.ok || data.success !== true) {
-        throw new Error(data.error || `Failed to create appointment (HTTP ${res.status})`)
-      }
-      return data
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['receptionist-appointments'] })
-      queryClient.invalidateQueries({ queryKey: ['receptionist-stats'] })
-      toast.success(`Appointment booked for ${variables.patientName}`)
-      setDialogOpen(false)
-      resetForm()
-    },
-    onError: (err: Error) => {
-      // Keep the dialog open with all form data preserved — the receptionist
-      // can fix whatever the API rejected and re-submit without losing work.
-      toast.error(err.message || 'Failed to create appointment')
-    },
-  })
-
-  const registerMutation = useMutation({
-    mutationFn: (body: { name: string; email: string; mobile: string; gender: string }) =>
-      fetch('/api/dashboard/receptionist/patients/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      }).then((r) => r.json()),
-    onSuccess: (data) => {
-      if (data.success && data.patient) {
-        toast.success('New patient registered successfully')
-        setFormPatientName(data.patient.name)
-        setFormGender(data.patient.gender)
-        setLookupStatus('found')
-        setShowRegisterDialog(false)
-      } else {
-        toast.error(data.error || 'Failed to register patient')
-      }
-    },
-    onError: () => {
-      toast.error('Failed to register patient')
-    },
   })
 
   const statusMutation = useMutation({
@@ -325,125 +161,6 @@ export default function ReceptionistAppointmentsPage() {
     },
   })
 
-  // DOB -> Age auto-calculation (computed via handler, not effect)
-  const handleDobChange = (value: string) => {
-    setFormDob(value)
-    if (value) {
-      const dob = new Date(value)
-      const age = differenceInYears(new Date(), dob)
-      setFormAge(String(age))
-    } else {
-      setFormAge('')
-    }
-  }
-
-  // Mobile lookup with debounce
-  const doLookup = useCallback(async (mobile: string) => {
-    if (mobile.length < 3) {
-      setLookupStatus('idle')
-      return
-    }
-    setLookupStatus('searching')
-    try {
-      const res = await fetch(`/api/dashboard/receptionist/patients?search=${encodeURIComponent(mobile)}`)
-      const data = await res.json()
-      const patients: PatientLookupResult[] = data.patients || []
-      const match = patients.find((p) => p.mobileNo === mobile)
-      if (match) {
-        setFormPatientName(match.name)
-        if (match.gender) setFormGender(match.gender)
-        setLookupStatus('found')
-      } else {
-        setLookupStatus('not_found')
-      }
-    } catch {
-      setLookupStatus('not_found')
-    }
-  }, [])
-
-  const handleMobileBlur = useCallback(() => {
-    if (lookupDebounceTimer.current) {
-      clearTimeout(lookupDebounceTimer.current)
-    }
-    if (formMobile) {
-      doLookup(formMobile)
-    }
-  }, [formMobile, doLookup, lookupDebounceTimer])
-
-  const handleLookupClick = useCallback(() => {
-    if (lookupDebounceTimer.current) {
-      clearTimeout(lookupDebounceTimer.current)
-    }
-    if (formMobile) {
-      doLookup(formMobile)
-    }
-  }, [formMobile, doLookup, lookupDebounceTimer])
-
-  // Already-booked count on date change
-  useEffect(() => {
-    if (!formDate) return
-    let cancelled = false
-    fetch(`/api/dashboard/receptionist/appointments?from=${formDate}&to=${formDate}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled) {
-          setBookedCount((data.appointments?.length) ?? 0)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setBookedCount(0)
-      })
-    return () => { cancelled = true }
-  }, [formDate])
-
-  const handleCreateAppointment = () => {
-    if (!formPatientName || !formDate) {
-      toast.error('Patient name and date are required')
-      return
-    }
-    if (!formMobile) {
-      toast.error('Mobile number is required')
-      return
-    }
-    // Hospital mode requires a department + doctor (the POST API enforces the
-    // same rule — catch it here so the user gets an inline nudge).
-    if (isHospitalMode && (!formDepartmentId || !formDoctorId)) {
-      toast.error('Please select a department and a doctor for this appointment')
-      return
-    }
-    createMutation.mutate({
-      patientName: formPatientName,
-      mobile: formMobile,
-      disease: formDisease,
-      date: formDate,
-      time: formTime,
-      description: formDescription,
-      gender: formGender,
-      dateOfBirth: formDob,
-      age: formAge,
-      bloodGroup: formBloodGroup,
-      weight: formWeight,
-      height: formHeight,
-      physicallyChallenged: formPhysicalHandicap,
-      relationWithMe: formRelationWithMe,
-      departmentId: isHospitalMode ? formDepartmentId : undefined,
-      doctorId: isHospitalMode ? formDoctorId : undefined,
-    })
-  }
-
-  const handleRegisterPatient = () => {
-    if (!regName || !regMobile || !regGender) {
-      toast.error('Name, mobile, and gender are required')
-      return
-    }
-    registerMutation.mutate({
-      name: regName,
-      email: regEmail,
-      mobile: regMobile,
-      gender: regGender,
-    })
-  }
-
   const handleStatusAction = (id: string, action: 'approve' | 'reject' | 'extend' | 'visited') => {
     setSelectedId(id)
     setConfirmAction(action)
@@ -466,35 +183,6 @@ export default function ReceptionistAppointmentsPage() {
     setConfirmOpen(false)
     setSelectedId(null)
     setConfirmAction(null)
-  }
-
-  const resetForm = () => {
-    setFormMobile('')
-    setFormPatientName('')
-    setFormGender('')
-    setFormDob('')
-    setFormAge('')
-    setFormBloodGroup('')
-    setFormDisease('')
-    setFormDate('')
-    setFormTime('')
-    setFormDescription('')
-    setFormHeight('')
-    setFormWeight('')
-    setFormPhysicalHandicap('No')
-    setFormRelationWithMe('')
-    setFormDepartmentId('')
-    setFormDoctorId('')
-    setLookupStatus('idle')
-    setBookedCount(null)
-  }
-
-  const handleOpenRegisterDialog = () => {
-    setRegName('')
-    setRegEmail('')
-    setRegGender('')
-    setRegMobile(formMobile)
-    setShowRegisterDialog(true)
   }
 
   const appointments = data?.appointments ?? []
@@ -524,440 +212,14 @@ export default function ReceptionistAppointmentsPage() {
           )}
         </div>
 
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2 bg-teal-600 text-white hover:bg-teal-700">
-              <Plus className="h-4 w-4" />
-              New Appointment
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Book New Appointment</DialogTitle>
-            </DialogHeader>
-            <div className="max-h-[85vh] overflow-y-auto space-y-5 pt-2">
-              {doctor && (
-                <div className="rounded-lg bg-teal-50 p-3 dark:bg-teal-950/30">
-                  <p className="text-xs text-muted-foreground">Doctor</p>
-                  <p className="text-sm font-medium">{doctor.name}</p>
-                  {doctor.fees > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Consultation fee: ₹{doctor.fees.toLocaleString('en-IN')}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* PATIENT INFORMATION SECTION */}
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Patient Information</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Mobile Number */}
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="mobile">Mobile Number *</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="mobile"
-                      type="tel"
-                      placeholder="Enter mobile number"
-                      value={formMobile}
-                      onChange={(e) => {
-                        setFormMobile(e.target.value)
-                        setLookupStatus('idle')
-                      }}
-                      onBlur={handleMobileBlur}
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={handleLookupClick}
-                      disabled={!formMobile || lookupStatus === 'searching'}
-                      title="Look up patient"
-                    >
-                      {lookupStatus === 'searching' ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Phone className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                  {/* Lookup status feedback */}
-                  {lookupStatus === 'found' && (
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Patient found — details auto-filled
-                    </Badge>
-                  )}
-                  {lookupStatus === 'not_found' && (
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
-                        <AlertTriangle className="h-3 w-3" />
-                        No patient found
-                      </Badge>
-                      <Button
-                        type="button"
-                        variant="link"
-                        size="sm"
-                        className="h-auto p-0 text-teal-600 hover:text-teal-700"
-                        onClick={handleOpenRegisterDialog}
-                      >
-                        <UserPlus className="h-3 w-3 mr-1" />
-                        Register New Patient
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Patient Name */}
-                <div className="space-y-2">
-                  <Label htmlFor="patientName">Patient Name *</Label>
-                  <Input
-                    id="patientName"
-                    placeholder="Enter patient name"
-                    value={formPatientName}
-                    onChange={(e) => setFormPatientName(e.target.value)}
-                  />
-                </div>
-
-                {/* Gender */}
-                <div className="space-y-2">
-                  <Label>Gender</Label>
-                  <Select value={formGender} onValueChange={setFormGender}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Male">Male</SelectItem>
-                      <SelectItem value="Female">Female</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Date of Birth */}
-                <div className="space-y-2">
-                  <Label htmlFor="dob">Date of Birth</Label>
-                  <Input
-                    id="dob"
-                    type="date"
-                    value={formDob}
-                    onChange={(e) => handleDobChange(e.target.value)}
-                  />
-                </div>
-
-                {/* Age */}
-                <div className="space-y-2">
-                  <Label htmlFor="age">Age</Label>
-                  <Input
-                    id="age"
-                    type="text"
-                    placeholder="Auto-filled from DOB"
-                    value={formAge}
-                    onChange={(e) => setFormAge(e.target.value)}
-                  />
-                </div>
-
-                {/* Blood Group */}
-                <div className="space-y-2">
-                  <Label>Blood Group</Label>
-                  <Select value={formBloodGroup} onValueChange={setFormBloodGroup}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select blood group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {bloodGroupOptions.map((bg) => (
-                        <SelectItem key={bg} value={bg}>{bg}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* DEPARTMENT & DOCTOR — hospital mode only */}
-              {isHospitalMode && (
-                <>
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      Department &amp; Doctor
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Department */}
-                    <div className="space-y-2">
-                      <Label htmlFor="department">Department *</Label>
-                      <Select
-                        value={formDepartmentId}
-                        onValueChange={(value) => {
-                          setFormDepartmentId(value)
-                          // Reset doctor whenever the department changes so a
-                          // stale doctor from another department is never sent.
-                          setFormDoctorId('')
-                        }}
-                      >
-                        <SelectTrigger id="department" className="w-full">
-                          <SelectValue
-                            placeholder={scheduleLoading ? 'Loading departments…' : 'Select department'}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {hospitalDepartments.length === 0 && !scheduleLoading && (
-                            <div className="px-3 py-2 text-sm text-muted-foreground">
-                              No departments with doctors found
-                            </div>
-                          )}
-                          {hospitalDepartments.map((group) => (
-                            <SelectItem key={group.department.id} value={group.department.id}>
-                              {group.department.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Doctor */}
-                    <div className="space-y-2">
-                      <Label htmlFor="doctor">Doctor *</Label>
-                      <Select
-                        value={formDoctorId}
-                        onValueChange={setFormDoctorId}
-                        disabled={!formDepartmentId}
-                      >
-                        <SelectTrigger id="doctor" className="w-full">
-                          <SelectValue
-                            placeholder={
-                              !formDepartmentId
-                                ? 'Select a department first'
-                                : departmentDoctors.length === 0
-                                  ? 'No doctors in this department'
-                                  : 'Select doctor'
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {departmentDoctors.map((doc) => (
-                            <SelectItem key={doc.id} value={doc.id}>
-                              {doc.name}
-                              {doc.specialization ? ` · ${doc.specialization}` : ''}
-                              {doc.fees > 0 ? ` · ₹${doc.fees}` : ''}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {selectedDoctor && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Stethoscope className="h-3 w-3" />
-                          Consultation fee: ₹{(selectedDoctor.fees || 0).toLocaleString('en-IN')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <Separator />
-                </>
-              )}
-
-              {/* APPOINTMENT DETAILS SECTION */}
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Appointment Details</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Date */}
-                <div className="space-y-2">
-                  <Label htmlFor="date">Date *</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    min={today}
-                    value={formDate}
-                    onChange={(e) => setFormDate(e.target.value)}
-                  />
-                  {bookedCount !== null && formDate && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CalendarDays className="h-3 w-3" />
-                      {bookedCount} appointment{bookedCount !== 1 ? 's' : ''} already booked for this date
-                    </p>
-                  )}
-                </div>
-
-                {/* Time Slot */}
-                <div className="space-y-2">
-                  <Label htmlFor="time">Time Slot</Label>
-                  <Input
-                    id="time"
-                    type="time"
-                    value={formTime}
-                    onChange={(e) => setFormTime(e.target.value)}
-                  />
-                </div>
-
-                {/* Disease / Reason */}
-                <div className="space-y-2">
-                  <Label htmlFor="disease">Disease / Condition</Label>
-                  <Input
-                    id="disease"
-                    placeholder="e.g. Fever, Headache"
-                    value={formDisease}
-                    onChange={(e) => setFormDisease(e.target.value)}
-                  />
-                </div>
-
-                {/* Description — spans full width */}
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Additional notes..."
-                    value={formDescription}
-                    onChange={(e) => setFormDescription(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* ADDITIONAL INFORMATION SECTION */}
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Additional Information</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Height */}
-                <div className="space-y-2">
-                  <Label htmlFor="height">Height (cm)</Label>
-                  <Input
-                    id="height"
-                    type="number"
-                    placeholder="e.g. 170"
-                    value={formHeight}
-                    onChange={(e) => setFormHeight(e.target.value)}
-                  />
-                </div>
-
-                {/* Weight */}
-                <div className="space-y-2">
-                  <Label htmlFor="weight">Weight (kg)</Label>
-                  <Input
-                    id="weight"
-                    type="number"
-                    placeholder="e.g. 70"
-                    value={formWeight}
-                    onChange={(e) => setFormWeight(e.target.value)}
-                  />
-                </div>
-
-                {/* Physical Handicap */}
-                <div className="space-y-2">
-                  <Label>Physical Handicap</Label>
-                  <Select value={formPhysicalHandicap} onValueChange={setFormPhysicalHandicap}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="No">No</SelectItem>
-                      <SelectItem value="Yes">Yes</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Relation With Me */}
-                <div className="space-y-2">
-                  <Label htmlFor="relationWithMe">Relation With Me</Label>
-                  <Input
-                    id="relationWithMe"
-                    placeholder="Self, Father, Mother, etc."
-                    value={formRelationWithMe}
-                    onChange={(e) => setFormRelationWithMe(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleCreateAppointment}
-                  disabled={createMutation.isPending}
-                  className="bg-teal-600 text-white hover:bg-teal-700"
-                >
-                  {createMutation.isPending ? 'Booking...' : 'Book Appointment'}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Register New Patient Dialog */}
-        <Dialog open={showRegisterDialog} onOpenChange={setShowRegisterDialog}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Register New Patient</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label htmlFor="regName">Name *</Label>
-                <Input
-                  id="regName"
-                  placeholder="Enter patient name"
-                  value={regName}
-                  onChange={(e) => setRegName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="regMobile">Mobile *</Label>
-                <Input
-                  id="regMobile"
-                  type="tel"
-                  value={regMobile}
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">Pre-filled from booking form</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="regEmail">Email</Label>
-                <Input
-                  id="regEmail"
-                  type="email"
-                  placeholder="Optional"
-                  value={regEmail}
-                  onChange={(e) => setRegEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Gender *</Label>
-                <Select value={regGender} onValueChange={setRegGender}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select gender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Male">Male</SelectItem>
-                    <SelectItem value="Female">Female</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => setShowRegisterDialog(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleRegisterPatient}
-                  disabled={registerMutation.isPending}
-                  className="bg-teal-600 text-white hover:bg-teal-700"
-                >
-                  {registerMutation.isPending ? 'Registering...' : 'Register Patient'}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Booking is unified — one desk for walk-in, express and slots */}
+        <Button
+          className="flex items-center gap-2 bg-teal-600 text-white hover:bg-teal-700"
+          onClick={() => router.push('/dashboard/receptionist/booking')}
+        >
+          <Plus className="h-4 w-4" />
+          New Appointment
+        </Button>
       </div>
 
       {/* Status tabs */}
@@ -1075,7 +337,14 @@ export default function ReceptionistAppointmentsPage() {
                             >
                               {appt.patientName}
                             </p>
-                            <p className="text-xs text-muted-foreground">{appt.appointmentNo}</p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                              {appt.appointmentNo}
+                              {appt.tokenNumber && (
+                                <span className="inline-flex items-center rounded-sm bg-teal-50 px-1 font-mono text-[10px] font-semibold text-teal-700 dark:bg-teal-950/40 dark:text-teal-400">
+                                  {appt.tokenNumber}
+                                </span>
+                              )}
+                            </p>
                           </div>
                         </div>
                       </TableCell>
@@ -1198,7 +467,27 @@ export default function ReceptionistAppointmentsPage() {
                     )}>
                       {selectedAppt.status}
                     </span>
-                    <span className="text-xs text-muted-foreground">{selectedAppt.appointmentNo}</span>
+                    <div className="flex items-center gap-2">
+                      {selectedAppt.tokenNumber && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 border-teal-300 text-teal-700 hover:bg-teal-50 dark:border-teal-700 dark:text-teal-400 dark:hover:bg-teal-950/40"
+                          onClick={() =>
+                            window.open(
+                              `/bookings/print-token/${selectedAppt.id}`,
+                              '_blank',
+                              'width=400,height=600'
+                            )
+                          }
+                          title="Print the OPD token slip"
+                        >
+                          <Printer className="h-3 w-3" />
+                          {selectedAppt.tokenNumber}
+                        </Button>
+                      )}
+                      <span className="text-xs text-muted-foreground">{selectedAppt.appointmentNo}</span>
+                    </div>
                   </div>
 
                   {/* Patient info card */}

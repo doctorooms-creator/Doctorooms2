@@ -2,23 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/api-auth'
-import { istDateRange, currentTimeIST } from '@/lib/date-utils'
+import { istDateRange } from '@/lib/date-utils'
 
 /**
- * Build the correct UTC instant for an IST wall-clock date + time.
- *
- * `new Date(`${date}T${time}`)` parses in the server's local timezone (UTC in
- * production), so an IST evening slot like 19:30 lands on the next IST day.
- * `nowIST()` is equally wrong — it stores a future-shifted instant. Instead we
- * anchor on the IST start-of-day instant from istDateRange() and add the
- * wall-clock minutes, producing the exact UTC equivalent of the IST time.
+ * Appointment management (list + status updates).
+ * The POST handler was retired with the booking unification (Reception
+ * Panel P2) — ALL booking creation now flows through
+ * /api/dashboard/receptionist/bookings (one desk, 3 modes, uniform tokens).
  */
-function istDateTime(dateStr: string, timeStr: string): Date {
-  const range = istDateRange(dateStr)
-  const [hours, minutes] = timeStr.split(':').map(Number)
-  const totalMinutes = (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0)
-  return new Date(range.start.getTime() + totalMinutes * 60000)
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -139,6 +130,7 @@ export async function GET(request: NextRequest) {
           disease: b.disease,
           bookingType: b.bookingType,
           createdAt: b.createdAt,
+          tokenNumber: b.tokenNumber || null,
         })),
         statusCounts: statusCountMap,
         doctor: null,
@@ -214,6 +206,7 @@ export async function GET(request: NextRequest) {
         disease: b.disease,
         bookingType: b.bookingType,
         createdAt: b.createdAt,
+        tokenNumber: b.tokenNumber || null,
       })),
       statusCounts: statusCountMap,
       doctor: doctor
@@ -223,182 +216,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Receptionist appointments list error:', error)
     return NextResponse.json({ error: 'Failed to load appointments' }, { status: 500 })
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const user = await requireRole(request, 'receptionist')
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const receptionist = await db.receptionist.findUnique({
-      where: { userId: user.id },
-    })
-
-    if (!receptionist) {
-      return NextResponse.json({ error: 'Receptionist not found' }, { status: 404 })
-    }
-
-    const body = await request.json()
-    const {
-      patientName,
-      disease,
-      date,
-      time,
-      description,
-      gender,
-      dateOfBirth,
-      age,
-      bloodGroup,
-      weight,
-      height,
-      physicallyChallenged,
-      relationWithMe,
-      mobile,
-    } = body
-
-    if (!patientName || !date) {
-      return NextResponse.json(
-        { error: 'Patient name and date are required' },
-        { status: 400 }
-      )
-    }
-
-    // ── Hospital Mode ──
-    const isHospitalMode = !!receptionist.hospitalId && !receptionist.doctorId
-
-    if (isHospitalMode) {
-      const { departmentId, doctorId } = body
-      if (!departmentId || !doctorId) {
-        return NextResponse.json(
-          { error: 'departmentId and doctorId are required in hospital mode' },
-          { status: 400 }
-        )
-      }
-      // Validate department belongs to this hospital
-      const dept = await db.department.findFirst({
-        where: { id: departmentId, hospitalId: receptionist.hospitalId, status: 'Active' },
-      })
-      if (!dept) {
-        return NextResponse.json({ error: 'Invalid department for this hospital' }, { status: 400 })
-      }
-      // Validate doctor is linked to this hospital
-      const docLink = await db.doctorHospital.findFirst({
-        where: { doctorId, hospitalId: receptionist.hospitalId, status: 'Active' },
-        include: { doctor: true },
-      })
-      if (!docLink) {
-        return NextResponse.json({ error: 'Doctor is not linked to this hospital' }, { status: 400 })
-      }
-
-      const bookingDate = time
-        ? istDateTime(date, time)
-        : new Date()
-
-      const appointmentCount = await db.booking.count()
-      const appointmentNo = `APT${String(appointmentCount + 1).padStart(6, '0')}`
-
-      let userId: string | null = null
-      if (mobile) {
-        const existingPatient = await db.user.findFirst({
-          where: { mobileNo: mobile, role: 'patient' },
-          select: { id: true },
-        })
-        if (existingPatient) {
-          userId = existingPatient.id
-        }
-      }
-
-      const appointment = await db.booking.create({
-        data: {
-          appointmentNo,
-          doctorId,
-          userId,
-          patientName,
-          disease: disease || '',
-          description: description || '',
-          bookingDate,
-          status: 'Approve',
-          bookingType: 'By Receptionist',
-          appointmentCharge: docLink.doctor.fees || 0,
-          hospitalId: receptionist.hospitalId,
-          departmentId,
-          receptionistId: user.id,
-          gender: gender || '',
-          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-          age: age ? parseInt(String(age), 10) || null : null,
-          bloodGroup: bloodGroup || '',
-          weight: weight ? parseFloat(String(weight)) || 0 : 0,
-          height: height ? parseFloat(String(height)) || 0 : 0,
-          physicallyChallenged: physicallyChallenged || 'No',
-          relationWithMe: relationWithMe || '',
-          timeSlot: time || currentTimeIST(),
-        },
-      })
-
-      return NextResponse.json({ success: true, appointment }, { status: 201 })
-    }
-
-    // ── Clinic Mode (unchanged) ──
-    const doctor = await db.doctor.findUnique({
-      where: { id: receptionist.doctorId },
-    })
-
-    // When no time slot selected, use the actual current instant (not the
-    // future-shifted nowIST()) so queue ordering stays truthful.
-    const bookingDate = time
-      ? istDateTime(date, time)
-      : new Date()
-
-    // Generate appointment number
-    const appointmentCount = await db.booking.count()
-    const appointmentNo = `APT${String(appointmentCount + 1).padStart(6, '0')}`
-
-    // Look up existing patient by mobile
-    let userId: string | null = null
-    if (mobile) {
-      const existingPatient = await db.user.findFirst({
-        where: { mobileNo: mobile, role: 'patient' },
-        select: { id: true },
-      })
-      if (existingPatient) {
-        userId = existingPatient.id
-      }
-    }
-
-    const appointment = await db.booking.create({
-      data: {
-        appointmentNo,
-        doctorId: receptionist.doctorId,
-        userId,
-        patientName,
-        disease: disease || '',
-        description: description || '',
-        bookingDate,
-        status: 'Approve',
-        bookingType: 'By Receptionist',
-        appointmentCharge: doctor?.fees || 0,
-        gender: gender || '',
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        age: age ? parseInt(String(age), 10) || null : null,
-        bloodGroup: bloodGroup || '',
-        weight: weight ? parseFloat(String(weight)) || 0 : 0,
-        height: height ? parseFloat(String(height)) || 0 : 0,
-        physicallyChallenged: physicallyChallenged || 'No',
-        relationWithMe: relationWithMe || '',
-        timeSlot: time || currentTimeIST(),
-      },
-    })
-
-    return NextResponse.json({ success: true, appointment }, { status: 201 })
-  } catch (error) {
-    console.error('Create appointment error:', error)
-    return NextResponse.json(
-      { error: 'Failed to create appointment' },
-      { status: 500 }
-    )
   }
 }
 

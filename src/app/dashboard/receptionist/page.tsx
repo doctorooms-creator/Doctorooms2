@@ -286,7 +286,7 @@ export default function ReceptionistDashboardPage() {
       {/* Quick actions */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Button
-          onClick={() => router.push('/dashboard/receptionist/appointments')}
+          onClick={() => router.push('/dashboard/receptionist/booking')}
           className="flex items-center gap-2 bg-teal-600 text-white hover:bg-teal-700"
         >
           <Plus className="h-4 w-4" />
@@ -321,12 +321,12 @@ export default function ReceptionistDashboardPage() {
           <Users className="h-4 w-4" />
           View Patients
         </Button>
-        {/* Hospital Mode: View Queue & OPD Walk-in */}
+        {/* Hospital Mode: View Queue & unified booking desk */}
         {isHospitalMode && (
           <>
             <Button
               variant="outline"
-              onClick={() => router.push('/dashboard/receptionist/walk-in')}
+              onClick={() => router.push('/dashboard/receptionist/queue')}
               className="flex items-center gap-2 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30"
             >
               <ListOrdered className="h-4 w-4" />
@@ -334,11 +334,11 @@ export default function ReceptionistDashboardPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => router.push('/dashboard/receptionist/walk-in')}
+              onClick={() => router.push('/dashboard/receptionist/booking')}
               className="flex items-center gap-2 border-teal-300 text-teal-700 hover:bg-teal-50 hover:text-teal-800 dark:border-teal-700 dark:text-teal-400 dark:hover:bg-teal-950/30"
             >
               <Plus className="h-4 w-4" />
-              OPD Walk-in
+              Book Patient
             </Button>
           </>
         )}
