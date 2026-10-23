@@ -8562,3 +8562,21 @@ Stage Summary:
 - User-facing guidance: one hard refresh (Ctrl+Shift+R) to bust the old SW cache; SW v3 will self-heal all future deploys automatically.
 - Known prod limitations (non-blocking): realtime websocket absent on Vercel (socket timeouts in console, app falls back to polling — candidate future fix: disable socket on prod or host realtime); metadataBase warning (cosmetic).
 - Next-phase backlog candidates: kiosk-mode one-form, dark-mode Booking Desk polish, print-token from Queue page rows, patient-module audit (12 items), doctor-side care log visibility, walk-in/express redirect page deletion.
+
+---
+Task ID: pdf-4issue-audit
+Agent: Main (Z.ai Code)
+Task: User uploaded "Untitled document (8).pdf" (4 pages, 6 screenshots) with 4 issues + prescription-ID question. IN-DEPTH AUDIT ONLY — no development (user's explicit instruction).
+
+Work Log:
+- Extracted PDF text (pdftotext) + all 6 embedded screenshots (pdfimages) → VLM-analyzed each
+- ISSUE 1 (patient "Loading queue…" stuck): feature IS built (patient dashboard: "Your Position #N" card + progress bar + "N ahead ~X min wait", 30s polling via /api/patient/bookings/queue). Root cause chain: the online booking has NO tokenNumber → API early-returns queueInfo:null (requires tokenNumber && tokenOrder>0) → UI renders "Loading queue…" spinner forever (UI treats null info as still-loading = infinite spinner). Token missing = Issue-3 bug.
+- ISSUE 2 (online patient FIRST in doctor list + "09:00" in token column): doctor queue APIs (/api/queue/doctor/[doctorId], /api/dashboard/doctor/queue) use slotAwareSort — Mode 2 puts SLOTTED patients (any parseable timeSlot) ABOVE all walk-ins (deliberate CTO-Plan Phase-2 design). User's clinic reality: FIFO queue order. DESIGN CONFLICT to resolve with owner. The 09:00-in-token-column: reception queue page falls back to timeSlot display when tokenNumber null → uniformity break, same root cause as Issue 3.
+- ISSUE 3 (online patient got NO token) — THE BIG ONE. Token assignment is NOT centralized: walk-in POST /bookings stamps token at creation ✓; Pending-Bookings page → /approve route generates token ✓ (dept fallback via doctorHospital); BUT Appointments-page Approve → /status route = status flip ONLY, NO token ✗; doctor-side /api/dashboard/doctor/appointments/[id]/status also NO token ✗. Evidence booking went tokenless: live-queue rail shows appointmentNo.slice(-4) fallback ("l0de"/"10de") — src/app/dashboard/receptionist/page.tsx:1150. Secondary bug: /approve calls generateTokenNumber WITHOUT bookingDate → future-dated bookings consume TODAY's token counter.
+- ISSUE 4 (visited not showing on reception + patient still in live queue): status flow = Pending → Approve → Visited (doctor "Call Next Patient" = consultation START) → Finish (Rx complete) → removed from queue. Live-queue API includes ['Approve','Visited'] — Visited patient stays in queue BY DESIGN (teal "In OPD" chip in rail, "In Consultation" on full queue page); removed only at Finish. Reception "Visited" tab shows 0 because it filters the TRANSIENT in-consultation status; patients the doctor completed land as 'Finish' → "Finished: 3" tab. Data present, label/mental-model mismatch: user's "visited" = system's 'Finish'.
+- PRESCRIPTION ID question: Rx print shows "Patient ID: {tokenNumber||appointmentNo}" (print-view.tsx:401-404) — misleading since tokens reset daily. Prescription has internal unique cuid (never printed). Doctor Rx search supports appointmentNo + mobile (registered patients). Honest verdict given: separate memorable ID system NOT needed now (phone-linked accounts + search cover it); rename label to "Token:"; IF future need (pharmacy verification / insurance / no-phone follow-up), print existing prescription cuid as short "Rx No" — zero schema change.
+
+Stage Summary:
+- 4 issues root-caused to: (1) non-centralized token assignment (2 approve paths skip it), (2) slotAwareSort design vs user's FIFO expectation, (3) "Visited" is transient in-consultation state + queue keeps them till Finish, (4) patient queue-position card works but depends on token existing.
+- User-agreed next dev batch (pending user confirmation): 2-box name+mobile form, remove chief-complaint, universal token stamping on ALL approve paths, queue order decision (FIFO vs slot), Rx print label fix.
+- NO CODE CHANGED in this task — audit only.
