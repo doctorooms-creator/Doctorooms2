@@ -8260,3 +8260,23 @@ Stage Summary:
 - Deliverable: RECEPTION-PANEL-REVIEW-AND-PLAN.md (analysis + plan, zero code changes)
 - All 4 PDF issues decoded with root causes; booking-merge design ready for owner approval
 - Awaiting owner GO on: phase order, family-access fold decision, token-slip expansion, and credentials for sandbox restore
+
+---
+Task ID: reception-pdf-fixes-p0p1p3
+Agent: Main (Z.ai Code)
+Task: Owner approved reception-panel plan with 3 revisions: (1) Family Access KEEP (not fold), (2) booking merge must follow real-hospital flow (dept → associated doctor → queue, uniform tokens, queue system untouched), (3) production-grade with all scenarios. Provided fresh Vercel token → sandbox restored + fixes executed.
+
+Work Log:
+- SANDBOX RESTORED (reset #8 recovery): decrypted all 16 Vercel env vars via API (v1 decrypt, no teamId — token is personal account), transformed DATABASE_URL 6543→5432 session pooler, NOTIFICATION_SERVICE_URL→localhost:3006, dropped NEXT_PUBLIC_REALTIME_URL (dev gateway fallback), DEV_MODE=1, bun install main+realtime (975+74 pkgs), prisma db push, start-all.sh → :3000=200 + :3006 db:up in ~4min, watchdog re-armed
+- FOUNDER SCENARIO ANALYSIS appended to RECEPTION-PANEL-REVIEW-AND-PLAN.md (Part D): 7 scenarios (S1 OPD rush, S2 crowd express, S3 emergency, S4 advance booking, S5 cancel gap, S6 concurrent receptionists, S7 registered-vs-guest), 5 uniformity rules LOCKED (single {DEPT}-{NNN} token + EMR- for emergency only; every confirmed booking gets a token incl. future-dated — counter window already correct in token-utils; queue logic UNTOUCHED; charge always stamped; notifications always), final design = "One Booking Desk, 3 modes" (Patient Type × Visit Mode selectors, dept→doctor core flow preserved)
+- PHASE 0 (crash fix) DONE: stats API enriches departments via Department join + DoctorHospital active-doctor counts (fallback 'General OPD'/'OPD' for null dept), page.tsx defensive (shortCode?.toUpperCase(), name fallback, optional interface fields)
+- PHASE 1 (sidebar) DONE: receptionist 22→13 items — removed Medicines/Diet Orders/Charge Master/Bed Transfer/Lab Tests/My Blog/Notifications/Profile/Change Password; Family Access KEPT (owner directive); Profile page got a Change Password card (routes to /dashboard/change-password)
+- PHASE 3 (doctor avatar) DONE: NEW /api/doctor/avatar route (2MB limit, JPEG/PNG/WebP, magic-byte check, Cloudinary uploadToStorage 'avatars' bucket doctors/ path, old-avatar cleanup); doctor profile camera button now real (hover overlay + hidden file input + mutation + toast + spinner) — was decorative
+- E2E VERIFIED via agent-browser: Sunita Devi (AIIMS hospital-mode) dev-login → dashboard FULLY renders with Cardiology dept card "CARD · 1 patients today · 3 doctors active" (crash case reproduced first via real walk-in booking CARD-001, then fix confirmed); sidebar shows exactly 13 items; doctor avatar API tested 200 with real PNG (local storage path — Cloudinary vars absent on sandbox); camera overlay button present on doctor profile
+- Test data cleaned (booking deleted, avatar reset to default.png, local file removed); bun run lint CLEAN; commit 82f5e55 pushed to origin/main
+- DISCOVERED: Vercel project env vars do NOT include CLOUDINARY_* (owner checklist item from earlier sessions — still pending; avatar uploads on prod will use ephemeral local storage until Cloudinary vars are added)
+
+Stage Summary:
+- 3 of 5 phases EXECUTED + browser-verified (P0 crash, P1 sidebar, P3 doctor photo); P2 booking unification designed (founder scenarios + uniformity rules locked) awaiting next execution turn; P4 dead-code cleanup after P2
+- Sandbox fully operational again (dev + realtime + shared Supabase DB)
+- Owner-decision pending: CLOUDINARY_* env vars on Vercel (prod avatars/medical-docs need them)
