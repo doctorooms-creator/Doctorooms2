@@ -8241,3 +8241,22 @@ Stage Summary:
 - STITCH-UI-BRIEF.md = single hand-off file for Google Stitch (English, design-tool friendly; PATIENT-MODULE-AUDIT.md remains the engineering reference)
 - User next step: design screens on Stitch section-by-section (feed Section 2 design system first, then screen blocks from Section 4), validate against Section 5 flows
 - No development performed (owner's explicit instruction — analysis/design docs only)
+
+---
+Task ID: reception-panel-pdf-audit
+Agent: Main (Z.ai Code)
+Task: Owner resumed testing and reported reception-panel issues via PDF (4 items). ANALYSIS ONLY — no development. Full audit + keep/remove verdicts + detailed phased plan requested before proceeding.
+
+Work Log:
+- Extracted PDF (2 pages, Google Docs) text + 2 embedded screenshots; VLM-analyzed the error screenshot
+- ISSUE 4 ROOT CAUSE (code-verified): receptionist dashboard crash = TypeError .toUpperCase on undefined — stats API (hospital mode) returns departments as [{departmentId,count}] but page.tsx:240 expects dept.shortCode/name/todayCount/activeDoctors → crash whenever ≥1 booking today with departmentId in Hospital Mode. Fix = API enrich (Department join) + defensive render
+- ISSUE 2: ran deep Explore audit of the 3 booking surfaces (appointments 1315 ln / walk-in 1142 ln / express 174 ln + 3 POST APIs): ~70% duplicated form code; real differences = scheduled-vs-today, explicit-vs-auto-doctor, token-vs-none, safety rails (appointments POST has NO slot-conflict/OPD-limit/holiday/tx — double-booking risk!; express never stamps appointmentCharge — billing bug). Merge shape: ONE flow with Patient Type selector (Existing/Register New/Quick Name) × Visit Mode (Book Slot/Walk-in Today/Express), unified API = walk-in's Serializable-tx superset, Appointments page stays as management list, Queue page stays; walk-in/express routes retire with redirects
+- ISSUE 3: item-by-item verdict on 10 sidebar removals — agreed with owner on all EXCEPT flagged Family Access (only receptionist has it; deleting orphans the feature → fold into IPD Admissions page as per-patient action) and suggested Change Password moves INTO Profile page. 23 sidebar items → ~12. Removals = sidebar-config only first (non-destructive), dead routes deleted in Phase 4
+- ISSUE 1: patient avatar upload ALREADY WORKS (Cloudinary E2E-verified in prior session); receptionist avatar route exists; DOCTOR has NO avatar API and the profile camera button is DECORATIVE (no onClick) — genuine gap, small fix (clone patient avatar route pattern + wire button)
+- WROTE /home/z/my-project/RECEPTION-PANEL-REVIEW-AND-PLAN.md: Part A (4-issue audit w/ evidence), Part B (5 phases: P0 crash fix → P1 sidebar cleanup+family-access fold → P2 booking unification → P3 doctor photo → P4 dead-code cleanup; each with files, acceptance criteria, risks), Part C (TL;DR table + 3 owner-decision items: family-access fold, token-slip-for-walk-in bonus, redirect-then-delete strategy)
+- Flagged blocker: sandbox still DOWN (reset #8) — development needs Vercel token or DATABASE_URL from owner; prod deploy also needs fresh token
+
+Stage Summary:
+- Deliverable: RECEPTION-PANEL-REVIEW-AND-PLAN.md (analysis + plan, zero code changes)
+- All 4 PDF issues decoded with root causes; booking-merge design ready for owner approval
+- Awaiting owner GO on: phase order, family-access fold decision, token-slip expansion, and credentials for sandbox restore
