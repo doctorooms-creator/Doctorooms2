@@ -8580,3 +8580,20 @@ Stage Summary:
 - 4 issues root-caused to: (1) non-centralized token assignment (2 approve paths skip it), (2) slotAwareSort design vs user's FIFO expectation, (3) "Visited" is transient in-consultation state + queue keeps them till Finish, (4) patient queue-position card works but depends on token existing.
 - User-agreed next dev batch (pending user confirmation): 2-box name+mobile form, remove chief-complaint, universal token stamping on ALL approve paths, queue order decision (FIFO vs slot), Rx print label fix.
 - NO CODE CHANGED in this task — audit only.
+
+---
+Task ID: video-consult-audit
+Agent: Main (Z.ai Code)
+Task: User confirmed all audit findings ("sab kuch sahi hai") + asked: do video-call bookings from home also get tokens + queue positions? Audit only.
+
+Work Log:
+- Traced video flow: patient books (bookingMode='VideoCall' + timeSlot, validated InPerson|VideoCall in patient bookings POST) → status Pending → reception approve → queue. SAME pipeline as walk-in.
+- Queue APIs include video bookings: /api/queue/doctor/[doctorId] + /api/dashboard/receptionist/walk-in return bookingMode but apply NO mode filter → video patients DO appear in doctor queue + reception live queue once approved.
+- Doctor dashboard: "Join Call" button renders for VideoCall+Visited+videoRoomId (doctor pushes patient to Visited = consultation start = call window opens). videoRoomId API routes exist (/api/video-call/[roomId], /api/dashboard/doctor/video-call).
+- Approve route notification already handles video: "Video call ka link appointment page me milega" + token in Aturseva card.
+- Patient side: same /api/patient/bookings/queue position card works for video bookings (token-gated).
+- GAPS affecting video: (1) same tokenless bug on Appointments-page/doctor-side approve paths, (2) slotAwareSort puts slotted video patients ABOVE walk-ins (same FIFO conflict), (3) reception queue UI shows NO video badge — APIs return bookingMode but queue rail/page don't render it (reception can't tell at-home patient from waiting-room patient).
+
+Stage Summary:
+- VIDEO CONSULT IS ALREADY TOKEN+QUEUE-DESIGNED — no new architecture needed; it inherits the same fixes queued for walk-ins.
+- Confirmed dev batch (user-approved "sab kuch sahi hai" + video requirement): 2-box name+mobile form, remove chief-complaint field, centralized token stamping on ALL approve paths (+bookingDate fix), queue order decision (user leans FIFO), video badge in queue UIs, Rx print "Patient ID"→"Token" label, patient queue-card spinner-vs-null fix, "Visited" tab semantics.
