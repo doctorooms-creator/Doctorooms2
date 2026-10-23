@@ -4,6 +4,21 @@
 
 ---
 
+## ✅ EXECUTION STATUS (updated 23 Oct 2026, end of P2)
+
+| Phase | Status | Commit | Notes |
+|---|---|---|---|
+| P0 Dashboard crash | ✅ DONE | 82f5e55 | API enrich + defensive render; E2E verified |
+| P1 Sidebar cleanup | ✅ DONE | 82f5e55 | 22→13 items; Family Access KEPT (owner); Change Password → Profile card |
+| P3 Doctor photo | ✅ DONE | 82f5e55 | /api/doctor/avatar + wired camera button |
+| P2 Booking unification | ✅ DONE | 1397ae5 | One Booking Desk shipped (see Part D design); E2E 12 scenarios + prod deployed |
+| P4 Dead-code cleanup | ✅ DONE | 1397ae5 | 6 dead page dirs + 3 legacy POST handlers deleted; walk-in/express = redirects (1-release rollback) |
+
+**P2 shipped as:** `/dashboard/receptionist/booking` (3-step desk) + `POST /api/dashboard/receptionist/bookings` (walk-in superset with ALL safety rails on every mode) + uniform `BRK-YYYYMMDD-NNNN` appointmentNo + `{DEPT}-{NNN}` tokens everywhere + token slip printable from every mode + queuePosition via slotAwareSort (matches TV board). Queue system UNTOUCHED and verified (emergency-first order confirmed live). Legacy walk-in/express POST routes retired (GETs kept for queue + lookup). Appointments page = pure management list with token chips + print action. Test data cleaned from the shared prod DB.
+
+
+---
+
 ## PART A — PDF AUDIT (all 4 issues decoded)
 
 ### Issue #1 — Doctor & Patient photo upload → Cloudinary

@@ -80,3 +80,4 @@ watcher.sh
 # Runtime state
 .zscripts/dev.pid
 .zscripts/*.pid
+.vercel/

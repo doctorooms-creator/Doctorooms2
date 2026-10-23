@@ -8280,3 +8280,41 @@ Stage Summary:
 - 3 of 5 phases EXECUTED + browser-verified (P0 crash, P1 sidebar, P3 doctor photo); P2 booking unification designed (founder scenarios + uniformity rules locked) awaiting next execution turn; P4 dead-code cleanup after P2
 - Sandbox fully operational again (dev + realtime + shared Supabase DB)
 - Owner-decision pending: CLOUDINARY_* env vars on Vercel (prod avatars/medical-docs need them)
+
+---
+Task ID: reception-p2-booking-unification
+Agent: Main (Z.ai Code)
+Task: Execute P2 (booking unification per the approved founder design — One Booking Desk, 3 modes, uniform tokens, queue system untouched) + P4 (dead-code cleanup), E2E verify, deploy to prod. Continuation of reception-pdf-fixes-p0p1p3 (P0/P1/P3 done at 82f5e55).
+
+Work Log:
+- SANDBOX already alive from previous turn (:3000=200, :3006 healthy, Supabase shared DB) — went straight to build
+- READ the full booking stack first: token-utils (generateTokenNumberTx = per-doctor-per-day counter, EMR prefix for emergencies, future-date counter windows), walk-in POST (the Serializable-tx superset pattern), express POST (least-busy auto-assign + holiday-blind), appointments POST (NO tx/limit/conflict/token — the double-booking hole), approve route (already stamps tokens on By-Self approvals), patients/register (deterministic email + phone dedup), public token-slip route, SlotGrid component, schedule API shapes
+- BUILT unified API POST /api/dashboard/receptionist/bookings: patientMode (lookup/register/quick — register LINKS an existing mobile instead of erroring) × visitMode (walkin/express/scheduled); Serializable tx + P2034 retry ×5; OPD-limit re-check for the VISIT day; slot-conflict 409 (emergency bypasses); holiday check on the VISIT date (express auto-assign also SKIPS holiday doctors — new founder rule); token INSIDE the tx via generateTokenNumberTx (future-dated bookings consume the future day's counter); ONE appointmentNo generator BRK-YYYYMMDD-NNNN (daily creation-day sequence, race-safe in tx; APT/DOC-/EXP- retired for new rows); charge ALWAYS stamped (docLink.fees ?? doctor.fees); notifications ALWAYS (patient + doctor + queue-updated emit for today bookings only); doctor validated against dept+hospital link (founder flow guarantee); clinic-mode branch = faithful port of walk-in clinic branch
+- BUILT unified UI /dashboard/receptionist/booking: 3-step desk (Patient: Mobile Lookup/Register New/Quick Name × Visit: dept→associated-doctor cascading cards with fees × When: Today-Queue/Today-Express/Book-Slot) with live SlotGrid reuse, auto next-free-slot pick (walkin only), emergency toggle (walkin only), InPerson/Video toggle, register demographics collapse, charge preview, sticky token-slip result panel (print slip + book another + linkedExisting hint); express mode hides doctor/slot (auto-assign banner); clinic mode shows fixed doctor card
+- FIXED queuePosition semantics: computed via slotAwareSort in BOTH the unified API and the public token-slip route (was tokenOrder-only counting — emergencies reported wrong positions; now matches Queue page/TV board exactly: EMR-003→#2, first normal CARD-001→#3 verified)
+- REWIRED appointments page: 1316→~630 lines (inline booking dialog + register dialog + lookup/create mutations REMOVED via surgical sed + MultiEdit); "New Appointment" button → router.push(/booking); token chip next to appointmentNo in table rows; Print Token button in detail dialog; appointments GET now returns tokenNumber (both modes)
+- RETIRED walk-in + express pages → server redirects to /booking (1-release rollback); express client.tsx deleted; sidebar 13→12 items (Express Walk-in + Walk-in merged into New Appointment w/ CalendarPlus icon); dashboard quick actions rewired (New Appointment→/booking, View Queue→/queue, Book Patient→/booking); breadcrumbs updated (+ booking/queue labels, dead-page labels removed)
+- P4 CLEANUP: git rm'd 6 dead page dirs (medicines, diet-orders, charge-master, bed-transfer, lab-test-master, blog); deleted POST handlers from walk-in (728→222 ln), express-walkin (172→19 ln), appointments (469→294 ln) routes — GETs kept (queue page + print-queue + booking-page mode discovery + mobile lookup all use them); stale imports cleaned; receptionist notifications page KEPT (header bell routes there)
+- E2E (agent-browser, AIIMS Sunita hospital mode + API-level): (1) walkin existing-patient → CARD-001 queue #1; (2) express quick-name → auto Dr. Vinod GMED-001 + slip; (3) scheduled tomorrow 10:00 Dr. Madhuri → tomorrow's CARD-001 counter + BRK ref; (4) slot-conflict 409 clean message; (5) emergency ×2 → EMR-002/003 queue-TOP (queue page order verified: EMR-002→EMR-003→CARD-001→CARD-004→CARD-005); (6) past-date 400, no-slot 400, no-patient 400, wrong-dept-doctor 400, cross-hospital 400; (7) register → user created + booking; register-dup → linkedExisting=true no fork; (8) token slip page full context (AIIMS header/room/floor/Hindi footer) + positions match queue; (9) redirects walk-in/express→/booking; (10) quick actions + sidebar verified; (11) clinic-mode page renders (no doctorId receptionists exist in prod data — branch is port of proven walk-in logic)
+- DEV SERVER DIED TWICE mid-E2E (sandbox memory-threshold restarts during compile-heavy rounds) — recovered via start-all.sh both times; all 10 receptionist routes smoke-tested 307/200 after
+- TEST DATA CLEANED from the SHARED PROD DB: 9 BRK bookings + 13 notifications + 1 QA user deleted; zero residue verified (BRK count = 0)
+- bun run lint CLEAN; commit 1397ae5 pushed origin main
+- PROD DEPLOYED: .vercel/project.json re-pinned WITH projectName (junk my-project mis-link guard) + --scope aditya-2b2c → deployment doctorooms-2nf7vfskk READY, aliased doctorooms-hms.vercel.app; prod verified: root 200, /booking 307 (auth), QA patient login 200, booking API role-guarded (patient → Unauthorized)
+- RECEPTION-PANEL-REVIEW-AND-PLAN.md updated with execution-status table (all 5 phases DONE)
+
+Stage Summary:
+- RECEPTION PANEL PDF: ALL 4 ISSUES RESOLVED END-TO-END (P0 crash 82f5e55 + P1 sidebar 82f5e55 + P3 doctor photo 82f5e55 + P2 booking unification 1397ae5 + P4 cleanup 1397ae5) — prod runs 1397ae5
+- ONE BOOKING DESK LIVE: reception has a single flow for walk-in/express/scheduled; every confirmed booking gets a uniform {DEPT}-{NNN} token (EMR- only for emergencies), stamped charge, notifications, and a printable slip; queue/TV board/print-queue/doctor queue UNTOUCHED and verified intact (emergency-first order live-confirmed)
+- Uniformity rules from the founder analysis are all enforced server-side (single token system, single appointmentNo generator, charge always, notifications always, S6 concurrency via Serializable tx)
+- Legacy POST surfaces retired: walk-in/express POSTs deleted, appointments POST deleted; pages redirect for one release; GETs retained where other pages consume them
+- Sandbox note: dev server dies under compile-heavy memory pressure (known 4GB sandbox trait) — restart via `bash start-all.sh` (recovery is <1 min)
+- Next executables (no owner needed): FAB sheet voice controls, prod LLM-fallback retry chip, doctor-side care log visibility, Copilot vision.ts route wiring (Phase E); walk-in/express redirect pages can be deleted after 1 release
+- Owner queue unchanged: LLM_* env for prod AI activation, CLOUDINARY_* env for prod avatars, Render API key for realtime redeploy
+
+---
+Task ID: webdevreview-cron-recreate
+Agent: Main (Z.ai Code)
+Task: Create the mandatory 15-min webDevReview cron job (previous jobs disabled by exec limits).
+
+Work Log:
+- (entry below)
