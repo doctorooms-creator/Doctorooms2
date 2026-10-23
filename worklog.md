@@ -8318,3 +8318,22 @@ Task: Create the mandatory 15-min webDevReview cron job (previous jobs disabled 
 
 Work Log:
 - (entry below)
+
+---
+Task ID: home-redesign-analysis
+Agent: Main (Z.ai Code)
+Task: Analyze uploaded PDF "Untitled document (7).pdf" (reception UX redesign request) — ANALYSIS ONLY, no development per explicit user instruction.
+
+Work Log:
+- Extracted full PDF: 4 pages, 7 embedded 1920×1030 screenshots (all unique) + 1 page Hinglish instructions
+- VLM-analyzed all 7 screenshots: (a) Receptionist Dashboard home page ×2, (b) New Appointment booking page — Step 1 with Mobile Lookup / Register New / Quick Name tabs, Step 2 dept→doctor cascade, Step 3 Today-Queue / Today-Express / Book-Slot mode cards
+- Translated user's Hinglish requirement: ONE single auto-detecting form (mobile → auto-fill existing; mobile+name → auto-register; name-only → straight to queue) + AUTO-RESET after booking (no button press) + everything on ONE page — receptionist time-saving is the goal
+- Code-reviewed current implementation: src/app/dashboard/receptionist/page.tsx (504 lines, monitoring-style dashboard), booking/page.tsx (1086 lines, 3-step wizard × 3 patient modes × 3 visit modes), express-walkin GET lookup API, unified bookings POST API
+- Confirmed backend is ALREADY ~90% ready: patientMode quick/existing/register + auto-link on existing mobile + token/charge/notifications all server-side
+- Gap analysis produced: form buried 2 clicks deep, upfront mode-choice burden (should be auto-detected), manual "Book Another Patient" reset button (should be auto), 3 stacked step cards require scrolling (should be single-viewport smart form), no name-based patient search endpoint
+- Delivered full redesign plan "One-Form Home Page (Booking-First Dashboard)" to user with smart-field behavior spec, 3 user journeys with click counts, proposed layout ASCII wireframe, minimal backend changes list (extend lookup payload, add name-search endpoint, per-receptionist defaults), and open decisions for owner
+
+Stage Summary:
+- ANALYSIS-ONLY PHASE COMPLETE — zero code modified
+- Key finding: the redesign is primarily a FRONTEND re-architecture of the receptionist home page (flip from monitoring-dashboard to booking-desk) + 2 small backend additions (name-search endpoint, extended lookup payload); the heavy booking logic (tokens, linking, safety rails) is reusable as-is
+- Next phase (awaiting owner approval): implement One-Form home page per the delivered plan
