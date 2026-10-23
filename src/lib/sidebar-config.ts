@@ -177,8 +177,9 @@ export const sidebarConfig: RoleSidebarMap = {
     { label: 'Change Password', href: '/dashboard/change-password', icon: KeyRound },
   ],
   receptionist: [
-    { label: 'Dashboard', href: '/dashboard/receptionist', icon: LayoutDashboard },
-    { label: 'New Appointment', href: '/dashboard/receptionist/booking', icon: CalendarPlus },
+    // Home IS the booking form now (One-Form Booking Desk, founder redesign):
+    // smart field + dept/doctor chips + auto-reset. Monitoring lives compact on same page.
+    { label: 'Booking Desk', href: '/dashboard/receptionist', icon: CalendarPlus },
     { label: 'Appointments', href: '/dashboard/receptionist/appointments', icon: CalendarDays },
     { label: 'Pending Bookings', href: '/dashboard/receptionist/pending-bookings', icon: Clock },
     { label: 'Queue', href: '/dashboard/receptionist/queue', icon: ListOrdered },
@@ -187,6 +188,9 @@ export const sidebarConfig: RoleSidebarMap = {
     { label: 'Patients', href: '/dashboard/receptionist/patients', icon: Users },
     { label: 'IPD Admissions', href: '/dashboard/receptionist/ipd', icon: BedDouble },
     { label: 'Family Access', href: '/dashboard/receptionist/family-access', icon: Users },
+    // Legacy 3-step wizard, demoted: ONLY for future slots / express auto-doctor / video.
+    // Everyday walk-ins belong on the Booking Desk (one-form home) above.
+    { label: 'Advanced Booking', href: '/dashboard/receptionist/booking', icon: CalendarDays },
     {
       label: 'Billing',
       href: '/dashboard/receptionist/billing',

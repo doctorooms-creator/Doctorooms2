@@ -965,12 +965,12 @@ export default function ReceptionistHomePage() {
                       )}
                     </Button>
                     <p className="text-center text-[11px] text-muted-foreground">
-                      Advanced booking (future slots, express, video){' '}
+                      Need a future slot, express auto-doctor or video consult?{' '}
                       <Link
                         href="/dashboard/receptionist/booking"
                         className="font-medium text-teal-600 underline-offset-2 hover:underline dark:text-teal-400"
                       >
-                        open full desk →
+                        Advanced Booking →
                       </Link>
                     </p>
                   </div>

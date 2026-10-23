@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation'
 
 /**
- * RETIRED (Reception Panel P2 — booking unification).
- * Express is now a mode of the unified Booking Desk. Redirect old
- * bookmarks/sidebar links for one release before the route is deleted.
+ * RETIRED (One-Form Booking Home redesign).
+ * Quick/express walk-ins now happen directly on the receptionist HOME page —
+ * the one smart-form booking desk (name-only → straight to queue).
+ * Full express auto-doctor lives under Advanced Booking (/booking).
  */
 export default function ExpressWalkinPage() {
-  redirect('/dashboard/receptionist/booking')
+  redirect('/dashboard/receptionist')
 }

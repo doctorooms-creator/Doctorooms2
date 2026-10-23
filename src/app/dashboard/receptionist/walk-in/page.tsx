@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation'
 
 /**
- * RETIRED (Reception Panel P2 — booking unification).
- * Walk-in is now a mode of the unified Booking Desk. Redirect old
- * bookmarks/sidebar links for one release before the route is deleted.
+ * RETIRED (One-Form Booking Home redesign).
+ * Walk-ins now happen directly on the receptionist HOME page — the one
+ * smart-form booking desk (type mobile/name → Enter → auto-reset).
+ * Old bookmarks land there.
  */
 export default function WalkInPage() {
-  redirect('/dashboard/receptionist/booking')
+  redirect('/dashboard/receptionist')
 }

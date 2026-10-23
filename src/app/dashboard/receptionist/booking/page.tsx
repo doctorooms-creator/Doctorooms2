@@ -1,15 +1,17 @@
 'use client'
 
 /**
- * UNIFIED BOOKING DESK — "One Booking Desk, 3 modes"
- * (Reception Panel P2, owner-approved founder design.)
+ * UNIFIED BOOKING DESK → ADVANCED BOOKING (legacy 3-step wizard)
+ * (Reception Panel P2, owner-approved founder design — later demoted by the
+ *  One-Form Booking Home redesign; see worklog `home-redesign-implementation`.)
  *
- * ONE surface replaces the three legacy booking pages:
- *   STEP 1 — Patient:   Mobile Lookup · Register New · Quick Name
- *   STEP 2 — Visit:     Department → associated Doctor (founder core flow)
- *   STEP 3 — When:      Today–Queue · Today–Express · Book Slot (future date)
+ * Everyday walk-ins now happen on the receptionist HOME page (one smart form,
+ * auto-reset loop). This page remains ONLY for the advanced paths:
+ *   • future date slot booking (Book Slot)
+ *   • express auto-doctor assignment
+ *   • video consult bookings
  *
- * Every confirmed booking gets a UNIFORM {DEPT}-{NNN} token (EMR- only for
+ * Every confirmed booking still gets a UNIFORM {DEPT}-{NNN} token (EMR- only for
  * emergencies), a printable token slip, a stamped charge, and notifications —
  * regardless of mode. Queue page / TV board / doctor queue stay untouched and
  * simply pick the new bookings up.
@@ -35,6 +37,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -389,15 +392,36 @@ export default function NewBookingPage() {
 
   return (
     <div className="space-y-6 p-4 md:p-6">
+      {/* Redirect nudge — everyday walk-ins belong on the one-form Booking Desk */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-teal-200 bg-teal-50/70 px-4 py-2.5 text-sm text-teal-900 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-200">
+        <Zap className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1">
+          Everyday walk-in? The{' '}
+          <Link
+            href="/dashboard/receptionist"
+            className="font-semibold underline underline-offset-2"
+          >
+            Booking Desk
+          </Link>{' '}
+          (one smart form, auto-reset) is faster — this page is only for future
+          slots, express auto-doctor &amp; video consults.
+        </span>
+        <Link href="/dashboard/receptionist">
+          <Button size="sm" variant="outline" className="h-8 gap-1 border-teal-300 bg-white text-teal-700 hover:bg-teal-50 dark:border-teal-800 dark:bg-transparent dark:text-teal-300 dark:hover:bg-teal-950/60">
+            Open Booking Desk
+          </Button>
+        </Link>
+      </div>
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <CalendarPlus className="h-6 w-6 text-teal-600" />
-            New Appointment
+            Advanced Booking
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            One booking desk — walk-in, express and future slots, uniform tokens
+            Future slots, express auto-doctor and video consults — uniform tokens
             {isHospitalMode ? '' : ' for your doctor'}
           </p>
         </div>
