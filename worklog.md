@@ -8674,3 +8674,25 @@ Stage Summary:
 - THE critical find: consultation lifecycle (In OPD → auto-Finish) was broken in 3 places; fixed via init/finalize/reception-escape-hatch triad. Lifecycle now: Approve → Call Next (Visited/In OPD) → Save & Print (Finish, slot freed, next patient notified).
 - Verified: lint clean, E2E green on fixed flow, notifications firing at both transitions.
 - Prod push follows this commit (auto-deploy on Git reconnect).
+
+---
+Task ID: doctor-dashboard-audit
+Agent: Main (Z.ai Code)
+Task: User pasted doctor-dashboard screenshot saying it's "bekar"/cluttered — "as a doctor think what you need all day; system must make his work easy and fast; he's not going to sit looking at software." ANALYSIS ONLY, no development (explicit user instruction, twice).
+
+Work Log:
+- VLM-analyzed uploaded screenshot (3 passes, incl. 2x zoom crop): doctor dashboard @ doctorooms.in/vetera/app/dashboard/doctor — URL has /vetera/app/ path + queue rows show "Approve"/"No-show"/"Finish" buttons which do NOT exist in any commit of Doctorooms2's doctor page (verified git history 31eed46→038be76→HEAD) → screenshot is of the OLD v1 "Vetera" product build. Structural critique still applies 100% to current Doctorooms2 dashboard (verified in code).
+- Read full src/app/dashboard/doctor/page.tsx (1283 lines): page structure = LostRevenueBanner → HospitalBanner → 4 StatCards → OPDQueueSection (the good part) → Today's Schedule (duplicate list) → Recent Reviews (vanity) → Sent for Tests → Quick Actions (low-frequency) → SearchSection (bottom).
+- CRITICAL FIND — FAKE DATA: StatCard trends are HARDCODED literals: trend={{ value: 12, 'from yesterday' }}, { value: 8, 'this month' }, { value: 5, 'this month' }} — never computed from DB. "Average Rating 0.0 +5%" is a lie rendered daily. Trust-killer: doctor sees +12% on a 4-appointment day after a 20-appointment yesterday.
+- Sidebar audit (sidebar-config.ts): doctor role = 24 top-level items, 33 links total (Earnings, Lost Revenue, Referral, Recall Campaigns, Plan & Billing, Gallery, Posts, Lab Partners, My Commission, 9 Rx Settings children...) — vs doctor's actual OPD loop needing ~5.
+- Wizard audit: 8 steps (Complaints→Vitals→Tables→Medicines→Advice→Finish + Order Tests/Reports optional) — every patient walks all mandatory steps; no Quick-Rx, no Repeat-last-Rx for follow-ups.
+- Loop-trace (click-math per patient): scroll past banner+4 cards → Call Next (1) → brief close (1) → patient row click (1) → 6 steps × (fill+Next ≈ 2 each) → Save&Print (1) → Print (1) → Mark Visit Complete (1) ≈ 15-20 interactions; ×40 patients = 600-800/day, ~70% pure navigation overhead, not care.
+- Redundancy found: FinishPrintOverlay still has "Mark Visit Complete" button although finalize now auto-stamps Finish (a9fa7b6) — leftover double-action confusion.
+- GOOD bones identified (keep): Call Next hero button w/ next-token label, PreVisitBriefSheet auto-open (401-line brief: today context/alerts/history/last-visit/trends — the right instinct), Currently Serving banner, Waiting/In-OPD/Done mini stats, no-show two-click, Pause Queue, emergency tier, FIFO, FinishPrintOverlay auto-return to dashboard, hover route-prefetch.
+- Delivered full Hinglish analysis to user: doctor's real day (the 35-50× loop: Call→context→examine→Rx→print→next), 2-moods framing (OPD mode vs business mode — clutter comes from merging them), post-mortem of all 8 sections, click-math, "OPD Cockpit" one-screen concept (hero=current patient w/ Start Rx, next-up preview, compact waiting strip w/ wait times, day-progress line, report-review inbox, search at top, 4 day-states: morning/midday/report-returns/day-end), Quick-Rx/Full-Rx/Repeat-last-Rx wizard split, sidebar diet 24→5, Keep/Move/Delete/Add table, success metrics (chair-to-Rx ≤3 taps ≤90s, dashboard dwell ≤5s/patient, zero fake numbers).
+
+Stage Summary:
+- NO CODE CHANGED — audit only per user instruction.
+- Verdict delivered: bones of the loop are right (Call Next + brief + FIFO + auto-finish), but they're buried under vanity (fake stat trends, reviews, lost-revenue banner, duplicate schedule list, 24-item sidebar, 8-step wizard for simple cases).
+- Proposed redesign direction (awaiting user green light): OPD Cockpit + Quick/Full Rx split + report-review inbox + sidebar diet + honest numbers only.
+- Open decision points for owner: sidebar diet scope, Quick-Rx default vs Full-Rx default, repeat-last-Rx permissions (clone with new date?), whether business metrics get a separate "Practice" screen or stay hidden.
