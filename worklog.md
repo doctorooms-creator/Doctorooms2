@@ -8696,3 +8696,24 @@ Stage Summary:
 - Verdict delivered: bones of the loop are right (Call Next + brief + FIFO + auto-finish), but they're buried under vanity (fake stat trends, reviews, lost-revenue banner, duplicate schedule list, 24-item sidebar, 8-step wizard for simple cases).
 - Proposed redesign direction (awaiting user green light): OPD Cockpit + Quick/Full Rx split + report-review inbox + sidebar diet + honest numbers only.
 - Open decision points for owner: sidebar diet scope, Quick-Rx default vs Full-Rx default, repeat-last-Rx permissions (clone with new date?), whether business metrics get a separate "Practice" screen or stay hidden.
+
+---
+Task ID: doctor-cockpit-automation-design
+Agent: Main (Z.ai Code)
+Task: User confirmed direction ("age ka tmhara sara sochna sahi hai") + gave own automation thought: on finishing a patient, system should auto-open the NEXT patient; if that patient visited before, auto-show EVERYTHING (past Rx, reports, medical history). Asked for extreme-depth scenario thinking as a doctor — where automation can go, so the system is easy and never a headache in rush. NO development (explicit).
+
+Work Log:
+- Verified the plumbing already exists for the user's auto-advance dream: (1) notifyNextPatient() already fires in finalize route on Save & Print (queue-notifications.ts:235); (2) copilot brief API ([bookingId]/route.ts) already aggregates lastVisit + lastRx diagnosis + medicines WITH doses + vitals history (bp/weight per visit) + priorVisits; (3) PreVisitBriefSheet already renders Today's Complaint / Alerts / History With You / Last Visit / Vitals Trend sections; (4) draft auto-resume (P4 autosave) exists for interrupted consults. → Auto-advance is a WIRING delta (~20% new), not a rebuild.
+- Gaps found for chart completeness: NO allergy field anywhere in Prisma schema (chart Alerts needs structured allergies); NO lab-report-arrival notification to doctor (LabReport has status/resultEnteredAt/doctorId — data exists, event doesn't); vitals trend only tracks bp+weight (pulse/spo2 live in labels JSON, not trended).
+- Built the extreme-depth day simulation (as Dr. Rajesh): 16 scenarios minute-by-minute from 8:55 pre-flight to 2:30 exit — each with current-friction vs automation-answer: pre-flight check (pending approvals leak), cold start, THE loop ×40 anatomy (20-30s golden window = reading time, not clicking), revisit chronic patient (30% of OPD), first-visit patient, mid-day report return, emergency mid-Rx, video slot countdown, no-show timer, breaks/lunch (Pause-aware auto-advance), mid-Rx interruption (draft resume), reception bottleneck (solo-clinic auto-approve idea), OPD-end overrun warning, day-end summary + tomorrow preview, business mood separation.
+- Automation inventory delivered (16 items) with the architectural thesis: ONE doctor action (Save & Print) should equal SIX system updates (booking Finish + slot freed + next patient called/notified + waiting-display updated + doctor screen shows next chart + reports inbox refreshed). Current = 1 action : 1 update.
+- OPD Mode screen concept: cockpit + wizard MERGE into one continuous surface (no navigation during OPD hours) — hero zone swaps cockpit↔wizard, chart docks as right rail during Rx (doctor references last Rx WHILE writing new one — key insight: prescribing constantly refers backwards).
+- Over-automation safeguards designed: auto-advance respects Pause (no auto-call during breaks), Repeat-Rx SUGGESTS never clones (medical liability), cross-doctor history = hospital-scope consent question, every automation has manual override.
+- Success metrics: doctor-to-screen interactions per patient ≤6 (aaj ~15-20), chair-to-Rx ≤90s, zero clicks between patients (auto-advance), dashboard dwell ≤5s, zero fake numbers.
+- Cron: all 5 previous watchers disabled by exec limits → created fresh v6 (job 473185) with cockpit-redesign context.
+
+Stage Summary:
+- NO CODE CHANGED — design/analysis round 2 per user instruction.
+- User's auto-advance thought validated as the crown-jewel automation AND ~80% already plumbed (notifyNextPatient + brief aggregation + draft resume all exist; missing = auto-flip next booking to Visited + auto-open chart + waiting-display sync).
+- Blueprint is now scenario-complete: 16 scenarios, 16 automations, OPD-Mode single-screen concept, chart spec, safeguards, metrics.
+- Awaiting owner GO for development; build order recommended: (1) OPD Cockpit shell + auto-advance, (2) pre-loaded chart expansion (allergies field + reports inbox + pulse/spo2 trending), (3) Quick-Rx split, (4) sidebar diet, (5) delete fake stats + business-mood separation.
