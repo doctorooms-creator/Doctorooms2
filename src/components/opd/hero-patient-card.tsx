@@ -4,9 +4,18 @@
  * Hero patient card — the screen's heart (03 §3.2).
  * States: morning → called (golden window) → in-opd → break → day-end → empty-queue.
  * The ONE primary action sits here; Enter triggers it (keyboard map).
+ *
+ * Phase E — the AUTHORED moment (02 §5.3): when the card enters via
+ * auto-advance (justAdvanced), the swap is a rehearsed sequence —
+ * rise 20px + fade 320ms ease-out, content staggered 60ms (name →
+ * context → actions), and the token number ROLLS from the previous
+ * patient's number like a physical clinic board flipping. Total felt
+ * time ≤ 700ms including the exit handled by the orchestrator's
+ * AnimatePresence. Nothing else on the screen moves during it.
  */
 
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useState } from 'react'
+import { motion, useMotionValue, useReducedMotion, animate } from 'framer-motion'
 import { Video, UserX } from 'lucide-react'
 import { statusWords, waitLabel, type OpdQueueItem } from './types'
 
@@ -25,7 +34,7 @@ interface HeroCardProps {
   contextLine?: string | null
   primary: HeroAction | null
   secondary?: HeroAction | null
-  /** Phase C: true right after auto-advance (drives the authored swap). */
+  /** Phase C/E: true right after auto-advance (drives the authored swap). */
   justAdvanced?: boolean
 }
 
@@ -42,6 +51,17 @@ export function HeroPatientCard({ patient, mode, contextLine, primary, secondary
         ? 'Called — walking in'
         : 'Next up'
 
+  // Stagger only the authored swap — routine mounts stay still
+  // (no page-load choreography on data, 02 §5.5).
+  const stagger = (i: number) =>
+    justAdvanced
+      ? {
+          initial: { opacity: 0, y: 10 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.3, delay: 0.05 + i * 0.06, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
+        }
+      : {}
+
   return (
     <motion.section
       key={patient.id}
@@ -56,13 +76,14 @@ export function HeroPatientCard({ patient, mode, contextLine, primary, secondary
       className="flex h-full flex-col justify-between rounded-[var(--opd-radius-card)] border p-[var(--opd-card-pad)]"
       style={{ background: 'var(--opd-surface)', borderColor: 'var(--opd-border)' }}
     >
-      <div className="flex items-start justify-between gap-4">
+      <motion.div {...stagger(0)} className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          {/* Token — the board motif: tabular ink, the product's own object */}
+          {/* Token — the board motif: tabular ink, the product's own object.
+              On auto-advance the number rolls like a physical token board. */}
           <div className="flex items-baseline gap-3">
             {patient.tokenNumber && (
               <span className="opd-num text-[28px] font-semibold leading-none" style={{ color: 'var(--opd-text)' }}>
-                {patient.tokenNumber}
+                {justAdvanced ? <TokenRoll token={patient.tokenNumber} /> : patient.tokenNumber}
               </span>
             )}
             {patient.isEmergency && (
@@ -118,17 +139,17 @@ export function HeroPatientCard({ patient, mode, contextLine, primary, secondary
             {statusWords(patient.status)}
           </p>
         </div>
-      </div>
+      </motion.div>
 
       {/* Context line — one line of real facts (chart rail holds the depth) */}
       {contextLine && (
-        <p className="mt-4 truncate text-[13px]" style={{ color: 'var(--opd-muted)' }}>
+        <motion.p {...stagger(1)} className="mt-4 truncate text-[13px]" style={{ color: 'var(--opd-muted)' }}>
           {contextLine}
-        </p>
+        </motion.p>
       )}
 
       {/* Actions — ONE primary, Enter-bound; secondary ghosted */}
-      <div className="mt-5 flex items-center gap-2.5">
+      <motion.div {...stagger(2)} className="mt-5 flex items-center gap-2.5">
         {primary && (
           <button
             onClick={primary.onRun}
@@ -166,8 +187,46 @@ export function HeroPatientCard({ patient, mode, contextLine, primary, secondary
           <kbd className="rounded-[3px] border px-1" style={{ borderColor: 'var(--opd-border)' }}>Enter</kbd> ={' '}
           {primary?.label ?? 'primary action'}
         </p>
-      </div>
+      </motion.div>
     </motion.section>
+  )
+}
+
+/**
+ * Token roll — the "flip" of a physical number board. "GEN-013" → "GEN-014"
+ * animates only the numeric suffix (360ms, ease-out, tabular digits). Falls
+ * back to the static token for non-numeric formats, and to an instant swap
+ * under prefers-reduced-motion.
+ */
+function TokenRoll({ token }: { token: string }) {
+  const reduced = useReducedMotion()
+  const match = /^(.*?)(\d+)$/.exec(token)
+  const target = match ? parseInt(match[2], 10) : 0
+  const start = Math.max(0, target - 1)
+
+  const mv = useMotionValue(start)
+  const [display, setDisplay] = useState(start)
+
+  useEffect(() => {
+    if (!match || start === target) return
+    if (reduced) {
+      setDisplay(target)
+      return
+    }
+    const controls = animate(mv, target, {
+      duration: 0.36,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    })
+    return () => controls.stop()
+  }, [target, start, reduced, match, mv])
+
+  if (!match) return <>{token}</>
+  return (
+    <>
+      {match[1]}
+      {String(display).padStart(match[2].length, '0')}
+    </>
   )
 }
 

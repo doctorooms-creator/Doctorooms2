@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
+import { AnimatePresence, motion } from 'framer-motion'
 
 interface SearchRow {
   id: string
@@ -57,8 +58,6 @@ export function OpdSearch({ open, onClose }: OpdSearchProps) {
     setActive(0)
   }, [value])
 
-  if (!open) return null
-
   function go(row: SearchRow) {
     if (row.bookingId) {
       router.push(`/dashboard/doctor/prescriptions/new?bookingId=${row.bookingId}&returnTo=/opd`)
@@ -69,19 +68,29 @@ export function OpdSearch({ open, onClose }: OpdSearchProps) {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]"
-      style={{ background: 'rgba(20,21,21,0.45)' }}
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-label="Search patients"
-    >
-      <div
-        className="w-[min(560px,92vw)] overflow-hidden rounded-[var(--opd-radius-card)] border shadow-lg"
-        style={{ background: 'var(--opd-surface)', borderColor: 'var(--opd-border)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh]"
+          style={{ background: 'rgba(20,21,21,0.45)' }}
+          onClick={onClose}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Search patients"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+        >
+          <motion.div
+            className="w-[min(560px,92vw)] overflow-hidden rounded-[var(--opd-radius-card)] border shadow-lg"
+            style={{ background: 'var(--opd-surface)', borderColor: 'var(--opd-border)' }}
+            onClick={(e) => e.stopPropagation()}
+            initial={{ opacity: 0, scale: 0.98, y: 6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.98, y: 4 }}
+            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          >
         <input
           ref={inputRef}
           value={value}
@@ -164,7 +173,9 @@ export function OpdSearch({ open, onClose }: OpdSearchProps) {
             <kbd className="rounded-[3px] border px-1" style={{ borderColor: 'var(--opd-border)' }}>Esc</kbd> close
           </span>
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

@@ -4,8 +4,14 @@
  * Facts strip (03 §3.5) — the honest KPI line.
  * ONE container, 1px dividers, NO tiles/icons/sparklines.
  * Every figure comes from the aggregate payload — zero hardcoded trends.
+ *
+ * Phase E motion: numbers crossfade on change (160ms, tabular-nums — no
+ * odometer theatrics); the reports-ready count gets ONE soft emphasis
+ * pulse when it changes (02 §5.4) so an arriving lab report is felt
+ * without a sound.
  */
 
+import { AnimatePresence, motion } from 'framer-motion'
 import type { OpdCockpitData } from './types'
 
 interface FactsStripProps {
@@ -14,9 +20,11 @@ interface FactsStripProps {
   reportsCount: number
   scope: OpdCockpitData['scope']
   dateLabel: string
+  /** Phase D: opens the reports-review inbox dialog. */
+  onReportsOpen?: () => void
 }
 
-export function FactsStrip({ stats, pendingApprovals, reportsCount, scope, dateLabel }: FactsStripProps) {
+export function FactsStrip({ stats, pendingApprovals, reportsCount, scope, dateLabel, onReportsOpen }: FactsStripProps) {
   return (
     <footer
       className="flex flex-wrap items-center gap-x-0 gap-y-1 rounded-[var(--opd-radius-card)] border"
@@ -30,11 +38,16 @@ export function FactsStrip({ stats, pendingApprovals, reportsCount, scope, dateL
 
       {reportsCount > 0 && (
         <button
+          onClick={onReportsOpen}
+          disabled={!onReportsOpen}
           className="opd-press flex items-center gap-1.5 border-l px-3.5 py-2 text-[12px] font-medium"
           style={{ borderColor: 'var(--opd-rule)', color: 'var(--opd-accent-deep)' }}
-          title="Reports ready to review"
+          title="Reports ready to review — open the inbox"
         >
-          <span className="opd-num text-[14px] font-semibold">{reportsCount}</span>
+          {/* One soft pulse when the count changes (arrival felt, not heard) */}
+          <PulseOnChange value={reportsCount}>
+            <span className="opd-num text-[14px] font-semibold">{reportsCount}</span>
+          </PulseOnChange>
           reports ready
         </button>
       )}
@@ -77,15 +90,42 @@ function Fact({
       className="flex items-baseline gap-1.5 border-l px-3.5 py-2 first:border-l-0"
       style={{ borderColor: 'var(--opd-rule)' }}
     >
-      <span
-        className="opd-num text-[15px] font-semibold"
-        style={{ color: tone === 'warn' ? 'var(--opd-warning)' : 'var(--opd-text)' }}
-      >
-        {value}
+      {/* Crossfade on change — keyed by value so each new number fades in
+          over the old one, 160ms, tabular digits aligned (no shift). */}
+      <span className="opd-num relative inline-flex items-baseline">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={String(value)}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+            className="text-[15px] font-semibold"
+            style={{ color: tone === 'warn' ? 'var(--opd-warning)' : 'var(--opd-text)' }}
+          >
+            {value}
+          </motion.span>
+        </AnimatePresence>
       </span>
       <span className="text-[12px]" style={{ color: 'var(--opd-muted)' }}>
         {label}
       </span>
     </div>
+  )
+}
+
+/** Wraps a value display; remounts (key=value) so each change pulses once —
+ *  scale 1.14 → 1 in 220ms. Feels like the count landed, not blinked. */
+function PulseOnChange({ value, children }: { value: number; children: React.ReactNode }) {
+  return (
+    <motion.span
+      key={value}
+      initial={{ scale: 1.14 }}
+      animate={{ scale: 1 }}
+      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
+      className="inline-flex"
+    >
+      {children}
+    </motion.span>
   )
 }

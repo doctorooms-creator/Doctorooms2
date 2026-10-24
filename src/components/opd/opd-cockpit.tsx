@@ -10,15 +10,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
 import { toast } from 'sonner'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, FileText } from 'lucide-react'
 import { OpdTopBar } from './top-bar'
 import { HeroPatientCard, type HeroAction } from './hero-patient-card'
 import { ChartRail } from './chart-rail'
 import { QueueStrip } from './queue-strip'
 import { FactsStrip } from './facts-strip'
-import { MorningState, BreakState, DayEndState } from './day-states'
+import { MorningState, BreakState, DayEndState, ReportsReturnState } from './day-states'
+import { ReportsDialog } from './reports-dialog'
 import { OpdSearch } from './search'
 import { useOpdData, useInvalidateOpd, useOpdRealtimeNudge } from './use-opd-data'
 import { useOpdKeyboard } from './use-keyboard'
@@ -50,6 +51,7 @@ export function OpdCockpit() {
   useOpdRealtimeNudge()
 
   const [searchOpen, setSearchOpen] = useState(false)
+  const [reportsOpen, setReportsOpen] = useState(false)
   const [callPendingId, setCallPendingId] = useState<string | null>(null)
   const [noShowPendingId, setNoShowPendingId] = useState<string | null>(null)
   const [sendInPendingId, setSendInPendingId] = useState<string | null>(null)
@@ -69,6 +71,15 @@ export function OpdCockpit() {
   }, [justAdvanced])
 
   const dayState = useMemo(() => (data ? deriveDayState(data) : 'empty'), [data])
+
+  // ── S7 reports-return: idle doctor + reports waiting + day still open →
+  // reviewing reports IS the next action (03 §4 day-state table).
+  const reportsReviewActive = useMemo(() => {
+    if (!data || dayState !== 'day-end') return false
+    if (data.reportsInbox.length === 0) return false
+    const closeHour = parseInt((data.scope.closesAt || '14:00').split(':')[0], 10) || 14
+    return istNow().getHours() < closeHour
+  }, [data, dayState])
 
   // ── Core actions (all reuse existing APIs — no new server surfaces) ──
 
@@ -289,7 +300,8 @@ export function OpdCockpit() {
     .join(' · ')
 
   return (
-    <div className="opd-root flex h-screen flex-col overflow-hidden">
+    <MotionConfig reducedMotion="user">
+      <div className="opd-root flex h-screen flex-col overflow-hidden">
       <OpdTopBar
         doctorName={data.doctor.name}
         specialization={data.doctor.specialization}
@@ -322,36 +334,53 @@ export function OpdCockpit() {
         style={{ scrollbarGutter: 'stable' }}
       >
         <main className="flex min-h-0 min-w-0 flex-1 flex-col gap-4" aria-live="polite">
-          <div className="flex min-h-[240px] flex-1 flex-col">
-            {dayState === 'morning' ? (
-              <MorningState
-                data={data}
-                onPrimary={() => nextUp && callPatient(nextUp.id)}
-                primaryPending={callPendingId === nextUp?.id}
-              />
-            ) : dayState === 'break' ? (
-              <BreakState
-                data={data}
-                onResume={() => pauseMutation.mutate(false)}
-                resumePending={pausePending}
-                onPrimary={() => pauseMutation.mutate(false)}
-              />
-            ) : dayState === 'day-end' ? (
-              <DayEndState
-                data={data}
-                onPrimary={() => router.push('/dashboard/doctor')}
-                onDone={() => router.push('/dashboard/doctor')}
-              />
-            ) : (
-              <HeroPatientCard
-                patient={heroPatient}
-                mode={heroMode}
-                contextLine={contextLine}
-                primary={heroPrimary}
-                secondary={heroSecondary}
-                justAdvanced={justAdvanced}
-              />
-            )}
+          <div className="relative flex min-h-[240px] flex-1 flex-col">
+            {/* AnimatePresence mode="wait" — the authored swap sequence
+                (02 §5.3): old card exits 180ms ease-in, THEN the new chart
+                enters. Nothing else on screen moves during it. */}
+            <AnimatePresence mode="wait" initial={false}>
+              {dayState === 'morning' ? (
+                <MorningState
+                  key="morning"
+                  data={data}
+                  onPrimary={() => nextUp && callPatient(nextUp.id)}
+                  primaryPending={callPendingId === nextUp?.id}
+                  onReviewReports={data.reportsInbox.length > 0 ? () => setReportsOpen(true) : undefined}
+                />
+              ) : dayState === 'break' ? (
+                <BreakState
+                  key="break"
+                  data={data}
+                  onResume={() => pauseMutation.mutate(false)}
+                  resumePending={pausePending}
+                  onPrimary={() => pauseMutation.mutate(false)}
+                />
+              ) : dayState === 'day-end' && reportsReviewActive ? (
+                <ReportsReturnState
+                  key="reports-return"
+                  data={data}
+                  onReview={() => setReportsOpen(true)}
+                  onDone={() => router.push('/dashboard/doctor')}
+                />
+              ) : dayState === 'day-end' ? (
+                <DayEndState
+                  key="day-end"
+                  data={data}
+                  onPrimary={() => router.push('/dashboard/doctor')}
+                  onDone={() => router.push('/dashboard/doctor')}
+                />
+              ) : (
+                <HeroPatientCard
+                  key={heroPatient?.id || 'empty'}
+                  patient={heroPatient}
+                  mode={heroMode}
+                  contextLine={contextLine}
+                  primary={heroPrimary}
+                  secondary={heroSecondary}
+                  justAdvanced={justAdvanced}
+                />
+              )}
+            </AnimatePresence>
           </div>
         </main>
 
@@ -359,6 +388,7 @@ export function OpdCockpit() {
         <div className="w-full shrink-0 xl:w-[384px]">
           <ChartRail
             bookingId={briefBookingId}
+            draftOpen={data.draftsOpen.some((d) => d.bookingId === briefBookingId)}
             idleSummary={{
               done: data.stats.done,
               waiting: data.stats.waiting,
@@ -370,6 +400,47 @@ export function OpdCockpit() {
 
       {/* Queue + facts — the bottom rail (mobile: drawer-ish stack) */}
       <div className="shrink-0 space-y-2 px-[var(--opd-pad)] pb-[var(--opd-pad)]">
+        {/* S9 draft-resume strip — interrupted consults surface with one-tap
+            resume (the wizard auto-opens the saved draft). */}
+        <AnimatePresence initial={false}>
+          {data.draftsOpen.length > 0 && (
+            <motion.div
+              key="drafts"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="flex items-center gap-3 rounded-[var(--opd-radius-card)] border px-4 py-2"
+              style={{ background: 'var(--opd-warn-bg)', borderColor: 'var(--opd-warn-border)' }}
+              role="status"
+            >
+              <FileText className="h-4 w-4 shrink-0" style={{ color: 'var(--opd-warning)' }} aria-hidden="true" />
+              <p className="min-w-0 flex-1 truncate text-[12px]" style={{ color: 'var(--opd-warn-ink)' }}>
+                Interrupted consult — <span className="font-semibold">{data.draftsOpen[0].patientName}</span>, saved{' '}
+                {new Date(data.draftsOpen[0].updatedAt).toLocaleTimeString('en-IN', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}
+                {data.draftsOpen.length > 1 && (
+                  <span className="opd-num ml-1">· +{data.draftsOpen.length - 1} more</span>
+                )}
+              </p>
+              <button
+                onClick={() =>
+                  router.push(
+                    `/dashboard/doctor/prescriptions/new?bookingId=${data.draftsOpen[0].bookingId}&returnTo=/opd`
+                  )
+                }
+                className="opd-press shrink-0 rounded-[var(--opd-radius-chip)] px-2.5 py-1 text-[12px] font-semibold"
+                style={{ background: 'var(--opd-primary)', color: 'var(--opd-primary-ink)' }}
+                title="Resume the saved draft — the wizard opens where you left off"
+              >
+                Resume
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <QueueStrip
           queue={data.queue}
           currentId={data.currentServing?.id || null}
@@ -388,11 +459,14 @@ export function OpdCockpit() {
             day: 'numeric',
             month: 'short',
           })}
+          onReportsOpen={data.reportsInbox.length > 0 ? () => setReportsOpen(true) : undefined}
         />
       </div>
 
       <OpdSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
-    </div>
+      <ReportsDialog open={reportsOpen} onOpenChange={setReportsOpen} reports={data.reportsInbox} />
+      </div>
+    </MotionConfig>
   )
 }
 

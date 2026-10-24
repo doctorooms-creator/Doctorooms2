@@ -2,13 +2,27 @@
 
 /**
  * Day-state hero variants (03 §4) — the screen morphs by time + queue state.
- * Morning (pre-first-call) · Break (paused) · Day-end (queue drained past close).
- * All content computed from the aggregate payload — no fake numbers.
+ * Morning (pre-first-call) · Break (paused) · Reports-return (idle + reports
+ * waiting) · Day-end (queue drained). All content computed from the aggregate
+ * payload — no fake numbers.
+ *
+ * Every variant is a motion.section with matching enter/exit so the
+ * orchestrator's AnimatePresence can crossfade state changes (02 §5.4:
+ * quiet, ≤240ms — only the patient-card swap is the authored moment).
  */
 
-import { Coffee } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { Coffee, FileStack } from 'lucide-react'
 import type { OpdCockpitData } from './types'
 import { SpinnerDot } from './hero-patient-card'
+
+/** Quiet state-change motion (not the authored moment — 02 §5.4). */
+const stateMotion = {
+  initial: { opacity: 0, y: 8 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -12 },
+  transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] },
+}
 
 interface DayStateProps {
   data: OpdCockpitData
@@ -17,10 +31,17 @@ interface DayStateProps {
 }
 
 /** Morning: queue has patients, nobody called yet. */
-export function MorningState({ data, onPrimary, primaryPending }: DayStateProps) {
+export function MorningState({
+  data,
+  onPrimary,
+  primaryPending,
+  onReviewReports,
+}: DayStateProps & { onReviewReports?: () => void }) {
   const first = data.queue.find((q) => q.status === 'Approve')
   return (
-    <section
+    <motion.section
+      key="morning"
+      {...stateMotion}
       className="flex h-full flex-col justify-center rounded-[var(--opd-radius-card)] border p-[var(--opd-card-pad)]"
       style={{ background: 'var(--opd-surface)', borderColor: 'var(--opd-border)' }}
     >
@@ -33,10 +54,15 @@ export function MorningState({ data, onPrimary, primaryPending }: DayStateProps)
       </h1>
 
       {data.reportsInbox.length > 0 && (
-        <p className="mt-2 text-[13px]" style={{ color: 'var(--opd-accent-deep)' }}>
+        <button
+          onClick={onReviewReports}
+          className="opd-press mt-2 flex items-center gap-2 self-start rounded-[var(--opd-radius-chip)] px-1.5 py-0.5 text-left text-[13px] font-medium"
+          style={{ color: 'var(--opd-accent-deep)' }}
+          title="Review reports that arrived before OPD"
+        >
           {data.reportsInbox.length} {data.reportsInbox.length === 1 ? 'report' : 'reports'} ready to review
-          {data.reportsInbox[0] ? ` — ${data.reportsInbox[0].patientName} (${data.reportsInbox[0].testName})` : ''}
-        </p>
+          {data.reportsInbox[0] ? ` — ${data.reportsInbox[0].patientName} (${data.reportsInbox[0].testName})` : ''} →
+        </button>
       )}
       {data.pendingApprovals > 0 && (
         <p className="mt-2 text-[13px]" style={{ color: 'var(--opd-warning)' }}>
@@ -65,7 +91,7 @@ export function MorningState({ data, onPrimary, primaryPending }: DayStateProps)
           </button>
         </div>
       )}
-    </section>
+    </motion.section>
   )
 }
 
@@ -73,7 +99,9 @@ export function MorningState({ data, onPrimary, primaryPending }: DayStateProps)
 export function BreakState({ data, onResume, resumePending }: DayStateProps & { onResume: () => void; resumePending?: boolean }) {
   const next = data.queue.find((q) => q.status === 'Approve')
   return (
-    <section
+    <motion.section
+      key="break"
+      {...stateMotion}
       className="flex h-full flex-col items-center justify-center rounded-[var(--opd-radius-card)] border p-[var(--opd-card-pad)] text-center"
       style={{ background: 'var(--opd-warn-bg)', borderColor: 'var(--opd-warn-border)' }}
     >
@@ -110,15 +138,81 @@ export function BreakState({ data, onResume, resumePending }: DayStateProps & { 
           <>Resume Queue</>
         )}
       </button>
-    </section>
+    </motion.section>
+  )
+}
+
+/** Reports-return (S7): doctor idle mid-day, reports waiting — review is the action. */
+export function ReportsReturnState({
+  data,
+  onReview,
+  onDone,
+}: {
+  data: OpdCockpitData
+  onReview: () => void
+  onDone: () => void
+}) {
+  const abnormal = data.reportsInbox.filter((r) => r.flag === 'abnormal').length
+  return (
+    <motion.section
+      key="reports-return"
+      {...stateMotion}
+      className="flex h-full flex-col justify-center rounded-[var(--opd-radius-card)] border p-[var(--opd-card-pad)]"
+      style={{ background: 'var(--opd-surface)', borderColor: 'var(--opd-border)' }}
+    >
+      <div className="flex items-center gap-2.5">
+        <FileStack className="h-[18px] w-[18px]" style={{ color: 'var(--opd-accent-deep)' }} aria-hidden="true" />
+        <p className="text-[12px]" style={{ color: 'var(--opd-faint)' }}>
+          Lab reports in
+        </p>
+      </div>
+      <h1 className="mt-1 text-[22px] font-semibold leading-tight" style={{ color: 'var(--opd-text)' }}>
+        {data.reportsInbox.length} {data.reportsInbox.length === 1 ? 'report' : 'reports'} ready — review now
+        {abnormal > 0 && (
+          <span className="ml-1.5 text-[15px] font-normal" style={{ color: 'var(--opd-negative)' }}>
+            · {abnormal} flagged abnormal
+          </span>
+        )}
+      </h1>
+
+      {data.reportsInbox[0] && (
+        <p className="mt-2 text-[13px]" style={{ color: 'var(--opd-muted)' }}>
+          Latest: {data.reportsInbox[0].patientName} — {data.reportsInbox[0].testName}
+          {data.reportsInbox[0].value ? ` (${data.reportsInbox[0].value}${data.reportsInbox[0].unit ? ` ${data.reportsInbox[0].unit}` : ''})` : ''}
+          {data.reportsInbox.length > 1 && ` · +${data.reportsInbox.length - 1} more`}
+        </p>
+      )}
+
+      <div className="mt-5 flex items-center gap-2.5">
+        <button
+          onClick={onReview}
+          className="opd-press flex h-10 items-center gap-2 rounded-[var(--opd-radius-control)] px-5 text-[14px] font-semibold"
+          style={{ background: 'var(--opd-primary)', color: 'var(--opd-primary-ink)' }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--opd-primary-hover)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--opd-primary)')}
+          title="Open the reports inbox (Enter)"
+        >
+          Review reports
+        </button>
+        <button
+          onClick={onDone}
+          className="opd-press h-10 rounded-[var(--opd-radius-control)] border px-4 text-[13px] font-medium"
+          style={{ borderColor: 'var(--opd-control)', color: 'var(--opd-muted)' }}
+          title="Done for today — back to the classic dashboard"
+        >
+          Done for today
+        </button>
+      </div>
+    </motion.section>
   )
 }
 
 /** Day-end: queue drained + past close (or queue simply empty late). */
 export function DayEndState({ data, onDone, donePending }: DayStateProps & { onDone: () => void; donePending?: boolean }) {
-  const tomorrow = null as { patientName: string; timeSlot: string } | null // Phase F: tomorrow preview
   return (
-    <section
+    <motion.section
+      key="day-end"
+      {...stateMotion}
       className="flex h-full flex-col justify-center rounded-[var(--opd-radius-card)] border p-[var(--opd-card-pad)]"
       style={{ background: 'var(--opd-surface)', borderColor: 'var(--opd-border)' }}
     >
@@ -135,9 +229,10 @@ export function DayEndState({ data, onDone, donePending }: DayStateProps & { onD
           {data.reportsInbox.length} {data.reportsInbox.length === 1 ? 'report' : 'reports'} to review tomorrow morning
         </p>
       )}
-      {tomorrow && (
+      {data.tomorrowFirst && (
         <p className="mt-2 text-[13px]" style={{ color: 'var(--opd-muted)' }}>
-          Tomorrow starts with {tomorrow.patientName} at {tomorrow.timeSlot}
+          Tomorrow starts with {data.tomorrowFirst.patientName}
+          {data.tomorrowFirst.timeSlot ? ` at ${data.tomorrowFirst.timeSlot}` : ''}
         </p>
       )}
 
@@ -152,6 +247,6 @@ export function DayEndState({ data, onDone, donePending }: DayStateProps & { onD
           Done for today
         </button>
       </div>
-    </section>
+    </motion.section>
   )
 }

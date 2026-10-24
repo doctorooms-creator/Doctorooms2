@@ -87,6 +87,8 @@ export interface OpdCockpitData {
     minutesUntil: number
   } | null
   autoAdvance: boolean
+  /** Phase F bookend: tomorrow's first live booking (computed, never guessed). */
+  tomorrowFirst: { patientName: string; timeSlot: string } | null
 }
 
 /** Human words for booking statuses (03 §3.2 — words of the trade). */

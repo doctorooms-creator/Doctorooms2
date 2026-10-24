@@ -126,30 +126,85 @@ export async function GET(req: NextRequest) {
         }
       : null
 
-    // ── Reports inbox (Phase D fills values/deltas; counts + names now) ──
+    // ── Reports inbox (Phase D: values + abnormal flags + previous-value deltas) ──
+    // Status truth: the lab flow is Ordered → SampleCollected → ResultEntered
+    // → Verified/Filed. A report is "ready" for the doctor the moment results
+    // are ENTERED — verification is a lab-side QA step, not a gate for review.
+    // ("Completed" is not a real status in this flow — it was a plan-time guess.)
     const labReports = await db.labReport.findMany({
       where: {
         doctorId: doctor.id,
-        status: { in: ['Completed', 'Verified'] },
+        status: { in: ['ResultEntered', 'Verified'] },
         // recent: last 7 days (old reports shouldn't haunt the cockpit)
         resultEnteredAt: { gte: new Date(now.getTime() - 7 * 86400000) },
       },
-      include: { testMaster: { select: { name: true } } },
+      include: {
+        testMaster: { select: { name: true } },
+        parameterValues: {
+          include: { testParameter: { select: { paramName: true, unit: true } } },
+        },
+      },
       orderBy: { resultEnteredAt: 'desc' },
       take: 10,
     })
 
-    const reportsInbox = labReports.map((r) => ({
-      labReportId: r.id,
-      patientName: r.patientName,
-      testName: r.testMaster?.name || 'Lab test',
-      value: null,
-      unit: null,
-      flag: null,
-      previousValue: null,
-      previousDate: null,
-      readyAt: r.resultEnteredAt?.toISOString() || r.updatedAt.toISOString(),
-    }))
+    const reportsInbox: {
+      labReportId: string
+      patientName: string
+      testName: string
+      value: string | null
+      unit: string | null
+      flag: 'normal' | 'abnormal' | null
+      previousValue: string | null
+      previousDate: string | null
+      readyAt: string
+    }[] = []
+    for (const r of labReports) {
+      const filled = r.parameterValues.filter((p) => p.value && p.value.trim())
+      const headline = filled.find((p) => p.isAbnormal) || filled[0] || null
+      const anyAbnormal = filled.some((p) => p.isAbnormal)
+
+      // Delta vs the patient's previous report of the SAME test (bounded 1
+      // query per inbox row, ≤10 rows — worth it: the number that matters in
+      // a trend-based specialty is the change, not the absolute).
+      let previousValue: string | null = null
+      let previousDate: string | null = null
+      if (r.patientId && headline) {
+        try {
+          const prev = await db.labReport.findFirst({
+            where: {
+              patientId: r.patientId,
+              testMasterId: r.testMasterId,
+              resultEnteredAt: { lt: r.resultEnteredAt || r.createdAt },
+              parameterValues: { some: { value: { not: '' } } },
+            },
+            include: { parameterValues: true },
+            orderBy: { resultEnteredAt: 'desc' },
+          })
+          const prevParam = prev?.parameterValues.find(
+            (p) => p.testParameterId === headline.testParameterId && p.value && p.value.trim()
+          )
+          if (prev && prevParam) {
+            previousValue = prevParam.value
+            previousDate = (prev.resultEnteredAt || prev.createdAt).toISOString().slice(0, 10)
+          }
+        } catch {
+          // Delta miss never hides the report.
+        }
+      }
+
+      reportsInbox.push({
+        labReportId: r.id,
+        patientName: r.patientName,
+        testName: r.testMaster?.name || 'Lab test',
+        value: headline?.value || null,
+        unit: headline?.testParameter?.unit || null,
+        flag: filled.length ? (anyAbnormal ? 'abnormal' : 'normal') : null,
+        previousValue,
+        previousDate,
+        readyAt: r.resultEnteredAt?.toISOString() || r.updatedAt.toISOString(),
+      })
+    }
 
     // ── Pending approvals (S1/S13 — the queue-completeness truth) ──
     const pendingApprovals = await db.booking.count({
@@ -209,6 +264,32 @@ export async function GET(req: NextRequest) {
     // ── autoAdvance setting (Phase C — cookie v1, default ON) ──
     const autoAdvance = readAutoAdvanceCookie(req)
 
+    // ── Tomorrow's first patient (Phase F bookend — Day-end preview) ──
+    // Computed, never guessed: earliest timeSlot among tomorrow's live
+    // bookings (Approved first; Pending still counts — reception confirms it).
+    const tomorrowStr = new Date(now.getTime() + 86400000).toLocaleDateString('en-CA', {
+      timeZone: 'Asia/Kolkata',
+    })
+    const { start: tStart, end: tEnd } = istDateRange(tomorrowStr)
+    const tomorrowBookings = await db.booking.findMany({
+      where: {
+        doctorId: doctor.id,
+        bookingDate: { gte: tStart, lte: tEnd },
+        status: { in: ['Approve', 'Visited', 'Pending'] },
+      },
+      select: { patientName: true, timeSlot: true, isEmergency: true },
+    })
+    // Same precedence as the queue: emergency first, then earliest slot.
+    // (slotAwareSort needs full Booking rows; a plain comparator keeps this
+    // read light and typed.)
+    const tomorrowSorted = [...tomorrowBookings].sort((a, b) => {
+      if (!!a.isEmergency !== !!b.isEmergency) return a.isEmergency ? -1 : 1
+      return (a.timeSlot || '99:99').localeCompare(b.timeSlot || '99:99')
+    })
+    const tomorrowFirst = tomorrowSorted[0]
+      ? { patientName: tomorrowSorted[0].patientName || 'Patient', timeSlot: tomorrowSorted[0].timeSlot || '' }
+      : null
+
     return NextResponse.json({
       doctor: {
         id: doctor.id,
@@ -236,6 +317,7 @@ export async function GET(req: NextRequest) {
       draftsOpen,
       videoUpcoming,
       autoAdvance,
+      tomorrowFirst,
     })
   } catch (error) {
     console.error('OPD cockpit GET error:', error)

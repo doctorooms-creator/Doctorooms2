@@ -51,11 +51,17 @@ export function QueueStrip({ queue, currentId, onNoShow, noShowPendingId, onSend
           <motion.div
             key={item.id}
             initial={{ opacity: 0, x: 12 }}
-            animate={{ opacity: isDone || isNoShow ? 0.55 : 1, x: 0 }}
-            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 2) * 0.04 }}
+            animate={{
+              opacity: isDone || isNoShow ? 0.55 : 1,
+              x: 0,
+              // Phase E (02 §5.3 step 5): the called row converts to a compact
+              // done row — height eases 44→32 (220ms) while the wait-timer of
+              // the next row picks up.
+              height: isDone || isNoShow ? 32 : 44,
+            }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1], delay: i < 3 ? i * 0.04 : 0 }}
             className="flex items-center gap-3 px-4"
             style={{
-              height: isDone || isNoShow ? 32 : 'var(--opd-queue-row)',
               borderBottom: '1px solid var(--opd-rule)',
               background: isCurrent ? 'var(--opd-accent-pale)' : 'transparent',
               transition: 'background-color var(--opd-dur-state) ease',
