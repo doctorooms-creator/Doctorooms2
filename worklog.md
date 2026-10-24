@@ -8717,3 +8717,26 @@ Stage Summary:
 - User's auto-advance thought validated as the crown-jewel automation AND ~80% already plumbed (notifyNextPatient + brief aggregation + draft resume all exist; missing = auto-flip next booking to Visited + auto-open chart + waiting-display sync).
 - Blueprint is now scenario-complete: 16 scenarios, 16 automations, OPD-Mode single-screen concept, chart spec, safeguards, metrics.
 - Awaiting owner GO for development; build order recommended: (1) OPD Cockpit shell + auto-advance, (2) pre-loaded chart expansion (allergies field + reports inbox + pulse/spo2 trending), (3) Quick-Rx split, (4) sidebar diet, (5) delete fake stats + business-mood separation.
+
+---
+Task ID: dashboard2-plan-and-skills
+Agent: Main (Z.ai Code)
+Task: Owner confirmed: keep current dashboard UNTOUCHED; build new "Dashboard 2" nav item that operates FULL-SCREEN; wants smooth animations + professional non-AI look; told to use two GitHub UI skills (pbakaus/impeccable + leonxlnx/taste-skill); asked for understanding-confirmation + comprehensive plan + plan FILES; NO development.
+
+Work Log:
+- Verified the two named skills were NOT installed locally (skills/ had ui-ux-pro-max, design, visual-design-foundations instead) → cloned both GitHub repos, READ them deeply: impeccable SKILL.src.md + craft-floor.md + animate.md + operate.md (Operate-mode doctrine, motion timing tables, component-states law, bans); taste-skill SKILL.md (529L anti-slop run) + app-screens.md 1199L dashboard bible (color-on-data ~3%, KPIs-are-type-not-tiles, flat surfaces, honest zeros/deltas, shell archetypes, default tokens, empty-state laws, ONE authored motion).
+- INSTALLED both permanently into the project: skills/impeccable/ (2.3MB, self-contained with binary launcher) + skills/taste-skill/ (2.5MB with draw/lint/inspect scripts + library) — so every future agent/dev session can use them as the design authority.
+- Verified full-screen route mechanics: /dashboard/layout.tsx wraps sidebar+header+footer for ALL /dashboard/* + doctor layout adds copilot → new route MUST live at /opd (outside dashboard tree) with own auth guard.
+- CREATED the complete plan file set (5 files, ~1,100 lines):
+  * PLAN-OPD-COCKPIT.md (master: vision, owner decisions D1-D9, 7 phases A-G with checkboxes, guardrails, DoD)
+  * docs/opd-cockpit/01-SCENARIOS.md (16 day-scenarios S1-S16 → behavior → testable ACs = the E2E script)
+  * docs/opd-cockpit/02-DESIGN-SYSTEM.md (tokens mapped from taste defaults + Doctorooms teal single-accent; type/color/component laws; MOTION SPEC: timing tokens, feedback-on-every-control, THE authored auto-advance card-swap ≤700ms, motion bans, prefers-reduced-motion path; QA gates incl. taste inspect.mjs 0 FAIL)
+  * docs/opd-cockpit/03-SCREEN-BLUEPRINT.md (zone map: top bar 48px + hero ~60vh + chart rail 384px + queue strip + facts strip; 6 hero day-states; element-by-element spec with data sources/interactions/motion/states; keyboard map Enter/N/P//,Esc; safeguards; empty/zero/loading/error states; explicit NOT-have list)
+  * docs/opd-cockpit/04-TECH-IMPLEMENTATION.md (file map per phase; API contracts: new GET /api/opd/cockpit aggregate, finalize auto-advance extension with pause+zero-in-consultation guards + race-safe updateMany, autoAdvance doctor setting, lab-arrival event, brief extensions, Patient.allergies + Doctor.autoAdvance schema; data flow; risk table; per-phase verification incl. keyboard-only loop; owner demo checklist; keep/park rollout)
+- Key architecture decisions baked in: /opd route escapes all dashboard chrome; auto-advance server-side in finalize returning nextBooking; transition logic extracted to src/lib/queue-lifecycle.ts (single source — token-centralization lesson); aggregate API = single poll source of truth; poll-first design (Vercel has no websocket); feature is zero-risk to existing dashboard (separate route).
+
+Stage Summary:
+- NO APP CODE WRITTEN — plan + skills installation only, per owner instruction.
+- Plan is complete and followable: 5 files, 7 phases, 16 scenarios with ACs, full design system + motion contract, API contracts, risk mitigations, per-phase QA and owner demo checklist.
+- Skills situation resolved: both repos now permanently installed in skills/ (impeccable + taste-skill) and referenced as design authority throughout the plan.
+- Awaiting owner GO → Phase A (shell + entry) starts; build order A→B→C(crown jewel auto-advance)→D→E(polish)→F(quick-rx)→G(judge & keep).
