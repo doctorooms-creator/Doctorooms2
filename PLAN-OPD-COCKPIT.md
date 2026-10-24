@@ -50,12 +50,12 @@
 
 ## 5. Build phases (checkboxes = tracking)
 
-- [ ] **Phase A — Full-screen shell + entry** (½ day)
-  Route `/opd` (outside dashboard layout), own auth guard (doctor role), native Fullscreen API toggle, exit affordance (Esc + button → `/dashboard/doctor`), sidebar item "Dashboard 2" for doctors only. Empty state that names the product + scope. Zero data work.
-- [ ] **Phase B — Cockpit v1 (read-only truth)** (1-1.5 days)
-  New aggregate API `GET /api/opd/cockpit`. Screen: honest stat strip (one container, 1px dividers), hero zone (Currently Serving / Next Up card), queue strip (rules+alignment, tabular tokens), reports inbox (if any), search (Ctrl+K), all empty/zero/loading/error states. NO automation yet — Call Next / No-show / Pause work as today, just relocated. QA gate: taste inspect 0 FAIL, screenshots 1440/768/390.
-- [ ] **Phase C — Auto-advance engine** (1 day)
-  Finalize route: after Finish + notifyNextPatient, if `autoAdvance` enabled AND queue not paused AND no in-consultation → flip next booking Approve→Visited + consultation_started + return `nextBooking` in response. Cockpit consumes: hero swaps to the called patient's chart (the ONE authored motion moment). Pause-aware. Manual override: "Call Next" always available. Setting persisted server-side (doctor settings) with ON default; v1 fallback localStorage.
+- [x] **Phase A — Full-screen shell + entry** ✅ DONE (2026-10-25)
+  Route `/opd` (outside dashboard layout), own auth guard (doctor role + onboarding gate), native Fullscreen API toggle, exit affordance (Esc×2 + Classic view button), sidebar item "Dashboard 2" for doctors only. Empty state names product + scope. Zero data work.
+- [x] **Phase B — Cockpit v1 (read-only truth)** ✅ DONE (2026-10-25)
+  `GET /api/opd/cockpit` aggregate (queue+stats+reports+pending+drafts+video+scope, ALL computed). Screen: honest facts strip (1 container, 1px dividers), hero card (6 day-states), chart rail (brief), queue strip (rules+tabular), search (Ctrl+K + / + Esc), all empty/zero/loading/error states. VLM verdict 8.5/10 "real deployed healthcare product, not AI-generated". Responsive verified 1440/768/390.
+- [x] **Phase C — Auto-advance engine** ✅ DONE (2026-10-25)
+  `src/lib/queue-lifecycle.ts` (callNextPatient race-safe via updateMany-where-Approve + firstWaitingPatient + anyInConsultation). Finalize: after Finish-transaction → cookie-pref (default ON) + !paused + zero-in-consultation → auto-calls next + returns nextBooking (tail's notifyNextPatient skipped when auto-called, no double-ping). Top-bar Auto toggle (cookie v1). Step-6 stashes nextBooking in cache; FinishPrintOverlay gets returnTo=/opd → "Next: GEN-XXX →" button → /opd?advanced=1 → authored hero swap. E2E: EMR finish → GEN-001 auto-called + notified ✓; paused → no call ✓; midnight IST rollover (accidental day-boundary test) ✓.
 - [ ] **Phase D — Pre-loaded chart depth** (1-1.5 days)
   Hero chart expands brief: last visit Rx with doses (exists), vitals trend incl. pulse/SpO₂ (extend brief API), reports inbox with abnormal flags + trend arrows (new lab-arrival notification event + LabReport query), allergy field (schema addition — `Patient.allergies String?` + capture in wizard Step 2 + chart alert), draft-resume yellow strip, repeat-visit pattern detection → "Repeat Last Rx" suggestion (suggest, never auto-execute).
 - [ ] **Phase E — Motion & polish pass** (1 day)

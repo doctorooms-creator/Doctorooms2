@@ -114,7 +114,13 @@ export function Step6Finish({ onPrint }: { onPrint: (rxId: string) => void }) {
       }),
     onSuccess: (res: {
       prescription?: { status?: string; nextVisit?: string | null }
+      nextBooking?: { id: string; tokenNumber: string | null; patientName: string } | null
+      autoCalledNext?: boolean
     }) => {
+      // Phase C: stash the called-next patient in the shared cache — the
+      // print overlay reads it to offer "Next patient →" back into the
+      // cockpit. Set BEFORE onPrint mounts the overlay.
+      queryClient.setQueryData(['rx-next-after', prescriptionId], res.nextBooking ?? null)
       // Patch the finalized state straight into the shared cache — no
       // full-Rx refetch (the print overlay fetches /print on its own).
       queryClient.setQueryData<{ prescription?: Record<string, unknown> }>(

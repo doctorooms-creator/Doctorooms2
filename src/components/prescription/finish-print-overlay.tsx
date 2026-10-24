@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { AlertCircle, CheckCircle2, Loader2, Printer } from 'lucide-react'
+import { AlertCircle, ArrowRight, CheckCircle2, Loader2, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,10 +21,18 @@ interface BookingResponse {
   }
 }
 
+interface NextBookingInfo {
+  id: string
+  tokenNumber: string | null
+  patientName: string
+}
+
 interface FinishPrintOverlayProps {
   prescriptionId: string
   bookingId: string
   onClose: () => void
+  /** Phase C: cockpit sends '/opd' — enables the "Next patient →" flow. */
+  returnTo?: string | null
 }
 
 // ─── Component ────────────────────────────────────────────
@@ -39,6 +47,7 @@ interface FinishPrintOverlayProps {
 export function FinishPrintOverlay({
   prescriptionId,
   bookingId,
+  returnTo,
   onClose,
 }: FinishPrintOverlayProps) {
   const queryClient = useQueryClient()
@@ -73,6 +82,33 @@ export function FinishPrintOverlay({
         return r.json()
       }),
     enabled: !!bookingId,
+  })
+
+  // Phase C: the called-next patient, stashed by Step 6 from the finalize
+  // response. Present only when auto-advance actually called someone.
+  const { data: nextBooking } = useQuery<NextBookingInfo | null>({
+    queryKey: ['rx-next-after', prescriptionId],
+    queryFn: () => null, // cache-only: step-6 wrote it, nothing to fetch
+    enabled: !!prescriptionId,
+    initialData: null,
+    staleTime: Infinity,
+    gcTime: 5 * 60_000,
+  })
+
+  /** Phase C: send the doctor back to the cockpit; ?advanced=1 triggers
+   *  the authored hero-swap for the already-called patient. */
+  const goCockpit = useMutation({
+    mutationFn: async () => {
+      // Warm the brief of the called patient while the overlay closes —
+      // the cockpit hero reads instantly.
+      if (nextBooking?.id) {
+        void fetch(`/api/copilot/brief/${nextBooking.id}`).catch(() => {})
+      }
+      return nextBooking?.id ?? null
+    },
+    onSuccess: (hasNext) => {
+      router.push(hasNext ? '/opd?advanced=1' : '/opd')
+    },
   })
 
   // Mark Visit Complete: booking status Visited → Finish
@@ -162,6 +198,30 @@ export function FinishPrintOverlay({
             <Printer className="h-4 w-4" />
             Print
           </Button>
+          {/* Phase C: cockpit flow — one primary takes the doctor back with
+              the next patient ALREADY called (authored hero swap incoming). */}
+          {returnTo === '/opd' && (
+            <Button
+              size="sm"
+              onClick={() => goCockpit.mutate()}
+              disabled={goCockpit.isPending}
+              className="bg-emerald-600 text-white hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+            >
+              {goCockpit.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : nextBooking ? (
+                <>
+                  <ArrowRight className="h-4 w-4" />
+                  Next: {nextBooking.tokenNumber || nextBooking.patientName.split(' ')[0]}
+                </>
+              ) : (
+                <>
+                  <ArrowRight className="h-4 w-4" />
+                  Back to cockpit
+                </>
+              )}
+            </Button>
+          )}
           {isVisitComplete ? (
             <Button
               size="sm"

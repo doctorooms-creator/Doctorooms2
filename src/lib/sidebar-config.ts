@@ -56,6 +56,7 @@ export const sidebarConfig: RoleSidebarMap = {
   ],
   doctor: [
     { label: 'Dashboard', href: '/dashboard/doctor', icon: LayoutDashboard },
+    { label: 'Dashboard 2', href: '/opd', icon: Monitor },
     { label: 'Appointments', href: '/dashboard/doctor/appointments', icon: CalendarDays },
     { label: 'Prescriptions', href: '/dashboard/doctor/prescriptions', icon: FileText },
     { label: 'Rx Templates', href: '/dashboard/doctor/rx-templates', icon: Zap },

@@ -8740,3 +8740,31 @@ Stage Summary:
 - Plan is complete and followable: 5 files, 7 phases, 16 scenarios with ACs, full design system + motion contract, API contracts, risk mitigations, per-phase QA and owner demo checklist.
 - Skills situation resolved: both repos now permanently installed in skills/ (impeccable + taste-skill) and referenced as design authority throughout the plan.
 - Awaiting owner GO → Phase A (shell + entry) starts; build order A→B→C(crown jewel auto-advance)→D→E(polish)→F(quick-rx)→G(judge & keep).
+
+---
+Task ID: opd-cockpit-phase-abc
+Agent: Main (Z.ai Code)
+Task: Owner said "Go ahead as per plan" → executed Phases A+B+C of PLAN-OPD-COCKPIT.md (full-screen Doctor "Dashboard 2" shell, cockpit v1, auto-advance engine) with full sandbox E2E.
+
+Work Log:
+- ENV RECOVERY: node_modules was broken (next binary missing) → `bun install` (975 pkgs); realtime :3006 reinstalled+started; dev server restarted clean.
+- PHASE A (files): src/app/opd/{layout,page,opd.css} — chrome-free route outside /dashboard tree with own auth guard (Zustand→sessionStorage→/api/auth/me + doctor role assert + onboarding gate), Fullscreen API toggle, Esc×2 exit ladder; sidebar-config.ts + "Dashboard 2" (Monitor icon, doctor only, 2nd position); opd.css = full token set from 02-DESIGN-SYSTEM (teal single accent, near-black primary, pale status pairs, motion timing tokens, browser-surface theming, skeleton shimmer, reduced-motion path).
+- PHASE B (files): src/app/api/opd/cockpit/route.ts — ONE aggregate (queue via slotAwareSort incl NoShow, stats ALL computed incl backlog ~8min/pt + noShows, currentServing/nextUp, reportsInbox (7-day Completed/Verified LabReports), pendingApprovals count, draftsOpen (Draft Rx today), videoUpcoming (T-10min chip), scope w/ closesAt parsed from opdTimings); src/app/api/opd/search/route.ts — doctor-scoped search (token prefix + own-patients name/mobile + today-booking jump). Components: opd-cockpit (orchestrator + day-state derivation + keyboard map + golden-window brief prefetch), top-bar (identity/search/pause+PAUSED chip/video countdown/fullscreen/Auto toggle), hero-patient-card (called/in-opd/next-up/empty + ONE primary Enter-bound + authored swap variant), chart-rail (brief: complaint/history/last-visit-Rx/vitals-trend SVG flat line/alerts + first-visit teaching state + skeletons), queue-strip (44px rows, 1px rules, tabular tokens, EMERGENCY tier, VIDEO badge, wait timers, No-show/Send-In actions, done-rows compact), facts-strip (ONE container 1px dividers, honest zeros, amber pending), day-states (Morning/Break/DayEnd), search palette (/, Ctrl+K, arrows+Enter, Esc).
+- PHASE C (files): src/lib/queue-lifecycle.ts — callNextPatient (RACE-SAFE: updateMany where status='Approve' → 0 rows = already called) + firstWaitingPatient + anyInConsultation + readAutoAdvanceCookie (cookie v1, default ON — avoids schema migration risk; per-browser acceptable v1). finalize route: after Finish transaction → auto-advance block (swallow-all try/catch, respects cookie+queuePaused+zero-in-consultation) → returns nextBooking + autoCalledNext; tail's notifyNextPatient SKIPPED when auto-called (no double-ping to same patient). step-6-finish: stashes nextBooking into ['rx-next-after', rxId] cache. prescriptions/new page: reads returnTo param, passes to overlay. finish-print-overlay: NEW "Next: GEN-XXX →" primary button (returnTo=/opd only) → /opd?advanced=1 → authored hero swap; brief warm-prefetch on navigate. Top bar: Auto toggle chip (writes cookie + toast + invalidate).
+- E2E (sandbox sqlite, seed tmp-scripts/seed-opd-cockpit.ts — Shree Care hospital, Dr. Anita Sharma GEN dept, Suresh returning w/ 2 past Rx + vitals, Ramesh new, Priya video 12:00, EMR-005 emergency, Rahul Pending):
+  * Morning state ✓ "4 waiting — first EMR-005" + pending-approvals strip ✓ + emergency top ✓ + chart rail (complaint/history/alerts) ✓
+  * Call (hero) → In OPD ✓ → init+finalize → AUTO-CALLED GEN-001 Suresh + Consultation Started notification to Suresh ✓ + stats done=1 ✓
+  * PAUSE → finalize → nextBooking:null autoCalledNext:false ✓ (safeguard) → cockpit Break state ✓ → Resume → morning ✓
+  * Wizard: hero Start Rx → /dashboard/doctor/prescriptions/new?bookingId=X&returnTo=/opd ✓ (overlay Next-button verified at data level; full 8-step browser run deferred)
+  * /opd?advanced=1 → hero swap to auto-called Priya + chart loaded ✓
+  * Search: "Priya"/"priya"/mobile/token-prefix all ✓ (fixed SQLite mode:insensitive → case-variant OR); Esc-close fixed (input-level handler)
+  * Mobile 390px truncation fixed (hero name wraps, disease sm:max-w-none) → VLM re-check clean; desktop/tablet clean; VLM design verdict 8.5/10 "real deployed healthcare product, not AI-generated; like Athma/Practo/Epic ambulatory"; console: zero app errors (only known benign socket-timeout warnings)
+  * ACCIDENTAL BONUS: IST midnight rolled over mid-test → cockpit correctly switched to the new empty day (day-boundary correctness proven live)
+  * Day-end: queue drained → "2 patients seen today" summary ✓
+- Wrap-up: lint CLEAN ×3 runs; postgres schema + .env restored (deploy-schema-restore.sh + prisma generate); dev server restarted in postgres mode (/opd 200); tmp-scripts NOT committed (gitignored).
+
+Stage Summary:
+- PHASES A+B+C SHIPPED & E2E-VERIFIED: full-screen /opd cockpit with honest numbers, 6 day-states, chart rail, queue strip, search, keyboard map — and THE crown jewel: Save & Print → server auto-calls next patient (+notification) → doctor lands back on cockpit with next patient's chart already swapped in. 1 doctor action : 6 system updates promise = LIVE.
+- Existing dashboard untouched (separate route, only shared touchpoints are finalize/status-route reads + wizard returnTo param — backward-compatible, old flow unchanged when returnTo absent).
+- Known v1 tradeoffs (documented): autoAdvance = cookie v1 (per-browser; schema field in Phase D with allergies); chart rail vitals trend = BP only (pulse/SpO₂ Phase D); reports inbox = counts+names (values/deltas Phase D); overlay Next-button verified at data level not full wizard run.
+- Next phases per plan: D (chart depth: allergies + report values/deltas + pulse trend + Repeat-Rx chip), E (motion polish), F (Quick-Rx + bookends), G (owner judges keep/park).

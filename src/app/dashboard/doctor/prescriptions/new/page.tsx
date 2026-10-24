@@ -19,6 +19,9 @@ export default function NewPrescriptionPage() {
 function NewPrescriptionContent() {
   const searchParams = useSearchParams()
   const bookingId = searchParams.get('bookingId') || ''
+  // Phase C: the cockpit sends returnTo=/opd so the finishing overlay can
+  // send the doctor straight back with the NEXT patient already called.
+  const returnTo = searchParams.get('returnTo') || null
 
   // When set, the in-place finishing overlay (print preview + Mark Visit
   // Complete) is shown on top of the wizard — no new browser tab.
@@ -50,6 +53,7 @@ function NewPrescriptionContent() {
         <FinishPrintOverlay
           prescriptionId={finishingRxId}
           bookingId={bookingId}
+          returnTo={returnTo}
           onClose={() => setFinishingRxId(null)}
         />
       )}

@@ -1,0 +1,162 @@
+/* ============================================================
+   OPD Cockpit — design tokens & browser surfaces
+   Source of law: docs/opd-cockpit/02-DESIGN-SYSTEM.md
+   (Derived from taste-skill app-screen defaults + Doctorooms teal
+   as the single accent. Operate mode: color ~3% of pixels, ON DATA.)
+   ============================================================ */
+
+:root {
+  /* surfaces */
+  --opd-ground: #f7f8f8;
+  --opd-surface: #ffffff;
+  --opd-raised: #f1f2f2;
+  --opd-border: #e7e8e8;
+  --opd-rule: #f0f1f1;
+  --opd-control: #d2d6d6;
+
+  /* text — 3 tiers, all ≥4.5:1 on their surface */
+  --opd-text: #141515;
+  --opd-muted: #5a5f5f;
+  --opd-faint: #6b6b6b;
+
+  /* the single accent: Doctorooms teal — data + selection + ONE primary use */
+  --opd-accent: #0d9488;
+  --opd-accent-deep: #0f766e;
+  --opd-accent-pale: #e6f2f0;
+  --opd-accent-ink: #ffffff;
+
+  /* primary action = near-black (teal is reserved for data) */
+  --opd-primary: #1d1f20;
+  --opd-primary-hover: #333637;
+  --opd-primary-ink: #ffffff;
+
+  /* status — pale pairs */
+  --opd-positive: #247b50;
+  --opd-pos-bg: #dcfae5;
+  --opd-pos-ink: #04250e;
+  --opd-negative: #c4242a;
+  --opd-neg-bg: #ffedea;
+  --opd-neg-ink: #831c1e;
+  --opd-warning: #92400e;
+  --opd-warn-bg: #fffbeb;
+  --opd-warn-ink: #92400e;
+  --opd-warn-border: #fde68a;
+
+  /* geometry */
+  --opd-radius-card: 8px;
+  --opd-radius-control: 6px;
+  --opd-radius-chip: 4px;
+  --opd-gap: 16px;
+  --opd-card-pad: 20px;
+  --opd-pad: 24px;
+  --opd-queue-row: 44px;
+  --opd-control-h: 32px;
+
+  /* motion (02 §5.1) */
+  --opd-dur-feedback: 120ms;
+  --opd-dur-state: 200ms;
+  --opd-dur-layout: 320ms;
+  --opd-dur-authored: 480ms;
+  --opd-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --opd-ease-in: cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* ── browser surfaces: the built-not-assembled signal ── */
+.opd-root {
+  background: var(--opd-ground);
+  color: var(--opd-text);
+  font-size: 14px;
+  line-height: 20px;
+}
+.opd-root ::selection {
+  background: var(--opd-accent-pale);
+  color: var(--opd-text);
+}
+.opd-root .opd-searchinput {
+  caret-color: var(--opd-accent);
+}
+.opd-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.opd-root ::-webkit-scrollbar-thumb {
+  background: #cfd3d3;
+  border-radius: 4px;
+}
+.opd-root ::-webkit-scrollbar-thumb:hover {
+  background: #b9bebe;
+}
+.opd-root ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.opd-root :focus-visible {
+  outline: 2px solid var(--opd-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ── tabular data: numbers align digit-for-digit ── */
+.opd-num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ── press feedback on every control (02 §5.2) ── */
+.opd-press {
+  transition:
+    background-color var(--opd-dur-feedback) ease,
+    transform var(--opd-dur-feedback) ease,
+    border-color var(--opd-dur-feedback) ease,
+    color var(--opd-dur-feedback) ease;
+}
+.opd-press:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.opd-press:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── skeleton shimmer (no spinners over content) ── */
+.opd-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #eceeee;
+}
+.opd-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation: opd-shimmer 1.4s var(--opd-ease-out) infinite;
+}
+@keyframes opd-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+/* ── queue strip fade edge (mask, not gradient decoration) ── */
+.opd-queue-scroll {
+  mask-image: linear-gradient(to bottom, transparent 0, black 8px, black calc(100% - 8px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 8px, black calc(100% - 8px), transparent 100%);
+}
+
+/* ── reduced motion: content stays, travel drops (02 §5.6) ── */
+@media (prefers-reduced-motion: reduce) {
+  .opd-root *,
+  .opd-root *::before,
+  .opd-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── dark theme (Phase E+) — reserved, tokens switch only ──
+[data-opd-theme='dark'] {
+  --opd-ground: #0b0c0c; --opd-surface: #141515; --opd-raised: #1b1c1c;
+  --opd-border: #232525; --opd-rule: #1a1c1c; --opd-control: #37393a;
+  --opd-text: #ffffff; --opd-muted: #b4b4b4; --opd-faint: #949494;
+  --opd-positive: #3fc07a; --opd-pos-bg: #172a1d; --opd-pos-ink: #3fc07a;
+  --opd-negative: #e5566f; --opd-neg-bg: #2c1a20; --opd-neg-ink: #e5566f;
+} */

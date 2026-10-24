@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/api-auth'
 import { db } from '@/lib/db'
 import { sendQueueNotification, notifyNextPatient } from '@/lib/queue-notifications'
 import { emitNotification } from '@/lib/emit-notification'
+import { callNextPatient, firstWaitingPatient, anyInConsultation, readAutoAdvanceCookie } from '@/lib/queue-lifecycle'
 
 export async function POST(
   req: NextRequest,
@@ -32,6 +33,7 @@ export async function POST(
       select: {
         id: true,
         user: { select: { name: true } },
+        queuePaused: true,
       },
     })
     if (!doctor) {
@@ -79,6 +81,39 @@ export async function POST(
       }),
     ])
 
+    // ── Phase C: AUTO-ADVANCE (the crown jewel — 04 §2.2) ──
+    // After the transaction, the consultation slot is free. If the doctor
+    // has auto-advance ON (cookie v1, default on), the queue is NOT paused,
+    // and nobody else is mid-consultation: call the next waiting patient
+    // NOW — flip them to Visited + notify — and return them so the cockpit
+    // swaps the hero card without waiting for a poll.
+    // Safeguards: every failure here is swallowed — finalize NEVER fails
+    // because auto-advance hiccuped.
+    let nextBooking: { id: string; tokenNumber: string | null; patientName: string } | null = null
+    let autoCalledNext = false
+    try {
+      const autoAdvanceOn = readAutoAdvanceCookie(req)
+      if (autoAdvanceOn && !(doctor as { queuePaused?: boolean }).queuePaused) {
+        const busy = await anyInConsultation(doctor.id)
+        if (!busy) {
+          const next = await firstWaitingPatient(doctor.id)
+          if (next) {
+            const called = await callNextPatient({
+              doctorId: doctor.id,
+              doctorName: doctor.user.name,
+              bookingId: next.id,
+            })
+            if (called) {
+              nextBooking = called
+              autoCalledNext = true
+            }
+          }
+        }
+      }
+    } catch (advErr) {
+      console.error('Auto-advance error (non-fatal):', advErr)
+    }
+
     // ── P4-G: fire-and-forget tail (never blocks the print) ──
     // Queue notifications (patient-side "consultation complete" + next
     // patient "your turn"), department name lookup and the Rx #50 celebration
@@ -113,12 +148,16 @@ export async function POST(
             departmentName,
           })
           // The consultation slot just freed — tell the very next waiting
-          // patient it's their turn.
-          await notifyNextPatient(
-            doctor.id,
-            bookingBeforeUpdate.tokenOrder,
-            bookingBeforeUpdate.bookingDate
-          )
+          // patient it's their turn. When auto-advance already CALLED the
+          // next patient (consultation_started sent there), this would be a
+          // redundant second ping to the same person — skip it.
+          if (!autoCalledNext) {
+            await notifyNextPatient(
+              doctor.id,
+              bookingBeforeUpdate.tokenOrder,
+              bookingBeforeUpdate.bookingDate
+            )
+          }
         }
       } catch (err) {
         console.error('Finalize notification tail error:', err)
@@ -163,6 +202,11 @@ export async function POST(
         nextVisit: nextVisit || null,
         bookingStatus: 'Finish',
       },
+      // Phase C: the called-next patient (or null — queue empty / paused /
+      // toggle off / someone mid-consultation). The cockpit hero swap and
+      // the print overlay's "Next patient →" button consume this.
+      nextBooking,
+      autoCalledNext,
     })
   } catch (error) {
     console.error('Finalize prescription error:', error)
